@@ -11,3 +11,6 @@ Flutter client for ForoughArya business workflows.
 
 ## Preview
 Open `previews/automation-workspace.html` in a browser. It is offline and RTL.
+
+## Full capability and status preview
+Open `previews/current-capabilities-status.html` for an interactive, honest overview of implemented Work Order features, authentication, approved Automation design, and current source limitations.
