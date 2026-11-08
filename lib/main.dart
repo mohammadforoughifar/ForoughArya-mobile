@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'app/app.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/network/api_client.dart';
+import 'features/office_automation/data/office_repository.dart';
 import 'features/work_orders/data/work_order_repository.dart';
 
 void main() {
@@ -23,6 +24,7 @@ void main() {
         ChangeNotifierProvider.value(value: auth),
         Provider.value(value: api),
         Provider(create: (_) => WorkOrderRepository(api)),
+        Provider(create: (_) => OfficeAutomationRepository(api)),
       ],
       child: const ForoughApp(),
     ),

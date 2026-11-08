@@ -10,6 +10,7 @@ import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
+import 'wo_style.dart';
 import 'work_order_detail_page.dart';
 import 'work_order_editor_page.dart';
 import 'work_order_reports.dart';
@@ -25,10 +26,33 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
   int? _companyId;
   List<dynamic> _companies = [];
 
+  /// شمارندهٔ سبک برای بج تب‌ها (تعداد دستورهای باز)
+  Map<String, dynamic> _counts = {};
+
+  static const _views = <({String label, IconData icon, String key})>[
+    (label: 'دستورهای من', icon: Icons.outbox_outlined, key: 'mine'),
+    (label: 'محول به من', icon: Icons.inbox_outlined, key: 'assigned'),
+    (label: 'بایگانی', icon: Icons.archive_outlined, key: 'archive'),
+    (label: 'کانبان', icon: Icons.view_kanban_outlined, key: 'kanban'),
+    (label: 'تقویم', icon: Icons.calendar_month_outlined, key: 'calendar'),
+    (label: 'آمار', icon: Icons.insights_outlined, key: 'stats'),
+    (label: 'عملکرد', icon: Icons.leaderboard_outlined, key: 'performance'),
+  ];
+
   @override
   void initState() {
     super.initState();
     _loadCompanies();
+    _loadCounts();
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      final c = await context.read<WorkOrderRepository>().counts();
+      if (mounted) setState(() => _counts = c);
+    } catch (_) {
+      // سرورهای قدیمی بدون این مسیر کار می‌کنند
+    }
   }
 
   Future<void> _loadCompanies() async {
@@ -47,28 +71,25 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
     }
   }
 
-  static const _views = [
-    ('دستورهای من', Icons.outbox_outlined),
-    ('محول به من', Icons.inbox_outlined),
-    ('بایگانی', Icons.archive_outlined),
-    ('کانبان', Icons.view_kanban_outlined),
-    ('تقویم', Icons.calendar_month_outlined),
-    ('آمار', Icons.insights_outlined),
-    ('عملکرد', Icons.leaderboard_outlined),
-  ];
-
   Future<void> _newOrder() async {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const WorkOrderEditorPage()),
     );
-    if (result == true) setState(() => _version++);
+    if (result == true) {
+      setState(() => _version++);
+      _loadCounts();
+    }
   }
 
   Future<void> _account() async {
     final auth = context.read<AuthController>();
     await showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
       builder: (c) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(18),
@@ -77,7 +98,15 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
             children: [
               CircleAvatar(
                 radius: 30,
-                child: Text(auth.session!.displayName.characters.first),
+                backgroundColor: WoColors.seed.withValues(alpha: .12),
+                child: Text(
+                  auth.session!.displayName.characters.first,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: WoColors.seed,
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
               Text(
@@ -89,9 +118,13 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
               ),
               Text(
                 '${auth.session!.username} • ${auth.session!.roleNames.join('، ')}',
+                style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade500),
               ),
               const SizedBox(height: 18),
               ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 leading: const Icon(Icons.password),
                 title: const Text('تغییر رمز عبور'),
                 onTap: () {
@@ -100,6 +133,9 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
                 },
               ),
               ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 leading: const Icon(Icons.logout, color: Colors.red),
                 title: const Text('خروج از حساب'),
                 onTap: () {
@@ -176,111 +212,144 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'دستور کار',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          if (_companyId != null && _companies.isNotEmpty)
-            Text(
-              _companies
-                      .whereType<Map>()
-                      .firstWhere(
-                        (c) => (c['id'] as num?)?.toInt() == _companyId,
-                        orElse: () => const {},
-                      )['name']
-                      ?.toString() ??
-                  '',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.normal,
+  Widget build(BuildContext context) {
+    final companyName = _companies
+        .whereType<Map>()
+        .firstWhere(
+          (c) => (c['id'] as num?)?.toInt() == _companyId,
+          orElse: () => const {},
+        )['name']
+        ?.toString();
+
+    return Scaffold(
+      backgroundColor: WoColors.bg,
+      appBar: AppBar(
+        backgroundColor: WoColors.bg,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: WoColors.heroGradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.assignment_outlined,
+                color: Colors.white,
+                size: 19,
               ),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'دستور کار',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                  ),
+                  if (companyName != null && companyName.isNotEmpty)
+                    Text(
+                      companyName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.blueGrey.shade500,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          if (_companies.length > 1)
+            PopupMenuButton<int>(
+              tooltip: 'شرکت فعال',
+              icon: const Icon(Icons.business_outlined),
+              onSelected: (id) async {
+                await context.read<ApiClient>().setCompanyId(id);
+                setState(() {
+                  _companyId = id;
+                  _version++;
+                });
+              },
+              itemBuilder: (_) => _companies
+                  .whereType<Map>()
+                  .map(
+                    (c) => PopupMenuItem(
+                      value: (c['id'] as num).toInt(),
+                      child: Row(
+                        children: [
+                          if ((c['id'] as num).toInt() == _companyId)
+                            const Icon(Icons.check, size: 18)
+                          else
+                            const SizedBox(width: 18),
+                          const SizedBox(width: 7),
+                          Text(c['name']?.toString() ?? ''),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          IconButton(
+            tooltip: 'به‌روزرسانی',
+            onPressed: () {
+              setState(() => _version++);
+              _loadCounts();
+            },
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'حساب کاربری',
+            onPressed: _account,
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: SlidingTabs(
+            items: _views,
+            index: _view,
+            showCounts: true,
+            counts: {
+              'mine': (Fa.digitInt(_counts['mine']) ??
+                  Fa.digitInt(_counts['open']) ??
+                  0),
+              'assigned': Fa.digitInt(_counts['assigned']) ?? 0,
+              'archive': Fa.digitInt(_counts['archive']) ?? 0,
+            },
+            onChanged: (i) => setState(() => _view = i),
+          ),
+        ),
+      ),
+      body: IndexedStack(
+        index: _view,
+        children: [
+          WorkOrderListView(key: ValueKey('mine-$_version'), tab: 'mine'),
+          WorkOrderListView(key: ValueKey('assigned-$_version'), tab: 'assigned'),
+          WorkOrderListView(key: ValueKey('archive-$_version'), tab: 'archive'),
+          WorkOrderKanbanView(key: ValueKey('kanban-$_version')),
+          WorkOrderCalendarView(key: ValueKey('calendar-$_version')),
+          WorkOrderStatsView(key: ValueKey('stats-$_version')),
+          WorkOrderPerformanceView(key: ValueKey('performance-$_version')),
         ],
       ),
-      actions: [
-        if (_companies.length > 1)
-          PopupMenuButton<int>(
-            tooltip: 'شرکت فعال',
-            icon: const Icon(Icons.business_outlined),
-            onSelected: (id) async {
-              await context.read<ApiClient>().setCompanyId(id);
-              setState(() {
-                _companyId = id;
-                _version++;
-              });
-            },
-            itemBuilder: (_) => _companies
-                .whereType<Map>()
-                .map(
-                  (c) => PopupMenuItem(
-                    value: (c['id'] as num).toInt(),
-                    child: Row(
-                      children: [
-                        if ((c['id'] as num).toInt() == _companyId)
-                          const Icon(Icons.check, size: 18)
-                        else
-                          const SizedBox(width: 18),
-                        const SizedBox(width: 7),
-                        Text(c['name']?.toString() ?? ''),
-                      ],
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        IconButton(
-          tooltip: 'به‌روزرسانی',
-          onPressed: () => setState(() => _version++),
-          icon: const Icon(Icons.refresh),
-        ),
-        IconButton(
-          tooltip: 'حساب کاربری',
-          onPressed: _account,
-          icon: const Icon(Icons.account_circle_outlined),
-        ),
-      ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(55),
-        child: SizedBox(
-          height: 50,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: _views.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 7),
-            itemBuilder: (_, i) => ChoiceChip(
-              selected: _view == i,
-              avatar: Icon(_views[i].$2, size: 17),
-              label: Text(_views[i].$1),
-              onSelected: (_) => setState(() => _view = i),
-            ),
-          ),
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _newOrder,
+        backgroundColor: WoColors.seed,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('دستور جدید'),
       ),
-    ),
-    body: IndexedStack(
-      index: _view,
-      children: [
-        WorkOrderListView(key: ValueKey('mine-$_version'), tab: 'mine'),
-        WorkOrderListView(key: ValueKey('assigned-$_version'), tab: 'assigned'),
-        WorkOrderListView(key: ValueKey('archive-$_version'), tab: 'archive'),
-        WorkOrderKanbanView(key: ValueKey('kanban-$_version')),
-        WorkOrderCalendarView(key: ValueKey('calendar-$_version')),
-        WorkOrderStatsView(key: ValueKey('stats-$_version')),
-        WorkOrderPerformanceView(key: ValueKey('performance-$_version')),
-      ],
-    ),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _newOrder,
-      icon: const Icon(Icons.add),
-      label: const Text('دستور جدید'),
-    ),
-  );
+    );
+  }
 }
 
 class WorkOrderListView extends StatefulWidget {
@@ -345,14 +414,11 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
   }
 
   Future<void> _open(WorkOrder o) async {
-    final result = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => WorkOrderDetailPage(id: o.id)),
     );
-    if (result == true)
-      _load();
-    else
-      _load();
+    _load();
   }
 
   Future<void> _export(String format) async {
@@ -392,137 +458,37 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
     super.build(context);
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 5),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _search,
-                  onChanged: (_) {
-                    _debounce?.cancel();
-                    _debounce = Timer(const Duration(milliseconds: 450), () {
-                      _page = 1;
-                      _load();
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'شماره، عنوان، شخص یا برچسب',
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 5),
-              PopupMenuButton<String>(
-                tooltip: 'خروجی',
-                icon: _exporting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.download_outlined),
-                onSelected: _export,
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'xlsx', child: Text('خروجی Excel')),
-                  PopupMenuItem(value: 'pdf', child: Text('خروجی PDF')),
-                ],
-              ),
-            ],
-          ),
+        _searchRow(),
+        _filterRow(),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+          child: _selected.isEmpty
+              ? const SizedBox(width: double.infinity)
+              : _bulkBar(),
         ),
-        SizedBox(
-          height: 43,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 7),
-                child: DropdownButton<int?>(
-                  value: _priority,
-                  hint: const Text('همه اولویت‌ها'),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('همه اولویت‌ها')),
-                    DropdownMenuItem(value: 0, child: Text('کم')),
-                    DropdownMenuItem(value: 1, child: Text('عادی')),
-                    DropdownMenuItem(value: 2, child: Text('بالا')),
-                    DropdownMenuItem(value: 3, child: Text('فوری')),
-                  ],
-                  onChanged: (v) {
-                    _priority = v;
-                    _page = 1;
-                    _load();
-                  },
-                ),
-              ),
-              ...['approved', 'rejected', 'undecided', 'awaiting'].map(
-                (d) => Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: FilterChip(
-                    selected: _decision == d,
-                    label: Text(switch (d) {
-                      'approved' => 'تأییدشده',
-                      'rejected' => 'ردشده',
-                      'undecided' => 'بی‌تصمیم',
-                      _ => 'در انتظار پاسخ',
-                    }),
-                    onSelected: (v) {
-                      _decision = v ? d : null;
-                      _page = 1;
-                      _load();
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_selected.isNotEmpty)
-          Material(
-            color: Colors.indigo.shade50,
-            child: ListTile(
-              title: Text('${Fa.digits(_selected.length)} مورد انتخاب شده'),
-              trailing: OverflowBar(
-                children: [
-                  if (widget.tab != 'archive')
-                    TextButton(
-                      onPressed: () => _bulk('archive'),
-                      child: const Text('بایگانی'),
-                    ),
-                  TextButton(
-                    onPressed: () => _bulk('delete'),
-                    child: const Text(
-                      'حذف',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         Expanded(
           child: _loading
-              ? const LoadingView()
+              ? const ShimmerList()
               : _error != null
               ? ErrorView(message: _error!, onRetry: _load)
               : _data!.items.isEmpty
-              ? const EmptyView()
+              ? const EmptyView(message: 'دستور کاری برای نمایش نیست.')
               : RefreshIndicator(
+                  color: WoColors.seed,
                   onRefresh: _load,
                   child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 7, 12, 85),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 92),
                     itemCount: _data!.items.length + 1,
                     itemBuilder: (_, i) {
                       if (i == _data!.items.length) return _pager();
                       final o = _data!.items[i];
-                      return WorkOrderCard(
+                      return GlowWorkOrderCard(
                         order: o,
+                        index: i,
                         selected: _selected.contains(o.id),
                         onSelect: (v) => setState(
-                          () =>
-                              v ? _selected.add(o.id) : _selected.remove(o.id),
+                          () => v ? _selected.add(o.id) : _selected.remove(o.id),
                         ),
                         onTap: () => _open(o),
                       );
@@ -534,222 +500,289 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
     );
   }
 
-  Widget _pager() => Padding(
-    padding: const EdgeInsets.all(12),
+  Widget _searchRow() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
     child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        IconButton.outlined(
-          onPressed: _page > 1
-              ? () {
-                  _page--;
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: WoColors.line),
+            ),
+            child: TextField(
+              controller: _search,
+              style: const TextStyle(fontSize: 13),
+              onChanged: (_) {
+                _debounce?.cancel();
+                _debounce = Timer(const Duration(milliseconds: 450), () {
+                  _page = 1;
                   _load();
-                }
-              : null,
-          icon: const Icon(Icons.chevron_right),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'صفحه ${Fa.digits(_page)} از ${Fa.digits(_data!.pages)} • ${Fa.digits(_data!.totalCount)} مورد',
+                });
+              },
+              decoration: InputDecoration(
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 20,
+                  color: Colors.blueGrey.shade400,
+                ),
+                hintText: 'شماره، عنوان، شخص یا برچسب',
+                hintStyle: TextStyle(
+                  fontSize: 12.5,
+                  color: Colors.blueGrey.shade300,
+                ),
+                isDense: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+            ),
           ),
         ),
-        IconButton.outlined(
-          onPressed: _page < _data!.pages
-              ? () {
-                  _page++;
-                  _load();
-                }
-              : null,
-          icon: const Icon(Icons.chevron_left),
+        const SizedBox(width: 7),
+        PopupMenuButton<String>(
+          tooltip: 'خروجی',
+          icon: _exporting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_outlined),
+          onSelected: _export,
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'xlsx', child: Text('خروجی Excel')),
+            PopupMenuItem(value: 'pdf', child: Text('خروجی PDF')),
+          ],
         ),
       ],
     ),
   );
-}
 
-class WorkOrderCard extends StatelessWidget {
-  const WorkOrderCard({
-    super.key,
-    required this.order,
-    required this.onTap,
-    this.selected = false,
-    this.onSelect,
-    this.trailing,
-  });
-  final WorkOrder order;
-  final VoidCallback onTap;
-  final bool selected;
-  final ValueChanged<bool>? onSelect;
-  final Widget? trailing;
-  @override
-  Widget build(BuildContext context) {
-    final color = !order.isOpen
-        ? Colors.blueGrey
-        : order.isOverdue
-        ? Colors.red
-        : order.priority == 3
-        ? Colors.deepOrange
-        : Colors.indigo;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 9),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
-          color: selected ? Colors.indigo : Colors.transparent,
-          width: 1.5,
+  Widget _filterRow() => SizedBox(
+    height: 40,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      children: [
+        _filterPill(
+          label: _priority == null
+              ? 'همه اولویت‌ها'
+              : Fa.priority(_priority!),
+          icon: Icons.flag_outlined,
+          active: _priority != null,
+          onTap: () => _pickPriority(),
         ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        onLongPress: onSelect == null ? null : () => onSelect!(!selected),
-        child: Padding(
-          padding: const EdgeInsets.all(13),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (onSelect != null)
-                    SizedBox(
-                      width: 26,
-                      child: Checkbox(
-                        value: selected,
-                        onChanged: (v) => onSelect!(v ?? false),
-                      ),
-                    ),
-                  Container(
-                    width: 4,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    margin: const EdgeInsets.only(left: 9),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          order.number,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.blueGrey.shade500,
-                          ),
-                        ),
-                        Text(
-                          order.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (trailing != null) trailing!,
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _miniChip(
-                    order.isOpen
-                        ? order.isOverdue
-                              ? 'دیرکرد'
-                              : 'باز'
-                        : 'بسته',
-                    color,
-                  ),
-                  _miniChip(Fa.priority(order.priority), color),
-                  if (order.recurrence > 0)
-                    _miniChip(Fa.recurrence(order.recurrence), Colors.teal),
-                  ...order.tags
-                      .take(3)
-                      .map((t) => _miniChip('#$t', Colors.blueGrey)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.event, size: 16, color: Colors.blueGrey),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      Fa.date(order.dueAt),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                  Text(
-                    order.ownerName,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.blueGrey,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (order.checklistTotal > 0) ...[
-                    const Icon(
-                      Icons.checklist,
-                      size: 17,
-                      color: Colors.blueGrey,
-                    ),
-                    Text(
-                      ' ${Fa.digits(order.checklistDone)}/${Fa.digits(order.checklistTotal)}',
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  if (order.commentCount > 0) ...[
-                    const Icon(
-                      Icons.chat_bubble_outline,
-                      size: 16,
-                      color: Colors.blueGrey,
-                    ),
-                    Text(' ${Fa.digits(order.commentCount)}'),
-                    const SizedBox(width: 12),
-                  ],
-                  if (order.attachmentCount > 0) ...[
-                    const Icon(
-                      Icons.attach_file,
-                      size: 17,
-                      color: Colors.blueGrey,
-                    ),
-                    Text(' ${Fa.digits(order.attachmentCount)}'),
-                    const SizedBox(width: 12),
-                  ],
-                  const Spacer(),
-                  const Icon(
-                    Icons.people_outline,
-                    size: 17,
-                    color: Colors.blueGrey,
-                  ),
-                  Text(' ${Fa.digits(order.assignees.length)}'),
-                ],
-              ),
-            ],
+        ...['approved', 'rejected', 'undecided', 'awaiting'].map(
+          (d) => Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: _filterPill(
+              label: switch (d) {
+                'approved' => 'تأییدشده',
+                'rejected' => 'ردشده',
+                'undecided' => 'بی‌تصمیم',
+                _ => 'در انتظار پاسخ',
+              },
+              icon: Icons.rule,
+              active: _decision == d,
+              onTap: () {
+                setState(() {
+                  _decision = _decision == d ? null : d;
+                  _page = 1;
+                });
+                _load();
+              },
+            ),
           ),
+        ),
+      ],
+    ),
+  );
+
+  void _pickPriority() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            for (final e in <int?>[null, 0, 1, 2, 3])
+              ListTile(
+                leading: Icon(
+                  e == null ? Icons.clear_all : Icons.flag_outlined,
+                  color: e == 3
+                      ? WoColors.urgent
+                      : e == null
+                      ? Colors.blueGrey
+                      : WoColors.seed,
+                ),
+                title: Text(e == null ? 'همه اولویت‌ها' : Fa.priority(e)),
+                trailing: _priority == e
+                    ? const Icon(Icons.check, color: WoColors.seed)
+                    : null,
+                onTap: () {
+                  Navigator.pop(c);
+                  setState(() {
+                    _priority = e;
+                    _page = 1;
+                  });
+                  _load();
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
   }
 
-  Widget _miniChip(String text, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: .08),
-      borderRadius: BorderRadius.circular(20),
+  Widget _filterPill({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: active ? WoColors.seed : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: active ? WoColors.seed : WoColors.line,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: active ? Colors.white : Colors.blueGrey.shade400,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              color: active ? Colors.white : Colors.blueGrey.shade700,
+            ),
+          ),
+        ],
+      ),
     ),
-    child: Text(text, style: TextStyle(fontSize: 11, color: color)),
+  );
+
+  Widget _bulkBar() => Container(
+    margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    decoration: BoxDecoration(
+      color: WoColors.seed.withValues(alpha: .07),
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: WoColors.seed.withValues(alpha: .2)),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.check_circle, size: 17, color: WoColors.seed),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            '${Fa.digits(_selected.length)} مورد انتخاب شد',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (widget.tab != 'archive')
+          TextButton(
+            onPressed: () => _bulk('archive'),
+            child: const Text('بایگانی', style: TextStyle(fontSize: 12)),
+          ),
+        TextButton(
+          onPressed: () => _bulk('delete'),
+          child: const Text(
+            'حذف',
+            style: TextStyle(fontSize: 12, color: Colors.red),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _pager() => Padding(
+    padding: const EdgeInsets.fromLTRB(0, 10, 0, 16),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _pagerButton(
+          icon: Icons.chevron_right,
+          enabled: _page > 1,
+          onTap: () {
+            _page--;
+            _load();
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(
+            children: [
+              Text(
+                'صفحه ${Fa.digits(_page)} از ${Fa.digits(_data!.pages)}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                '${Fa.digits(_data!.totalCount)} مورد',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: Colors.blueGrey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _pagerButton(
+          icon: Icons.chevron_left,
+          enabled: _page < _data!.pages,
+          onTap: () {
+            _page++;
+            _load();
+          },
+        ),
+      ],
+    ),
+  );
+
+  Widget _pagerButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: enabled ? onTap : null,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: enabled ? Colors.white : Colors.white.withValues(alpha: .5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: WoColors.line),
+      ),
+      child: Icon(
+        icon,
+        size: 20,
+        color: enabled ? WoColors.seed : Colors.blueGrey.shade200,
+      ),
+    ),
   );
 }
 
@@ -822,7 +855,7 @@ class _WorkOrderKanbanViewState extends State<WorkOrderKanbanView> {
       ),
       Expanded(
         child: _loading
-            ? const LoadingView()
+            ? const ShimmerList()
             : _error != null
             ? ErrorView(message: _error!, onRetry: _load)
             : RefreshIndicator(
@@ -832,38 +865,88 @@ class _WorkOrderKanbanViewState extends State<WorkOrderKanbanView> {
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 85),
                   children: [0, 1, 2, 3].map((p) {
                     final items = _items.where((o) => o.priority == p).toList();
+                    final color = switch (p) {
+                      3 => WoColors.urgent,
+                      2 => WoColors.seed,
+                      0 => WoColors.open,
+                      _ => const Color(0xff55637a),
+                    };
                     return Container(
                       width: 310,
                       margin: const EdgeInsets.only(left: 10),
                       padding: const EdgeInsets.all(9),
                       decoration: BoxDecoration(
-                        color: Colors.blueGrey.withValues(alpha: .06),
-                        borderRadius: BorderRadius.circular(14),
+                        color: color.withValues(alpha: .05),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: color.withValues(alpha: .12)),
                       ),
                       child: Column(
                         children: [
-                          ListTile(
-                            title: Text(
-                              Fa.priority(p),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 7,
                             ),
-                            trailing: CircleAvatar(
-                              radius: 13,
-                              child: Text(
-                                Fa.digits(items.length),
-                                style: const TextStyle(fontSize: 11),
-                              ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Text(
+                                  Fa.priority(p),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: .12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    Fa.digits(items.length),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                          const SizedBox(height: 8),
                           Expanded(
                             child: items.isEmpty
-                                ? const EmptyView()
+                                ? Center(
+                                    child: Text(
+                                      'خالی',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blueGrey.shade300,
+                                      ),
+                                    ),
+                                  )
                                 : ListView(
                                     children: items
                                         .map(
-                                          (o) => WorkOrderCard(
+                                          (o) => GlowWorkOrderCard(
                                             order: o,
                                             onTap: () async {
                                               await Navigator.push(
@@ -877,32 +960,31 @@ class _WorkOrderKanbanViewState extends State<WorkOrderKanbanView> {
                                               );
                                               _load();
                                             },
-                                            trailing: _scope == 'mine'
-                                                ? PopupMenuButton<int>(
-                                                    onSelected: (v) =>
-                                                        _setPriority(o, v),
-                                                    itemBuilder: (_) =>
-                                                        [0, 1, 2, 3]
-                                                            .map(
-                                                              (
-                                                                v,
-                                                              ) => PopupMenuItem(
-                                                                value: v,
-                                                                child: Text(
-                                                                  Fa.priority(
-                                                                    v,
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            )
-                                                            .toList(),
-                                                  )
-                                                : null,
                                           ),
                                         )
                                         .toList(),
                                   ),
                           ),
+                          if (_scope == 'mine')
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: PopupMenuButton<int>(
+                                icon: const Icon(Icons.more_horiz, size: 18),
+                                tooltip: 'تغییر اولویت',
+                                onSelected: (v) => _setPriority(
+                                  items.isNotEmpty ? items.first : _items.first,
+                                  v,
+                                ),
+                                itemBuilder: (_) => [0, 1, 2, 3]
+                                    .map(
+                                      (v) => PopupMenuItem(
+                                        value: v,
+                                        child: Text(Fa.priority(v)),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
                         ],
                       ),
                     );
@@ -957,96 +1039,150 @@ class _WorkOrderCalendarViewState extends State<WorkOrderCalendarView> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _data?.items ?? [];
+    return _loading
+        ? const ShimmerList()
+        : _error != null
+        ? ErrorView(message: _error!, onRetry: _load)
+        : WorkOrderCalendarBody(
+            month: _month,
+            data: _data!,
+            onPrev: () {
+              setState(() => _month = DateTime(_month.year, _month.month - 1));
+              _load();
+            },
+            onNext: () {
+              setState(() => _month = DateTime(_month.year, _month.month + 1));
+              _load();
+            },
+            onOpen: (o) async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WorkOrderDetailPage(id: o.id),
+                ),
+              );
+              _load();
+            },
+          );
+  }
+}
+
+/// بدنهٔ تقویم دستور کار — گروه‌بندی بر اساس روز، با استایل جدید
+class WorkOrderCalendarBody extends StatelessWidget {
+  const WorkOrderCalendarBody({
+    super.key,
+    required this.month,
+    required this.data,
+    required this.onPrev,
+    required this.onNext,
+    required this.onOpen,
+  });
+
+  final DateTime month;
+  final WorkOrderPageData data;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final void Function(WorkOrder) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = data.items;
     final groups = <String, List<WorkOrder>>{};
     for (final o in items) {
       final d = DateTime.tryParse(o.dueAt ?? '')?.toLocal();
       final key = d == null ? 'بدون تاریخ' : '${d.year}-${d.month}-${d.day}';
       groups.putIfAbsent(key, () => []).add(o);
     }
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton.outlined(
-                onPressed: () {
-                  _month = DateTime(_month.year, _month.month - 1);
-                  _load();
-                },
-                icon: const Icon(Icons.chevron_right),
-              ),
-              TextButton(
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: _month,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2100),
-                  );
-                  if (d != null) {
-                    _month = DateTime(d.year, d.month);
-                    _load();
-                  }
-                },
-                child: Text(
-                  Fa.date(
-                    _month.toIso8601String(),
-                    time: false,
-                  ).substring(0, 8),
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: WoColors.line),
+            ),
+            child: Row(
+              children: [
+                _monthButton(Icons.chevron_right, onPrev),
+                Expanded(
+                  child: Text(
+                    Fa.date(month.toIso8601String(), time: false).substring(0, 8),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-              IconButton.outlined(
-                onPressed: () {
-                  _month = DateTime(_month.year, _month.month + 1);
-                  _load();
-                },
-                icon: const Icon(Icons.chevron_left),
-              ),
-            ],
+                _monthButton(Icons.chevron_left, onNext),
+              ],
+            ),
           ),
         ),
         Expanded(
-          child: _loading
-              ? const LoadingView()
-              : _error != null
-              ? ErrorView(message: _error!, onRetry: _load)
-              : items.isEmpty
+          child: items.isEmpty
               ? const EmptyView(message: 'در این ماه دستور کاری وجود ندارد.')
               : RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: () async {},
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 85),
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 92),
                     children: groups.entries.map((g) {
                       final first = g.value.first;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Text(
-                              Fa.date(first.dueAt, time: false),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.indigo,
-                              ),
+                            padding: const EdgeInsets.symmetric(vertical: 9),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 15,
+                                  decoration: BoxDecoration(
+                                    color: WoColors.seed,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Text(
+                                  Fa.date(first.dueAt, time: false),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.5,
+                                    color: WoColors.seed,
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: WoColors.seed.withValues(alpha: .1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    Fa.digits(g.value.length),
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: WoColors.seed,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          ...g.value.map(
-                            (o) => WorkOrderCard(
-                              order: o,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => WorkOrderDetailPage(id: o.id),
-                                ),
-                              ),
+                          ...g.value.asMap().entries.map(
+                            (e) => GlowWorkOrderCard(
+                              order: e.value,
+                              index: e.key,
+                              onTap: () => onOpen(e.value),
                             ),
                           ),
                         ],
@@ -1058,4 +1194,13 @@ class _WorkOrderCalendarViewState extends State<WorkOrderCalendarView> {
       ],
     );
   }
+
+  Widget _monthButton(IconData icon, VoidCallback onTap) => IconButton(
+    onPressed: onTap,
+    icon: Icon(icon, size: 20),
+    style: IconButton.styleFrom(
+      backgroundColor: WoColors.bg,
+      foregroundColor: WoColors.seed,
+    ),
+  );
 }

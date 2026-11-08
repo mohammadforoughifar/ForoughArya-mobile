@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import '../core/auth/auth_controller.dart';
 import '../features/auth/login_page.dart';
-import '../features/work_orders/presentation/work_orders_page.dart';
+import 'home_shell.dart';
 
 class ForoughApp extends StatelessWidget {
   const ForoughApp({super.key});
@@ -16,6 +17,13 @@ class ForoughApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
+      // ⚠️ حیاتی: بدون این دو delegate، MaterialLocalizations ساخته نمی‌شود و
+      // هر TextField/DatePicker در بیلد release به کادر خاکستری تبدیل می‌شود.
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Vazirmatn',
@@ -59,7 +67,7 @@ class ForoughApp extends StatelessWidget {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          return auth.isLoggedIn ? const WorkOrdersPage() : const LoginPage();
+          return auth.isLoggedIn ? const HomeShell() : const LoginPage();
         },
       ),
     );

@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>پیش‌نمایش طراحی اتوماسیون اداری</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#eef2f8;color:#203047;font-family:"Vazirmatn",Tahoma,Arial,sans-serif;padding:20px 12px 60px}
+  .wrap{max-width:1180px;margin:auto}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{font-size:12px;color:#71809b;margin-bottom:20px}
+  .sechead{display:flex;align-items:center;gap:8px;margin:26px 0 12px;font-size:14px;font-weight:800}
+  .sechead::before{content:"";width:4px;height:16px;border-radius:3px;background:#2547a8}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;align-items:start}
+  .phone{background:#f4f7fb;border-radius:26px;overflow:hidden;box-shadow:0 12px 34px rgba(21,42,99,.13);border:1px solid #e0e7f2;padding-bottom:16px}
+
+  /* هدر */
+  .hero{position:relative;overflow:hidden;border-radius:0 0 26px 26px;padding:14px 16px 8px;
+        background:linear-gradient(215deg,#152a63,#2547a8 55%,#5b47d6);color:#fff;
+        box-shadow:0 10px 24px rgba(21,42,99,.28)}
+  .bub{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.09),transparent 70%)}
+  .hrow{display:flex;align-items:center;gap:10px;position:relative}
+  .logo{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;font-size:18px;
+        background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.08));
+        border:1px solid rgba(255,255,255,.24)}
+  .hrow b{font-size:16px;font-weight:800;display:block}
+  .hrow small{font-size:10.5px;color:rgba(255,255,255,.75)}
+  .hbtn{width:34px;height:34px;display:grid;place-items:center;font-size:17px;opacity:.92}
+
+  /* تب کشویی */
+  .tabs{display:flex;gap:8px;overflow-x:auto;padding:10px 10px 12px;position:relative;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:9px 15px;border-radius:15px;
+       background:#fff;border:1px solid #e4eaf3;font-size:12.5px;color:#55637a;font-weight:500;white-space:nowrap;
+       transition:transform .18s cubic-bezier(.34,1.4,.64,1),background .25s,color .25s,box-shadow .25s}
+  .tab:active{transform:scale(.95)}
+  .tab.on{color:#fff;font-weight:800;border-color:transparent}
+  .tab.on .bd{background:rgba(255,255,255,.28);color:#fff}
+  .t1.on{background:linear-gradient(135deg,#2547a8,#2547a8c7);box-shadow:0 6px 15px rgba(37,71,168,.35)}
+  .t2.on{background:linear-gradient(135deg,#1a7f37,#1a7f37c0);box-shadow:0 6px 15px rgba(26,127,55,.35)}
+  .t3.on{background:linear-gradient(135deg,#0d7d8c,#0d7d8cc0);box-shadow:0 6px 15px rgba(13,125,140,.35)}
+  .bd{background:rgba(37,71,168,.13);color:#2547a8;font-size:9.5px;font-weight:800;
+      padding:1px 5px;border-radius:9px;min-width:17px;text-align:center}
+
+  /* کارت‌های نامه */
+  .card{position:relative;background:#fff;border-radius:18px;border:1px solid #e4eaf3;margin:0 12px 11px;
+        padding:12px 14px;overflow:hidden;box-shadow:0 4px 12px rgba(84,110,150,.07);
+        animation:rise .45s cubic-bezier(.22,1,.36,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+  .stripe{position:absolute;right:0;top:0;bottom:0;width:5px}
+  .g-in{background:linear-gradient(180deg,#4f7ce8,#2547a8)}
+  .g-out{background:linear-gradient(180deg,#3fb27f,#1a7f37)}
+  .g-inc{background:linear-gradient(180deg,#2fa8b8,#0d7d8c)}
+  .g-hot{background:linear-gradient(180deg,#e05357,#a4262c)}
+  .glow{position:absolute;inset:0;pointer-events:none;
+        background:linear-gradient(200deg,rgba(209,52,56,.07),transparent 55%)}
+  .crow{display:flex;gap:9px;align-items:flex-start}
+  .kav{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:19px;flex:0 0 auto}
+  .cin{background:linear-gradient(135deg,#2547a838,#2547a812);border:1px solid #2547a859;color:#2547a8}
+  .cout{background:linear-gradient(135deg,#1a7f3738,#1a7f3712);border:1px solid #1a7f3759;color:#1a7f37}
+  .cinc{background:linear-gradient(135deg,#0d7d8c38,#0d7d8c12);border:1px solid #0d7d8c59;color:#0d7d8c}
+  .num{font-size:10px;font-weight:800;padding:2px 7px;border-radius:7px}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .ctitle{font-size:14.5px;font-weight:800;line-height:1.45;margin-top:5px}
+  .csender{display:flex;align-items:center;gap:4px;font-size:11.5px;color:#8695ab;margin-top:5px}
+  .erja{background:#f4f7fb;border-radius:11px;padding:8px 10px;margin-top:9px;font-size:11.5px;
+        line-height:1.6;color:#44546e;display:flex;gap:5px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+  .tg{display:flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;
+      padding:3.5px 8px;border-radius:20px}
+
+  /* داشبورد */
+  .dh{padding:14px}
+  .herocard{position:relative;overflow:hidden;border-radius:22px;padding:16px;
+            background:linear-gradient(215deg,#152a63,#2547a8 55%,#5b47d6);color:#fff;
+            box-shadow:0 10px 22px rgba(37,71,168,.26)}
+  .hb{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;
+      padding:4px 9px;border-radius:9px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.26)}
+  .ring{position:relative;width:58px;height:58px;display:grid;place-items:center;flex:0 0 auto}
+  .ring svg{transform:rotate(-90deg)}
+  .ring b{position:absolute;font-size:10.5px;font-weight:800}
+  .stat4{display:flex;flex:1}
+  .stat4>div{flex:1;text-align:center}
+  .stat4 b{font-size:17.5px;font-weight:800;display:block}
+  .stat4 small{font-size:10px;color:rgba(255,255,255,.78)}
+  .sect{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;margin:16px 2px 10px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+  .qt{background:#fff;border:1px solid #e4eaf3;border-radius:16px;padding:10px 4px;text-align:center;
+      box-shadow:0 4px 10px rgba(84,110,150,.05);transition:transform .15s}
+  .qt:active{transform:scale(.94)}
+  .qt .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-size:17px;margin:0 auto}
+  .qt small{font-size:10.5px;font-weight:600;display:block;margin-top:6px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .sc{background:#fff;border:1px solid #e4eaf3;border-radius:16px;padding:10px 12px;display:flex;gap:9px;
+      align-items:center;box-shadow:0 4px 10px rgba(84,110,150,.05)}
+  .sc .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-size:17px;flex:0 0 auto}
+  .sc b{font-size:17px;font-weight:800}
+  .sc .lbl{font-size:11px;font-weight:600}
+  .sc small{font-size:9.5px;color:#96a3b8;display:block}
+
+  /* جزئیات نامه */
+  .dhead{background:#152a63;color:#fff;padding:8px 10px;display:flex;align-items:center;gap:6px}
+  .hero2{position:relative;overflow:hidden;background:linear-gradient(215deg,#152a63,#2547a8 55%,#5b47d6);
+         color:#fff;padding:0 18px 16px}
+  .hero2 h2{font-size:18px;font-weight:800;line-height:1.5;margin:10px 0 8px}
+  .hmeta{display:flex;align-items:center;gap:6px;font-size:11.5px;color:rgba(255,255,255,.9);flex-wrap:wrap}
+  .pbar{height:7px;border-radius:8px;background:rgba(255,255,255,.24);overflow:hidden;margin-top:7px}
+  .pbar>i{display:block;height:100%;background:#fff;border-radius:8px;animation:grow .95s both}
+  @keyframes grow{from{width:0!important}}
+
+  .statrow{display:flex;align-items:center;justify-content:space-evenly;background:#fff;border:1px solid #e4eaf3;
+           border-radius:18px;padding:14px 6px;margin:14px}
+  .mini{display:grid;justify-items:center;gap:5px}
+  .mini .circ{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:16px}
+  .mini b{font-size:13.5px}
+  .mini small{font-size:10px;color:#96a3b8}
+  .vdiv{width:1px;height:34px;background:#e4eaf3}
+
+  .oc{background:#fff;border:1px solid #e4eaf3;border-radius:18px;padding:15px;margin:0 14px 12px;
+      box-shadow:0 4px 14px rgba(84,110,150,.05)}
+  .ohead{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .ohead .gi{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-size:15px}
+  .ohead b{font-size:13.5px;font-weight:800}
+  .quote{background:#f7f9fc;border-radius:12px;padding:13px;font-size:13px;line-height:1.95;color:#22314a}
+  .itile{display:flex;gap:10px;align-items:center;padding:7px 0}
+  .itile .ii{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+  .itile .lab{font-size:10.5px;color:#96a3b8}
+  .itile .val{font-size:13px;font-weight:600}
+  .pill{padding:3.5px 8px;border-radius:20px;font-size:10.5px;font-weight:700;display:inline-flex;gap:3px;align-items:center}
+  .signer{display:flex;align-items:center;gap:10px;background:#f7f9fc;border:1px solid #e4eaf3;
+          border-radius:14px;padding:11px;margin-bottom:8px}
+  .signer.done{background:rgba(26,127,55,.045);border-color:rgba(26,127,55,.25)}
+  .sav{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800}
+
+  .actionbar{margin:0 12px;background:#fff;border:1px solid #e4eaf3;border-radius:18px;padding:7px;
+             display:flex;gap:8px;box-shadow:0 6px 16px rgba(84,110,150,.10)}
+  .btn{flex:1;height:44px;border-radius:13px;display:grid;place-items:center;font-size:13px;font-weight:700;border:none}
+  .btn.out{background:#fff;color:#2547a8;border:1px solid #2547a880}
+  .btn.fill{flex:2;background:#2547a8;color:#fff}
+
+  .note{font-size:11.5px;color:#71809b;background:#fff;border:1px dashed #cdd8e8;border-radius:12px;
+        padding:11px 13px;margin-top:22px;line-height:1.9}
+  .tbl{width:100%;border-collapse:collapse;font-size:11.5px;background:#fff;border-radius:12px;overflow:hidden;margin-top:8px}
+  .tbl th,.tbl td{padding:8px 10px;text-align:right;border-bottom:1px solid #eef2f8}
+  .tbl th{background:#f7f9fc;font-weight:800;font-size:11px}
+  code{background:#eef2f8;padding:1px 5px;border-radius:5px;font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>طراحی جدید ماژول اتوماسیون اداری</h1>
+  <div class="sub">همان زبان بصری ماژول دستور کار — با رنگ‌مایهٔ نیلی اداری و تفکیک رنگی نوع نامه (داخلی / صادره / وارده)</div>
+
+  <div class="sechead">۱ • صفحهٔ اصلی — هدر گرادیانی، تب کشویی با شمارنده، داشبورد</div>
+  <div class="cols">
+    <!-- ============ پنل اصلی: کارتابل ============ -->
+    <div class="phone">
+      <div class="hero">
+        <div class="bub" style="width:160px;height:160px;left:-40px;top:-60px"></div>
+        <div class="hrow">
+          <div class="logo">🏛</div>
+          <div style="flex:1"><b>اتوماسیون اداری</b><small>محمد فروغی</small></div>
+          <div class="hbtn">⟳</div>
+          <div class="hbtn">⊕</div>
+          <div class="hbtn">◯</div>
+        </div>
+        <div class="tabs">
+          <div class="tab t1 on"><span>▤</span>داشبورد</div>
+          <div class="tab t1"><span>✎</span>کارتابل داخلی<span class="bd">۱۲</span></div>
+          <div class="tab t2"><span>↗</span>صادره<span class="bd">۵</span></div>
+          <div class="tab t3"><span>↙</span>وارده</div>
+          <div class="tab t1"><span>🖊</span>امضا<span class="bd">۲</span></div>
+        </div>
+      </div>
+
+      <!-- جست‌وجو -->
+      <div style="display:flex;gap:8px;padding:12px 12px 4px">
+        <div style="flex:1;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid #e4eaf3;
+                    border-radius:14px;padding:12px 13px;font-size:12.5px;color:#a3aec0">🔍 جست‌وجو در نامهٔ داخلی…</div>
+        <div style="width:44px;height:44px;border-radius:14px;background:#fff;border:1px solid #e4eaf3;
+                    display:grid;place-items:center;color:#2547a8;font-size:18px">⚙</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:4px 18px 6px;font-size:10.5px;color:#8695ab;font-weight:600">
+        <span style="width:6px;height:6px;border-radius:50%;background:#2547a8"></span> ۳ نامه
+      </div>
+
+      <!-- نامهٔ دیرکرد با هاله -->
+      <div class="card">
+        <div class="stripe g-hot"></div><div class="glow"></div>
+        <div class="crow">
+          <div class="kav cin" style="background:linear-gradient(135deg,#d1343838,#d1343812);border-color:#d1343859;color:#d13438">✎</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="num" style="background:#d1343818;color:#d13438">شماره ۱۴۰۵/۲۸۴</span>
+              <span class="dot" style="background:#d13438"></span>
+              <span style="flex:1"></span>
+              <span style="color:#e0a800;font-size:15px">★</span>
+            </div>
+            <div class="ctitle">بازبینی قرارداد توسعه نرم‌افزار</div>
+            <div class="csender">👤 محمد فروغی</div>
+          </div>
+        </div>
+        <div class="erja"><span style="color:#2547a8">⎇</span> بررسی بندهای مالی و ارسال نظر کارشناسی به واحد حقوقی</div>
+        <div class="tags">
+          <span class="tg" style="background:#d1343814;color:#d13438;border:1px solid #d1343829">⚠ دیرکرد ۱۴۰۵/۰۸/۱۰</span>
+          <span class="tg" style="background:#e07b0014;color:#e07b00;border:1px solid #e07b0029">⚡ فوری</span>
+          <span class="tg" style="background:#b3261e14;color:#b3261e;border:1px solid #b3261e29">🔒 محرمانه</span>
+          <span class="tg" style="background:#2a6bd414;color:#2a6bd4;border:1px solid #2a6bd429">📎 پیوست</span>
+        </div>
+        <div class="tags" style="margin-top:7px">
+          <span style="font-size:10.5px;color:#8695ab;font-weight:600">📅 ۱۴۰۵/۰۸/۰۲ &nbsp; 👥 ۳</span>
+        </div>
+      </div>
+
+      <!-- نامهٔ صادره -->
+      <div class="card" style="animation-delay:.09s">
+        <div class="stripe g-out"></div>
+        <div class="crow">
+          <div class="kav cout">↗</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="num" style="background:#1a7f3718;color:#1a7f37">شماره ۱۴۰۵/ص-۱۷</span>
+              <span class="dot" style="background:#1a7f37"></span>
+            </div>
+            <div class="ctitle">ارسال صورت‌جلسهٔ جلسهٔ هیئت‌مدیره</div>
+            <div class="csender">📤 شرکت پخش سراسری</div>
+          </div>
+        </div>
+        <div class="tags">
+          <span class="tg" style="background:#1a7f3714;color:#1a7f37;border:1px solid #1a7f3729">✓ تأیید شده</span>
+          <span class="tg" style="background:#1a7f3714;color:#1a7f37;border:1px solid #1a7f3729">◇ صادره ۱۴۰۵/ص-۱۷</span>
+          <span class="tg" style="background:#2a6bd414;color:#2a6bd4;border:1px solid #2a6bd429">📎 پیوست</span>
+        </div>
+      </div>
+
+      <!-- نامهٔ وارده -->
+      <div class="card" style="animation-delay:.18s">
+        <div class="stripe g-inc"></div>
+        <div class="crow">
+          <div class="kav cinc">↙</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="num" style="background:#0d7d8c18;color:#0d7d8c">شماره ۱۴۰۵/و-۹۲</span>
+              <span class="dot" style="background:#0d7d8c"></span>
+            </div>
+            <div class="ctitle">درخواست همکاری فنی در پروژهٔ سامانهٔ فروش</div>
+            <div class="csender">🏢 سازمان فناوری اطلاعات</div>
+          </div>
+        </div>
+        <div class="tags">
+          <span class="tg" style="background:#1a7f371314;color:#1a7f37;border:1px solid #1a7f3729">↻ ارجاع</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ داشبورد ============ -->
+    <div class="phone">
+      <div class="dh">
+        <div class="herocard">
+          <div class="bub" style="width:150px;height:150px;left:-30px;bottom:-50px;position:absolute"></div>
+          <div style="display:flex;align-items:center;gap:6px;position:relative">
+            <span style="font-size:14px">📬</span>
+            <span style="font-size:11.5px;font-weight:600;color:rgba(255,255,255,.85)">کارتابل امروز</span>
+            <span style="flex:1"></span>
+            <span class="hb">📅 ۱۴۰۵/۰۸/۱۷</span>
+          </div>
+          <div style="font-size:18px;font-weight:800;margin-top:10px;line-height:1.5;position:relative">
+            ۷ نامهٔ خوانده‌نشده در انتظار شماست
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:16px;position:relative">
+            <div class="ring">
+              <svg width="58" height="58">
+                <circle cx="29" cy="29" r="24" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="5.5"/>
+                <circle cx="29" cy="29" r="24" fill="none" stroke="#fff" stroke-width="5.5"
+                        stroke-linecap="round" stroke-dasharray="151" stroke-dashoffset="60"/>
+              </svg>
+              <b>۶۰٪</b>
+            </div>
+            <div class="stat4">
+              <div><b>۱۸</b><small>دریافتی</small></div>
+              <div><b>۵</b><small>ارسالی</small></div>
+              <div><b>۹</b><small>بایگانی</small></div>
+              <div><b>۲</b><small>امضا</small></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sect"><span style="color:#2547a8">⚡</span> دسترسی سریع</div>
+        <div class="grid4">
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#2547a830,#2547a810);color:#2547a8">✎</div><small>داخلی</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#1a7f3730,#1a7f3710);color:#1a7f37">↗</div><small>صادره</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#0d7d8c30,#0d7d8c10);color:#0d7d8c">↙</div><small>وارده</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#e07b0030,#e07b0010);color:#e07b00">🖊</div><small>امضاها</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#2547a830,#2547a810);color:#2547a8">📥</div><small>کارتابل</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#5b47d630,#5b47d610);color:#5b47d6">🏛</div><small>دبیرخانه</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#6b7a9030,#6b7a9010);color:#6b7a90">🌳</div><small>بایگانی</small></div>
+          <div class="qt"><div class="ic" style="background:linear-gradient(135deg,#b04fbf30,#b04fbf10);color:#b04fbf">📝</div><small>پیش‌نویس</small></div>
+        </div>
+
+        <div class="sect"><span style="color:#2547a8">📊</span> شمارنده‌ها</div>
+        <div class="grid2">
+          <div class="sc"><div class="ic" style="background:linear-gradient(135deg,#2547a830,#2547a810);color:#2547a8">📥</div>
+            <div><div style="display:flex;align-items:baseline;gap:5px"><b style="color:#2547a8">۱۸</b><span class="lbl">دریافتی داخلی</span></div><small>۷ خوانده‌نشده</small></div></div>
+          <div class="sc"><div class="ic" style="background:linear-gradient(135deg,#1a7f3730,#1a7f3710);color:#1a7f37">📤</div>
+            <div><div style="display:flex;align-items:baseline;gap:5px"><b style="color:#1a7f37">۵</b><span class="lbl">ارسالی</span></div><small>نامهٔ صادره</small></div></div>
+          <div class="sc"><div class="ic" style="background:linear-gradient(135deg,#e0a80030,#e0a80010);color:#e0a800">★</div>
+            <div><div style="display:flex;align-items:baseline;gap:5px"><b style="color:#e0a800">۳</b><span class="lbl">نشان‌شده</span></div><small>ستاره‌دار</small></div></div>
+          <div class="sc"><div class="ic" style="background:linear-gradient(135deg,#b04fbf30,#b04fbf10);color:#b04fbf">📝</div>
+            <div><div style="display:flex;align-items:baseline;gap:5px"><b style="color:#b04fbf">۲</b><span class="lbl">پیش‌نویس</span></div><small>ذخیره‌شده</small></div></div>
+          <div class="sc"><div class="ic" style="background:linear-gradient(135deg,#e07b0030,#e07b0010);color:#e07b00">🖊</div>
+            <div><div style="display:flex;align-items:baseline;gap:5px"><b style="color:#e07b00">۲</b><span class="lbl">در انتظار امضا</span></div><small>نیازمند اقدام</small></div></div>
+          <div class="sc"><div class="ic" style="background:linear-gradient(135deg,#5b47d630,#5b47d610);color:#5b47d6">🏛</div>
+            <div><div style="display:flex;align-items:baseline;gap:5px"><b style="color:#5b47d6">۱</b><span class="lbl">دبیرخانه</span></div><small>در صف ارسال</small></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sechead">۲ • صفحهٔ جزئیات نامه — هدر گرادیانی، نوار آماری، کارت‌ها، امضاکنندگان</div>
+  <div class="cols">
+    <div class="phone" style="padding-bottom:12px">
+      <div class="dhead">
+        <span style="font-size:18px">‹</span>
+        <span style="flex:1;font-size:14px;font-weight:800">نامهٔ داخلی</span>
+        <span style="opacity:.9">⟳</span><span style="opacity:.9">⋮</span>
+      </div>
+      <div class="hero2">
+        <div class="bub" style="width:150px;height:150px;left:-40px;top:-50px"></div>
+        <div class="tabs" style="padding-right:0;padding-left:0">
+          <div class="tab t1 on"><span>📄</span>نامه</div>
+          <div class="tab"><span>📎</span>پیوست<span class="bd">۲</span></div>
+          <div class="tab"><span>🌳</span>گردش<span class="bd">۵</span></div>
+          <div class="tab"><span>👤</span>ارجاع من<span class="bd">۱</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;position:relative">
+          <span class="hb"># شماره ۱۴۰۵/۲۸۴</span>
+          <span class="hb" style="background:rgba(224,123,0,.30)">🔒 محرمانه</span>
+          <span class="hb" style="background:rgba(224,123,0,.30)">⚡ فوری</span>
+        </div>
+        <h2>بازبینی قرارداد توسعه نرم‌افزار</h2>
+        <div class="hmeta">👤 محمد فروغی &nbsp; 🕐 ۱۴۰۵/۰۸/۰۲ — ۰۹:۱۵</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.85);margin-top:14px">
+          <span>〰</span> پیشرفت گردش <span style="flex:1"></span><b>۶۰٪</b>
+        </div>
+        <div class="pbar"><i style="width:60%"></i></div>
+      </div>
+
+      <div class="statrow">
+        <div class="ring" style="width:60px;height:60px">
+          <svg width="60" height="60">
+            <circle cx="30" cy="30" r="25" fill="none" stroke="#2547a81f" stroke-width="5.5"/>
+            <circle cx="30" cy="30" r="25" fill="none" stroke="#2547a8" stroke-width="5.5"
+                    stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="63"/>
+          </svg>
+          <b style="color:#2547a8">۶۰٪</b>
+        </div>
+        <div class="vdiv"></div>
+        <div class="mini"><div class="circ" style="background:#2a6bd414;color:#2a6bd4">📎</div><b>۲</b><small>پیوست</small></div>
+        <div class="vdiv"></div>
+        <div class="mini"><div class="circ" style="background:#5b47d614;color:#5b47d6">🌳</div><b>۵</b><small>گردش</small></div>
+        <div class="vdiv"></div>
+        <div class="mini"><div class="circ" style="background:#1a7f3714;color:#1a7f37">👥</div><b>۴</b><small>گیرنده</small></div>
+      </div>
+
+      <div class="oc">
+        <div class="ohead">
+          <div class="gi" style="background:#2547a81a;color:#2547a8">📄</div><b>متن نامه</b>
+        </div>
+        <div class="quote" style="border-right:3px solid #2547a88c">
+          با سلام و احترام، خواهشمند است دستور فرمایید بندهای مالی و حقوقی قرارداد توسعه نرم‌افزار مورد بازبینی قرار گیرد و نتیجه تا پایان هفته به این واحد اعلام شود.
+        </div>
+      </div>
+
+      <div class="oc">
+        <div class="ohead">
+          <div class="gi" style="background:#5b47d61a;color:#5b47d6">🪪</div><b>مشخصات نامه</b>
+        </div>
+        <div class="itile"><div class="ii" style="background:#2547a817;color:#2547a8">👤</div>
+          <div><div class="lab">فرستنده</div><div class="val">محمد فروغی</div></div></div>
+        <div class="itile"><div class="ii" style="background:#6b7a9017;color:#6b7a90">#</div>
+          <div><div class="lab">شمارهٔ نامه</div><div class="val">۱۴۰۵/۲۸۴</div></div></div>
+        <div class="itile"><div class="ii" style="background:#6b7a9017;color:#6b7a90">🕐</div>
+          <div><div class="lab">تاریخ ثبت</div><div class="val">۱۴۰۵/۰۸/۰۲ — ۰۹:۱۵</div></div></div>
+        <div class="itile"><div class="ii" style="background:#e07b0017;color:#e07b00">🔒</div>
+          <div><div class="lab">محرمانگی</div><div class="val" style="color:#e07b00">محرمانه</div></div></div>
+        <div class="itile"><div class="ii" style="background:#e07b0017;color:#e07b00">⚡</div>
+          <div><div class="lab">فوریت</div><div class="val" style="color:#e07b00">فوری</div></div></div>
+      </div>
+
+      <div class="oc">
+        <div class="ohead">
+          <div class="gi" style="background:#e07b001a;color:#e07b00">🖊</div><b>امضاکنندگان (۲)</b>
+          <span style="flex:1"></span>
+          <span class="btn fill" style="height:32px;flex:none;padding:0 12px;font-size:11.5px;border-radius:10px">🖊 امضا</span>
+        </div>
+        <div class="signer done">
+          <div class="sav" style="background:linear-gradient(135deg,#3fb27f,#1a7f37)">✓</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700">محمد فروغی</div>
+            <div style="font-size:10.5px;color:#8695ab">مدیرعامل</div>
+            <div style="font-size:10.5px;color:#55637a;margin-top:3px">پاراف: با احترام، مورد تأیید است</div>
+          </div>
+          <span class="pill" style="background:#1a7f3714;color:#1a7f37;border:1px solid #1a7f3729">✓ ۱۴۰۵/۰۸/۰۴</span>
+        </div>
+        <div class="signer">
+          <div class="sav" style="background:linear-gradient(135deg,#c3cddc,#aab6c8)">۲</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700">علی رضایی</div>
+            <div style="font-size:10.5px;color:#8695ab">مدیر حقوقی</div>
+          </div>
+          <span class="pill" style="background:#e07b0014;color:#e07b00;border:1px solid #e07b0029">🕐 در انتظار</span>
+        </div>
+      </div>
+
+      <div class="actionbar">
+        <button class="btn out">↩ پاسخ</button>
+        <button class="btn fill">⎇ ارجاع نامه</button>
+      </div>
+    </div>
+
+    <!-- ============ تب پیوست + گردش + ارجاع من ============ -->
+    <div class="phone" style="padding-bottom:12px">
+      <div class="oc" style="margin-top:14px">
+        <div class="ohead">
+          <div class="gi" style="background:#2a6bd41a;color:#2a6bd4">📎</div><b>پیوست‌ها (۲)</b>
+          <span style="flex:1"></span>
+          <span class="btn fill" style="height:34px;flex:none;padding:0 12px;font-size:11.5px;border-radius:11px;background:#2a6bd4">⬆ افزودن</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;background:#f7f9fc;border:1px solid #e4eaf3;border-radius:14px;padding:11px;margin-bottom:8px">
+          <div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#2a6bd42e,#2a6bd412);display:grid;place-items:center;color:#2a6bd4;font-size:18px">📄</div>
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:600">قرارداد-توسعه-نرم-افزار.pdf</div>
+            <div style="font-size:10.5px;color:#8695ab">۱٫۸ مگابایت • محمد فروغی</div>
+          </div>
+          <span style="color:#2a6bd4;font-size:17px">⬇</span>
+          <span style="color:#d13438;font-size:17px">🗑</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;background:#f7f9fc;border:1px solid #e4eaf3;border-radius:14px;padding:11px">
+          <div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#2a6bd42e,#2a6bd412);display:grid;place-items:center;color:#2a6bd4;font-size:18px">📄</div>
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:600">صورت‌جلسه-هیئت-مدیره.docx</div>
+            <div style="font-size:10.5px;color:#8695ab">۳۴۰ کیلوبایت • مریم احمدی</div>
+          </div>
+          <span style="color:#2a6bd4;font-size:17px">⬇</span>
+          <span style="color:#d13438;font-size:17px">🗑</span>
+        </div>
+      </div>
+
+      <div class="oc">
+        <div class="ohead">
+          <div class="gi" style="background:#1a7f371a;color:#1a7f37">🌳</div><b>محمد فروغی ← علی رضایی</b>
+          <span style="flex:1"></span>
+          <span class="pill" style="background:#5b47d614;color:#5b47d6;border:1px solid #5b47d629">ارجاع</span>
+        </div>
+        <div class="itile"><div class="ii" style="background:#5b47d617;color:#5b47d6">⎇</div>
+          <div><div class="lab">عملگر</div><div class="val">جهت اقدام</div></div></div>
+        <div class="itile"><div class="ii" style="background:#6b7a9017;color:#6b7a90">🕐</div>
+          <div><div class="lab">تاریخ</div><div class="val">۱۴۰۵/۰۸/۰۳ — ۱۰:۲۰</div></div></div>
+        <div class="itile"><div class="ii" style="background:#e07b0017;color:#e07b00">⏱</div>
+          <div><div class="lab">مهلت پاسخ</div><div class="val" style="color:#e07b00">۱۴۰۵/۰۸/۱۰</div></div></div>
+        <div style="background:rgba(37,71,168,.045);border-right:3px solid #2547a88c;border-radius:11px;padding:11px;margin-top:8px">
+          <div style="font-size:10px;font-weight:700;color:#2547a8">دستور ارجاع</div>
+          <div style="font-size:12px;line-height:1.75;color:#44546e;margin-top:3px">بررسی بندهای مالی و ارسال نظر کارشناسی.</div>
+        </div>
+        <div style="background:rgba(26,127,55,.045);border-right:3px solid #1a7f378c;border-radius:11px;padding:11px;margin-top:8px">
+          <div style="font-size:10px;font-weight:700;color:#1a7f37">پاسخ</div>
+          <div style="font-size:12px;line-height:1.75;color:#44546e;margin-top:3px">بند ۷ نیازمند اصلاح است؛ گزارش کامل ارسال شد.</div>
+        </div>
+        <div class="tags" style="margin-top:9px">
+          <span class="tg" style="background:#1a7f3714;color:#1a7f37;border:1px solid #1a7f3729">✓ خوانده شد</span>
+          <span class="tg" style="background:#1a7f3714;color:#1a7f37;border:1px solid #1a7f3729">✓ تأیید شد</span>
+        </div>
+      </div>
+
+      <div style="margin:0 14px;background:linear-gradient(215deg,rgba(209,52,56,.10),#fff);border:1px solid rgba(209,52,56,.25);
+                  border-radius:18px;padding:14px;display:flex;gap:11px;align-items:center">
+        <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#e05357,#d13438);
+                    display:grid;place-items:center;font-size:21px;color:#fff">⚠</div>
+        <div>
+          <div style="font-size:14px;font-weight:800;color:#d13438">مهلت پاسخ گذشته است</div>
+          <div style="font-size:11px;color:#5c6d87">مهلت: ۱۴۰۵/۰۸/۱۰</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sechead">۳ • قواعد رنگی و اجزای مشترک</div>
+  <table class="tbl">
+    <tr><th>جزء</th><th>نام در کد</th><th>کاربرد</th></tr>
+    <tr><td>نوار رنگی کناری کارت</td><td><code>OfficeColors.gradientFor</code></td><td>دیرکرد/آنی = قرمز، فوری = نارنجی، صادره = سبز، وارده = فیروزه‌ای، داخلی = نیلی</td></tr>
+    <tr><td>هالهٔ نبضی</td><td><code>GlowLetterCard._glow</code></td><td>فقط برای نامه‌های دیرکرد یا «آنی» تا نظر جلب شود</td></tr>
+    <tr><td>تب کشویی</td><td><code>OfficeSlidingTabs</code></td><td>گرادیان + سایهٔ رنگی روی تب فعال، بج شمارنده، اسکرول خودکار</td></tr>
+    <tr><td>هدر گرادیانی</td><td><code>LetterHero</code> / هدر داخلی</td><td>سرمه‌ای → رنگ نوع نامه → بنفش</td></tr>
+    <tr><td>کارت بخش</td><td><code>OfficeCard</code></td><td>سفید، گوشهٔ ۱۸، آیکون رنگی در کادر نرم</td></tr>
+    <tr><td>ردیف اطلاعات</td><td><code>OfficeInfoTile</code></td><td>آیکون در کادر + برچسب خاکستری + مقدار پررنگ</td></tr>
+    <tr><td>حلقهٔ آمار</td><td><code>OfficeRing</code></td><td>درصد با انیمیشن کشیدن کمان</td></tr>
+    <tr><td>ورود آیتم</td><td><code>OFadeSlideIn</code></td><td>fade + slide + scale با تأخیر پلکانی</td></tr>
+    <tr><td>اسکلت بارگذاری</td><td><code>OfficeShimmer</code></td><td>جای نشانگر چرخان</td></tr>
+  </table>
+
+  <div class="note">
+    <b>یادداشت:</b> این پیش‌نمایش با HTML بازسازی شده تا طراحی را قبل از نصب ببینی. نسخهٔ واقعی با ویجت‌های فلاتر در
+    <code>office_style.dart</code> پیاده شده و ۶ تست رندر مخصوص آن پاس شده است
+    (کارت نامه، برچسب دیرکرد، تب کشویی با شمارنده، کارت/ردیف/حلقه، اسکلت و انیمیشن، و منطق رنگ‌ها).
+  </div>
+</div>
+</body>
+</html>

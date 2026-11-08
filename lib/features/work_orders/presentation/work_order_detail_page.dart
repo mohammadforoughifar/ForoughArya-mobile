@@ -10,6 +10,7 @@ import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
+import 'wo_style.dart';
 import 'work_order_editor_page.dart';
 
 class WorkOrderDetailPage extends StatefulWidget {
@@ -22,6 +23,11 @@ class WorkOrderDetailPage extends StatefulWidget {
 class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
     with SingleTickerProviderStateMixin {
   late final _tabs = TabController(length: 5, vsync: this);
+  late final _scrollCtrl = ScrollController();
+
+  /// ایندکس تب جاری — برای همگام‌سازی تب کشویی با TabBarView
+  int _tabIndex = 0;
+
   WorkOrder? _order;
   List<dynamic> _checklist = [], _comments = [], _attachments = [], _logs = [];
   bool _loading = true, _busy = false;
@@ -37,12 +43,19 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
   @override
   void initState() {
     super.initState();
+    // هر تغییر تب (سوایپ یا لمس تب کشویی) را به UI اطلاع می‌دهد
+    _tabs.addListener(() {
+      if (_tabs.index != _tabIndex && mounted) {
+        setState(() => _tabIndex = _tabs.index);
+      }
+    });
     _load();
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    _scrollCtrl.dispose();
     _comment.dispose();
     _checklistText.dispose();
     super.dispose();
@@ -93,6 +106,728 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final o = _order;
+    final canEdit =
+        o != null &&
+        isOwner &&
+        o.isOpen &&
+        o.assignees.every((a) => a.seenAt == null && a.repliedAt == null);
+    final canReply =
+        o != null && o.isOpen && o.assignees.any((a) => a.userId == myId);
+
+    return Scaffold(
+      backgroundColor: WoColors.bg,
+      extendBodyBehindAppBar: false,
+      appBar: AppBar(
+        backgroundColor: WoColors.deep,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 4,
+        title: Text(
+          o?.number ?? 'جزئیات دستور کار',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          if (canEdit)
+            IconButton(
+              tooltip: 'ویرایش',
+              onPressed: _edit,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          if (o != null)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (v) {
+                switch (v) {
+                  case 'extend':
+                    _extend();
+                    break;
+                  case 'close':
+                    _close();
+                    break;
+                  case 'reopen':
+                    _reopen();
+                    break;
+                  case 'assignees':
+                    _addAssignees();
+                    break;
+                  case 'delete':
+                    _delete();
+                    break;
+                }
+              },
+              itemBuilder: (_) => [
+                if (isOwner && o.isOpen) ...const [
+                  PopupMenuItem(
+                    value: 'extend',
+                    child: ListTile(
+                      leading: Icon(Icons.more_time),
+                      title: Text('تمدید مهلت'),
+                      dense: true,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'assignees',
+                    child: ListTile(
+                      leading: Icon(Icons.group_add_outlined),
+                      title: Text('افزودن گیرنده'),
+                      dense: true,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'close',
+                    child: ListTile(
+                      leading: Icon(Icons.lock_outline),
+                      title: Text('بستن نهایی'),
+                      dense: true,
+                    ),
+                  ),
+                ],
+                if (isOwner && !o.isOpen)
+                  const PopupMenuItem(
+                    value: 'reopen',
+                    child: ListTile(
+                      leading: Icon(Icons.lock_open_outlined),
+                      title: Text('بازگشایی'),
+                      dense: true,
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline, color: Colors.red),
+                    title: Text('حذف'),
+                    dense: true,
+                  ),
+                ),
+              ],
+            ),
+        ],
+        bottom: o == null
+            ? null
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(58),
+                child: Container(
+                  color: WoColors.deep,
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: SlidingTabs(
+                    height: 54,
+                    pillColor: Colors.white,
+                    items: const [
+                      (label: 'جزئیات', icon: Icons.info_outline, key: 'd'),
+                      (label: 'چک‌لیست', icon: Icons.checklist_rtl, key: 'c'),
+                      (label: 'گفتگو', icon: Icons.forum_outlined, key: 'm'),
+                      (label: 'پیوست', icon: Icons.attach_file, key: 'a'),
+                      (label: 'تاریخچه', icon: Icons.history, key: 'l'),
+                    ],
+                    index: _indexForTab(),
+                    showCounts: true,
+                    counts: {
+                      'c': _checklist.length,
+                      'm': _comments.length,
+                      'a': _attachments.length,
+                      'l': _logs.length,
+                    },
+                    onChanged: (i) {
+                      setState(() => _tabIndex = i);
+                      _tabs.animateTo(i);
+                    },
+                  ),
+                ),
+              ),
+      ),
+      body: _loading
+          ? const ShimmerList(count: 4)
+          : _error != null
+          ? ErrorView(message: _error!, onRetry: _load)
+          : Column(
+              children: [
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabs,
+                    children: [
+                      _overview(),
+                      _checklistTab(),
+                      _commentsTab(),
+                      _attachmentsTab(),
+                      _logsTab(),
+                    ],
+                  ),
+                ),
+                if (canReply)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueGrey.withValues(alpha: .10),
+                          blurRadius: 16,
+                          offset: const Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 46,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: WoColors.seed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: _busy ? null : _reply,
+                            icon: const Icon(Icons.reply, size: 19),
+                            label: const Text('ثبت پاسخ من'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  int _indexForTab() => _tabIndex;
+
+  // ============================================================
+  //  تب جزئیات — چیدمان کارت‌محور با هدر گرادیانی
+  // ============================================================
+
+  Widget _overview() {
+    final o = _order!;
+    final progress = o.checklistTotal == 0
+        ? 0.0
+        : o.checklistDone / o.checklistTotal;
+
+    return RefreshIndicator(
+      color: WoColors.seed,
+      onRefresh: _load,
+      child: ListView(
+        controller: _scrollCtrl,
+        padding: EdgeInsets.zero,
+        children: [
+          DetailHero(
+            order: o,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _heroBadge(
+                      !o.isOpen
+                          ? 'بسته'
+                          : o.isOverdue
+                          ? 'دیرکرد'
+                          : 'در جریان',
+                      !o.isOpen
+                          ? Colors.white24
+                          : o.isOverdue
+                          ? WoColors.overdue
+                          : WoColors.open,
+                      icon: !o.isOpen
+                          ? Icons.lock_outline
+                          : o.isOverdue
+                          ? Icons.warning_amber_rounded
+                          : Icons.play_circle_outline,
+                    ),
+                    const SizedBox(width: 6),
+                    _heroBadge(
+                      Fa.priority(o.priority),
+                      Colors.white24,
+                      icon: Icons.flag_outlined,
+                    ),
+                    if (o.recurrence > 0) ...[
+                      const SizedBox(width: 6),
+                      _heroBadge(
+                        Fa.recurrence(o.recurrence),
+                        Colors.white24,
+                        icon: Icons.repeat,
+                      ),
+                    ],
+                    const Spacer(),
+                    _heroBadge(
+                      Fa.digits(o.number),
+                      Colors.white24,
+                      icon: Icons.tag,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 13),
+                Text(
+                  o.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    height: 1.45,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: .8),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      o.ownerName,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.white.withValues(alpha: .9),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Icon(
+                      Icons.event_outlined,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: .8),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      Fa.date(o.dueAt, time: false),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: o.isOverdue
+                            ? const Color(0xffffd7d7)
+                            : Colors.white.withValues(alpha: .9),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
+            child: Column(
+              children: [
+                // ---------- خلاصهٔ آماری ----------
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: WoColors.line),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      RingStat(
+                        value: progress,
+                        label: 'چک‌لیست',
+                        color: WoColors.open,
+                      ),
+                      _statDivider(),
+                      _miniStat(
+                        Icons.people_outline,
+                        o.assignees.length,
+                        'گیرنده',
+                      ),
+                      _statDivider(),
+                      _miniStat(
+                        Icons.chat_bubble_outline,
+                        o.commentCount,
+                        'گفتگو',
+                      ),
+                      _statDivider(),
+                      _miniStat(
+                        Icons.attach_file,
+                        o.attachmentCount,
+                        'پیوست',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ---------- شرح دستور ----------
+                GlassCard(
+                  title: 'شرح دستور کار',
+                  icon: Icons.article_outlined,
+                  children: [
+                    SelectableText(
+                      o.description.isEmpty
+                          ? 'شرحی برای این دستور کار ثبت نشده است.'
+                          : o.description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.95,
+                        color: o.description.isEmpty
+                            ? Colors.blueGrey.shade400
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ---------- مشخصات ----------
+                GlassCard(
+                  title: 'مشخصات',
+                  icon: Icons.badge_outlined,
+                  children: [
+                    InfoTile(
+                      icon: Icons.person_outline,
+                      label: 'دستوردهنده',
+                      value: o.ownerName,
+                    ),
+                    InfoTile(
+                      icon: Icons.event_outlined,
+                      label: 'مهلت انجام',
+                      value: Fa.date(o.dueAt),
+                      color: o.isOverdue ? WoColors.overdue : null,
+                    ),
+                    InfoTile(
+                      icon: Icons.add_box_outlined,
+                      label: 'تاریخ ثبت',
+                      value: Fa.date(o.createdAt),
+                    ),
+                    if (o.extensionCount > 0)
+                      InfoTile(
+                        icon: Icons.more_time,
+                        label: 'تعداد تمدید',
+                        value: '${Fa.digits(o.extensionCount)} بار',
+                        color: WoColors.urgent,
+                      ),
+                    if (o.projectName != null)
+                      InfoTile(
+                        icon: Icons.account_tree_outlined,
+                        label: 'پروژه',
+                        value: '${o.projectCode ?? ''} ${o.projectName}'.trim(),
+                      ),
+                    if (o.parentOrderId != null)
+                      InfoTile(
+                        icon: Icons.subdirectory_arrow_left,
+                        label: 'دستور مادر',
+                        value: '#${Fa.digits(o.parentOrderId!)}',
+                      ),
+                    if (o.closeNote?.isNotEmpty == true)
+                      InfoTile(
+                        icon: Icons.lock_outline,
+                        label: 'یادداشت بستن',
+                        value: o.closeNote!,
+                        color: WoColors.closed,
+                      ),
+                  ],
+                ),
+
+                // ---------- برچسب‌ها ----------
+                if (o.tags.isNotEmpty)
+                  GlassCard(
+                    title: 'برچسب‌ها',
+                    icon: Icons.sell_outlined,
+                    color: WoColors.accent,
+                    children: [
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: o.tags
+                            .map(
+                              (t) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: WoColors.accent.withValues(alpha: .08),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: WoColors.accent.withValues(alpha: .2),
+                                  ),
+                                ),
+                                child: Text(
+                                  '#$t',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: WoColors.accent,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                  ),
+
+                // ---------- گیرندگان ----------
+                GlassCard(
+                  title: 'گیرندگان (${Fa.digits(o.assignees.length)})',
+                  icon: Icons.people_alt_outlined,
+                  children: [
+                    if (o.assignees.isEmpty)
+                      Text(
+                        'گیرینده‌ای ثبت نشده است.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.blueGrey.shade400,
+                        ),
+                      )
+                    else
+                      ...o.assignees.map((a) => _assigneeTile(a, o)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statDivider() => Container(
+    width: 1,
+    height: 34,
+    color: WoColors.line,
+  );
+
+  Widget _miniStat(IconData icon, int value, String label) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: WoColors.seed.withValues(alpha: .08),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 17, color: WoColors.seed),
+      ),
+      const SizedBox(height: 5),
+      Text(
+        Fa.digits(value),
+        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
+      ),
+      Text(
+        label,
+        style: TextStyle(fontSize: 10, color: Colors.blueGrey.shade500),
+      ),
+    ],
+  );
+
+  Widget _heroBadge(String text, Color color, {IconData? icon}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: Colors.white.withValues(alpha: .28)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 11, color: Colors.white),
+          const SizedBox(width: 3),
+        ],
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  /// کارت گیرنده با وضعیت رنگی و دکمه‌های تأیید/رد
+  Widget _assigneeTile(Assignee a, WorkOrder o) {
+    final (statusColor, statusLabel, statusIcon) = switch (a) {
+      Assignee(ownerDecision: 'Approved') => (
+        WoColors.open,
+        'تأیید شده',
+        Icons.verified_outlined,
+      ),
+      Assignee(ownerDecision: 'Rejected') => (
+        WoColors.overdue,
+        'رد شده',
+        Icons.cancel_outlined,
+      ),
+      Assignee(done: true) => (
+        WoColors.open,
+        'انجام شد',
+        Icons.check_circle_outline,
+      ),
+      Assignee(done: false) => (
+        WoColors.overdue,
+        'انجام نشد',
+        Icons.highlight_off,
+      ),
+      Assignee(seenAt: != null) => (
+        const Color(0xff2a6bd4),
+        'رویت شده',
+        Icons.visibility_outlined,
+      ),
+      _ => (WoColors.urgent, 'در انتظار رویت', Icons.hourglass_empty),
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: statusColor.withValues(alpha: .22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: WoColors.gradientFor(o),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  a.name.isEmpty ? '؟' : a.name.characters.first,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  a.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 12, color: statusColor),
+                    const SizedBox(width: 3),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (a.replyText?.isNotEmpty == true)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 9),
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: WoColors.bg,
+                borderRadius: BorderRadius.circular(10),
+                border: const Border(
+                  right: BorderSide(color: WoColors.seed, width: 3),
+                ),
+              ),
+              child: SelectableText(
+                a.replyText!,
+                style: const TextStyle(fontSize: 12, height: 1.7),
+              ),
+            ),
+          if (a.repliedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.schedule,
+                    size: 12,
+                    color: Colors.blueGrey.shade400,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'پاسخ: ${Fa.date(a.repliedAt)}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: Colors.blueGrey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (a.ownerDecisionNote?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(
+                'یادداشت شما: ${a.ownerDecisionNote}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.blueGrey.shade600,
+                ),
+              ),
+            ),
+          if (isOwner && o.isOpen && a.repliedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: WoColors.overdue,
+                        side: BorderSide(
+                          color: WoColors.overdue.withValues(alpha: .4),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => _decide(a, false),
+                      icon: const Icon(Icons.close, size: 15),
+                      label: const Text(
+                        'رد',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: WoColors.open,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => _decide(a, true),
+                      icon: const Icon(Icons.check, size: 15),
+                      label: const Text(
+                        'تأیید',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _reply() async {
@@ -439,321 +1174,66 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
     if (result == true) await _load();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final o = _order;
-    final canEdit =
-        o != null &&
-        isOwner &&
-        o.isOpen &&
-        o.assignees.every((a) => a.seenAt == null && a.repliedAt == null);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(o?.number ?? 'جزئیات دستور کار'),
-        actions: [
-          if (canEdit)
-            IconButton(
-              tooltip: 'ویرایش',
-              onPressed: _edit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-          if (o != null)
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                switch (v) {
-                  case 'extend':
-                    _extend();
-                    break;
-                  case 'close':
-                    _close();
-                    break;
-                  case 'reopen':
-                    _reopen();
-                    break;
-                  case 'assignees':
-                    _addAssignees();
-                    break;
-                  case 'delete':
-                    _delete();
-                    break;
-                }
-              },
-              itemBuilder: (_) => [
-                if (isOwner && o.isOpen) ...const [
-                  PopupMenuItem(
-                    value: 'extend',
-                    child: ListTile(
-                      leading: Icon(Icons.more_time),
-                      title: Text('تمدید مهلت'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'assignees',
-                    child: ListTile(
-                      leading: Icon(Icons.group_add_outlined),
-                      title: Text('افزودن گیرنده'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'close',
-                    child: ListTile(
-                      leading: Icon(Icons.lock_outline),
-                      title: Text('بستن نهایی'),
-                    ),
-                  ),
-                ],
-                if (isOwner && !o.isOpen)
-                  const PopupMenuItem(
-                    value: 'reopen',
-                    child: ListTile(
-                      leading: Icon(Icons.lock_open_outlined),
-                      title: Text('بازگشایی'),
-                    ),
-                  ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    leading: Icon(Icons.delete_outline, color: Colors.red),
-                    title: Text('حذف'),
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
-      body: _loading
-          ? const LoadingView()
-          : _error != null
-          ? ErrorView(message: _error!, onRetry: _load)
-          : Column(
-              children: [
-                Container(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: TabBar(
-                    controller: _tabs,
-                    isScrollable: true,
-                    tabs: const [
-                      Tab(text: 'جزئیات'),
-                      Tab(text: 'چک‌لیست'),
-                      Tab(text: 'گفتگو'),
-                      Tab(text: 'پیوست'),
-                      Tab(text: 'تاریخچه'),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabs,
-                    children: [
-                      _overview(),
-                      _checklistTab(),
-                      _commentsTab(),
-                      _attachmentsTab(),
-                      _logsTab(),
-                    ],
-                  ),
-                ),
-                if (o!.isOpen && o.assignees.any((a) => a.userId == myId))
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _busy ? null : _reply,
-                          icon: const Icon(Icons.reply),
-                          label: const Text('ثبت پاسخ'),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-    );
-  }
-
-  Widget _overview() {
-    final o = _order!;
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            children: [
-              _statusChip(o),
-              const SizedBox(width: 7),
-              Chip(label: Text(Fa.priority(o.priority))),
-              if (o.recurrence > 0) ...[
-                const SizedBox(width: 7),
-                Chip(
-                  avatar: const Icon(Icons.repeat, size: 17),
-                  label: Text(Fa.recurrence(o.recurrence)),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            o.title,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            o.description.isEmpty ? 'بدون شرح' : o.description,
-            style: const TextStyle(height: 1.8),
-          ),
-          const SizedBox(height: 18),
-          _info(Icons.person_outline, 'دستوردهنده', o.ownerName),
-          _info(Icons.event, 'مهلت انجام', Fa.date(o.dueAt)),
-          _info(Icons.add_box_outlined, 'تاریخ ثبت', Fa.date(o.createdAt)),
-          if (o.projectName != null)
-            _info(
-              Icons.account_tree_outlined,
-              'پروژه',
-              '${o.projectCode ?? ''} ${o.projectName}',
-            ),
-          if (o.closeNote?.isNotEmpty == true)
-            _info(Icons.lock_outline, 'یادداشت بستن', o.closeNote!),
-          if (o.tags.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Wrap(
-                spacing: 6,
-                children: o.tags.map((e) => Chip(label: Text('#$e'))).toList(),
-              ),
-            ),
-          const SizedBox(height: 14),
-          Text(
-            'گیرندگان (${Fa.digits(o.assignees.length)})',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-          ),
-          const SizedBox(height: 8),
-          ...o.assignees.map(
-            (a) => Card(
-              margin: const EdgeInsets.only(bottom: 9),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(child: Text(a.name.characters.first)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            a.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        _assigneeStatus(a),
-                      ],
-                    ),
-                    if (a.replyText?.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: SelectableText(a.replyText!),
-                      ),
-                    if (a.repliedAt != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'پاسخ: ${Fa.date(a.repliedAt)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.blueGrey,
-                          ),
-                        ),
-                      ),
-                    if (a.ownerDecisionNote?.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'یادداشت دستوردهنده: ${a.ownerDecisionNote}',
-                        ),
-                      ),
-                    if (isOwner && o.isOpen && a.repliedAt != null)
-                      OverflowBar(
-                        children: [
-                          TextButton.icon(
-                            onPressed: () => _decide(a, true),
-                            icon: const Icon(Icons.check, color: Colors.green),
-                            label: const Text('تأیید'),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => _decide(a, false),
-                            icon: const Icon(Icons.close, color: Colors.red),
-                            label: const Text('رد'),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 25),
-        ],
-      ),
-    );
-  }
-
-  Widget _assigneeStatus(Assignee a) {
-    if (a.ownerDecision == 'Approved')
-      return const Chip(
-        label: Text('تأیید شده'),
-        backgroundColor: Color(0xffe3f7e9),
-      );
-    if (a.ownerDecision == 'Rejected')
-      return const Chip(
-        label: Text('رد شده'),
-        backgroundColor: Color(0xffffe8e8),
-      );
-    if (a.done == true)
-      return const Text('انجام شد', style: TextStyle(color: Colors.green));
-    if (a.done == false)
-      return const Text('انجام نشد', style: TextStyle(color: Colors.red));
-    if (a.seenAt != null) return const Text('رویت شده');
-    return const Text('در انتظار رویت');
-  }
-
-  Widget _statusChip(WorkOrder o) => Chip(
-    label: Text(
-      !o.isOpen
-          ? 'بسته'
-          : o.isOverdue
-          ? 'باز • دیرکرد'
-          : 'باز',
-    ),
-    backgroundColor: !o.isOpen
-        ? Colors.blueGrey.shade100
-        : o.isOverdue
-        ? Colors.red.shade50
-        : Colors.green.shade50,
-  );
-
-  Widget _info(IconData icon, String title, String value) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: Icon(icon, color: Colors.blueGrey),
-    title: Text(
-      title,
-      style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-    ),
-    subtitle: Text(value, style: const TextStyle(fontSize: 15)),
-  );
-
   Widget _checklistTab() {
     final o = _order!;
     final done = _checklist
         .where((e) => e is Map && e['isDone'] == true)
         .length;
+    final progress = _checklist.isEmpty ? 0.0 : done / _checklist.length;
+
     return Column(
       children: [
         if (_checklist.isNotEmpty)
-          LinearProgressIndicator(
-            value: _checklist.isEmpty ? 0 : done / _checklist.length,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
+            child: Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: WoColors.line),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.checklist_rtl, size: 16, color: WoColors.open),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'پیشرفت کار',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${Fa.digits(done)} از ${Fa.digits(_checklist.length)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: WoColors.open,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: progress),
+                      duration: const Duration(milliseconds: 850),
+                      curve: Curves.easeOutCubic,
+                      builder: (_, v, __) => LinearProgressIndicator(
+                        value: v,
+                        minHeight: 8,
+                        backgroundColor: WoColors.line,
+                        valueColor: AlwaysStoppedAnimation(
+                          progress >= 1 ? WoColors.open : WoColors.seed,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         if (o.isOpen)
           Padding(
@@ -763,58 +1243,129 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                 Expanded(
                   child: TextField(
                     controller: _checklistText,
-                    decoration: const InputDecoration(hintText: 'زیرکار جدید'),
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'زیرکار جدید…',
+                      hintStyle: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.blueGrey.shade300,
+                      ),
+                      isDense: true,
+                      suffixIcon: const Icon(Icons.playlist_add, size: 20),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: () {
-                    if (_checklistText.text.trim().isNotEmpty) {
-                      final t = _checklistText.text.trim();
-                      _checklistText.clear();
-                      _run(() => repo.addChecklist(widget.id, t));
-                    }
-                  },
-                  icon: const Icon(Icons.add),
+                SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: WoColors.seed,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                    onPressed: () {
+                      if (_checklistText.text.trim().isNotEmpty) {
+                        final t = _checklistText.text.trim();
+                        _checklistText.clear();
+                        _run(() => repo.addChecklist(widget.id, t));
+                      }
+                    },
+                    child: const Icon(Icons.add),
+                  ),
                 ),
               ],
             ),
           ),
         Expanded(
           child: _checklist.isEmpty
-              ? const EmptyView(message: 'زیرکاری ثبت نشده است.')
+              ? const EmptyView(
+                  message: 'زیرکاری ثبت نشده است.',
+                  icon: Icons.checklist_rtl,
+                )
               : RefreshIndicator(
                   onRefresh: _load,
-                  child: ListView(
-                    children: _checklist.whereType<Map>().map((raw) {
-                      final c = Map<String, dynamic>.from(raw);
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                    itemCount: _checklist.length,
+                    itemBuilder: (_, i) {
+                      final c = Map<String, dynamic>.from(_checklist[i] as Map);
                       final id = (c['id'] as num).toInt();
                       final checked = c['isDone'] == true;
-                      return CheckboxListTile(
-                        value: checked,
-                        onChanged: o.isOpen
-                            ? (_) => _run(
-                                () => repo.toggleChecklist(widget.id, id),
-                              )
-                            : null,
-                        title: Text(
-                          c['text']?.toString() ?? '',
-                          style: TextStyle(
-                            decoration: checked
-                                ? TextDecoration.lineThrough
-                                : null,
+                      return FadeSlideIn(
+                        index: i,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: checked
+                                ? WoColors.open.withValues(alpha: .05)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: checked
+                                  ? WoColors.open.withValues(alpha: .25)
+                                  : WoColors.line,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Transform.scale(
+                                scale: .92,
+                                child: Checkbox(
+                                  value: checked,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  onChanged: o.isOpen
+                                      ? (_) => _run(
+                                          () => repo.toggleChecklist(
+                                            widget.id,
+                                            id,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  c['text']?.toString() ?? '',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    height: 1.6,
+                                    decoration: checked
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    color: checked
+                                        ? Colors.blueGrey.shade400
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                              if (o.isOpen)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: Colors.red.shade300,
+                                  ),
+                                  onPressed: () => _run(
+                                    () => repo.deleteChecklist(widget.id, id),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        secondary: o.isOpen
-                            ? IconButton(
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () => _run(
-                                  () => repo.deleteChecklist(widget.id, id),
-                                ),
-                              )
-                            : null,
                       );
-                    }).toList(),
+                    },
                   ),
                 ),
         ),
@@ -828,146 +1379,235 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
       children: [
         Expanded(
           child: _comments.isEmpty
-              ? const EmptyView(message: 'گفتگویی ثبت نشده است.')
+              ? const EmptyView(
+                  message: 'گفتگویی ثبت نشده است.',
+                  icon: Icons.forum_outlined,
+                )
               : ListView.builder(
-                  reverse: false,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                   itemCount: _comments.length,
                   itemBuilder: (_, i) {
                     final c = Map<String, dynamic>.from(_comments[i] as Map);
                     final mine = (c['authorUserId'] as num?)?.toInt() == myId;
                     final deleted = c['isDeleted'] == true;
-                    return Align(
-                      alignment: mine
-                          ? Alignment.centerLeft
-                          : Alignment.centerRight,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 360),
-                        margin: const EdgeInsets.only(bottom: 9),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: mine ? const Color(0xffe5edff) : Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              c['authorName']?.toString() ?? '',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                    return FadeSlideIn(
+                      index: i,
+                      child: Align(
+                        alignment: mine
+                            ? Alignment.centerLeft
+                            : Alignment.centerRight,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 340),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.fromLTRB(13, 10, 13, 8),
+                          decoration: BoxDecoration(
+                            gradient: mine
+                                ? LinearGradient(
+                                    colors: [
+                                      WoColors.seed.withValues(alpha: .10),
+                                      WoColors.seed.withValues(alpha: .04),
+                                    ],
+                                  )
+                                : null,
+                            color: mine ? null : Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topRight: const Radius.circular(16),
+                              topLeft: const Radius.circular(16),
+                              bottomLeft: Radius.circular(mine ? 16 : 4),
+                              bottomRight: Radius.circular(mine ? 4 : 16),
                             ),
-                            const SizedBox(height: 5),
-                            SelectableText(
-                              deleted
-                                  ? 'این پیام حذف شده است.'
-                                  : c['text']?.toString() ?? '',
-                              style: TextStyle(
-                                fontStyle: deleted ? FontStyle.italic : null,
-                                color: deleted ? Colors.grey : null,
-                              ),
+                            border: Border.all(
+                              color: mine
+                                  ? WoColors.seed.withValues(alpha: .18)
+                                  : WoColors.line,
                             ),
-                            const SizedBox(height: 5),
-                            Text(
-                              Fa.date(c['createdAt']?.toString()),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            if (!deleted && o.isOpen)
-                              OverflowBar(
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  TextButton(
-                                    onPressed: () => setState(
-                                      () => _replyTo = (c['id'] as num).toInt(),
+                                  CircleAvatar(
+                                    radius: 11,
+                                    backgroundColor: mine
+                                        ? WoColors.seed
+                                        : Colors.blueGrey.shade300,
+                                    child: Text(
+                                      (c['authorName']?.toString() ?? '؟')
+                                          .characters
+                                          .first,
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                    child: const Text('پاسخ'),
                                   ),
-                                  if (mine)
-                                    TextButton(
-                                      onPressed: () async {
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    c['authorName']?.toString() ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              SelectableText(
+                                deleted
+                                    ? 'این پیام حذف شده است.'
+                                    : c['text']?.toString() ?? '',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.75,
+                                  fontStyle: deleted ? FontStyle.italic : null,
+                                  color: deleted
+                                      ? Colors.blueGrey.shade300
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  Text(
+                                    Fa.date(c['createdAt']?.toString()),
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      color: Colors.blueGrey.shade400,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (!deleted && o.isOpen)
+                                    _commentAction(
+                                      Icons.reply,
+                                      'پاسخ',
+                                      () => setState(
+                                        () => _replyTo =
+                                            (c['id'] as num).toInt(),
+                                      ),
+                                    ),
+                                  if (!deleted && o.isOpen && mine)
+                                    _commentAction(
+                                      Icons.edit_outlined,
+                                      'ویرایش',
+                                      () async {
                                         final t = await promptText(
                                           context,
                                           'ویرایش پیام',
                                           initial: c['text']?.toString(),
                                         );
-                                        if (t != null && t.isNotEmpty)
+                                        if (t != null && t.isNotEmpty) {
                                           _run(
                                             () => repo.editComment(
                                               (c['id'] as num).toInt(),
                                               t,
                                             ),
                                           );
+                                        }
                                       },
-                                      child: const Text('ویرایش'),
                                     ),
-                                  if (mine || isOwner)
-                                    TextButton(
-                                      onPressed: () => _run(
+                                  if (!deleted && (mine || isOwner))
+                                    _commentAction(
+                                      Icons.delete_outline,
+                                      'حذف',
+                                      () => _run(
                                         () => repo.deleteComment(
                                           (c['id'] as num).toInt(),
                                         ),
                                       ),
-                                      child: const Text(
-                                        'حذف',
-                                        style: TextStyle(color: Colors.red),
-                                      ),
+                                      color: Colors.red.shade300,
                                     ),
                                 ],
                               ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );
                   },
                 ),
         ),
+        if (_replyTo != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: InputChip(
+                label: Text(
+                  'در حال پاسخ به پیام ${Fa.digits(_replyTo!)}',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                onDeleted: () => setState(() => _replyTo = null),
+              ),
+            ),
+          ),
         if (o.isOpen)
           SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (_replyTo != null)
-                    Chip(
-                      label: Text('در حال پاسخ به پیام ${Fa.digits(_replyTo)}'),
-                      onDeleted: () => setState(() => _replyTo = null),
-                    ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _comment,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            hintText: 'نوشتن پیام...',
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: WoColors.line),
+                      ),
+                      child: TextField(
+                        controller: _comment,
+                        minLines: 1,
+                        maxLines: 4,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'نوشتن پیام…',
+                          hintStyle: TextStyle(
+                            fontSize: 12.5,
+                            color: Colors.blueGrey.shade300,
+                          ),
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 13,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        onPressed: () {
-                          final t = _comment.text.trim();
-                          if (t.isEmpty) return;
-                          _comment.clear();
-                          final replyTo = _replyTo;
-                          _replyTo = null;
-                          _run(
-                            () => repo.addComment(
-                              widget.id,
-                              t,
-                              replyToId: replyTo,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.send),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: WoColors.seed,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ],
+                      onPressed: () {
+                        final t = _comment.text.trim();
+                        if (t.isEmpty) return;
+                        _comment.clear();
+                        final replyTo = _replyTo;
+                        _replyTo = null;
+                        _run(
+                          () => repo.addComment(
+                            widget.id,
+                            t,
+                            replyToId: replyTo,
+                          ),
+                        );
+                      },
+                      child: const Icon(Icons.send, size: 19),
+                    ),
                   ),
                 ],
               ),
@@ -977,26 +1617,44 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
     );
   }
 
+  Widget _commentAction(
+    IconData icon,
+    String tooltip,
+    VoidCallback onTap, {
+    Color? color,
+  }) => IconButton(
+    visualDensity: VisualDensity.compact,
+    constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+    padding: EdgeInsets.zero,
+    tooltip: tooltip,
+    onPressed: onTap,
+    icon: Icon(
+      icon,
+      size: 15,
+      color: color ?? Colors.blueGrey.shade400,
+    ),
+  );
+
   Widget _attachmentsTab() => Column(
     children: [
       if (_order!.isOpen)
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
           child: Row(
             children: [
               Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _upload(),
-                  icon: const Icon(Icons.attach_file),
-                  label: const Text('انتخاب فایل'),
+                child: _uploadButton(
+                  Icons.attach_file,
+                  'انتخاب فایل',
+                  () => _upload(),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 9),
               Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _upload(camera: true),
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('دوربین'),
+                child: _uploadButton(
+                  Icons.camera_alt_outlined,
+                  'دوربین',
+                  () => _upload(camera: true),
                 ),
               ),
             ],
@@ -1010,57 +1668,199 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
               )
             : RefreshIndicator(
                 onRefresh: _load,
-                child: ListView(
-                  children: _attachments.whereType<Map>().map((raw) {
-                    final a = Map<String, dynamic>.from(raw);
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      child: ListTile(
-                        onTap: () => _download(a),
-                        leading: const Icon(Icons.insert_drive_file_outlined),
-                        title: Text(
-                          a['fileName']?.toString() ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 20),
+                  itemCount: _attachments.length,
+                  itemBuilder: (_, i) {
+                    final a = Map<String, dynamic>.from(
+                      _attachments[i] as Map,
+                    );
+                    return FadeSlideIn(
+                      index: i,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 9),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: WoColors.line),
                         ),
-                        subtitle: Text(
-                          '${a['uploaderName'] ?? ''} • ${Fa.bytes((a['size'] as num?)?.toInt() ?? 0)}\n${Fa.date(a['uploadedAt']?.toString())}',
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          onTap: () => _download(a),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: WoColors.seed.withValues(alpha: .09),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: const Icon(
+                              Icons.insert_drive_file_outlined,
+                              size: 19,
+                              color: WoColors.seed,
+                            ),
+                          ),
+                          title: Text(
+                            a['fileName']?.toString() ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${a['uploaderName'] ?? ''} • ${Fa.bytes((a['size'] as num?)?.toInt() ?? 0)}'
+                            '\n${Fa.date(a['uploadedAt']?.toString())}',
+                            style: const TextStyle(fontSize: 10.5),
+                          ),
+                          isThreeLine: true,
+                          trailing: const Icon(
+                            Icons.download_rounded,
+                            size: 20,
+                            color: WoColors.seed,
+                          ),
                         ),
-                        isThreeLine: true,
-                        trailing: const Icon(Icons.download_outlined),
                       ),
                     );
-                  }).toList(),
+                  },
                 ),
               ),
       ),
     ],
   );
 
+  Widget _uploadButton(IconData icon, String label, VoidCallback onTap) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: WoColors.seed.withValues(alpha: .3)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: WoColors.seed),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: WoColors.seed,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
   Widget _logsTab() => _logs.isEmpty
-      ? const EmptyView(message: 'سابقه‌ای ثبت نشده است.')
+      ? const EmptyView(
+          message: 'سابقه‌ای ثبت نشده است.',
+          icon: Icons.history,
+        )
       : RefreshIndicator(
           onRefresh: _load,
           child: ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 20),
             itemCount: _logs.length,
             itemBuilder: (_, i) {
               final l = _logs[i] as Map;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 7),
-                child: ListTile(
-                  leading: const Icon(Icons.history),
-                  title: Text(
-                    l['text']?.toString() ?? l['action']?.toString() ?? '',
+              final last = i == _logs.length - 1;
+              return FadeSlideIn(
+                index: i,
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        children: [
+                          Container(
+                            width: 26,
+                            height: 26,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: WoColors.seed.withValues(alpha: .1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.history,
+                              size: 13,
+                              color: WoColors.seed,
+                            ),
+                          ),
+                          if (!last)
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: WoColors.line,
+                                margin: const EdgeInsets.symmetric(vertical: 3),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Container(
+                          margin: EdgeInsets.only(bottom: last ? 0 : 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: WoColors.line),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l['text']?.toString() ??
+                                    l['action']?.toString() ??
+                                    '',
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.6,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.person_outline,
+                                    size: 11,
+                                    color: Colors.blueGrey.shade400,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    l['actorName']?.toString() ?? '',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      color: Colors.blueGrey.shade500,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    Fa.date(l['createdAt']?.toString()),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.blueGrey.shade400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  subtitle: Text(
-                    '${l['actorName'] ?? ''}\n${Fa.date(l['createdAt']?.toString())}',
-                  ),
-                  isThreeLine: true,
-                ),
               );
             },
           ),

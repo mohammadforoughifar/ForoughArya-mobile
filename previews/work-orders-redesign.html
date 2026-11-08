@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>پیش‌نمایش طراحی جدید دستور کار</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#eef2f8;color:#203047;
+       font-family:"Vazirmatn",Tahoma,"Segoe UI",Arial,sans-serif;padding:20px 12px 60px}
+  .wrap{max-width:1180px;margin:auto}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{font-size:12px;color:#71809b;margin-bottom:22px}
+  .sechead{display:flex;align-items:center;gap:8px;margin:26px 0 12px;font-size:14px;font-weight:800}
+  .sechead::before{content:"";width:4px;height:16px;border-radius:3px;background:#2547a8}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;align-items:start}
+  .phone{background:#f4f7fb;border-radius:26px;padding:0 0 18px;overflow:hidden;
+         box-shadow:0 12px 34px rgba(21,42,99,.13);border:1px solid #e0e7f2}
+
+  /* ---------- اپ‌بار ---------- */
+  .appbar{background:#f4f7fb;padding:14px 16px 6px;display:flex;align-items:center;gap:10px}
+  .logo{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:17px;
+        background:linear-gradient(135deg,#152a63,#2547a8 55%,#5b47d6)}
+  .titles{flex:1;min-width:0}
+  .titles b{font-size:15px;display:block}
+  .titles small{font-size:10px;color:#828fa6}
+
+  /* ---------- تب کشویی ---------- */
+  .tabs{display:flex;gap:8px;overflow-x:auto;padding:10px 12px;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:15px;
+       background:#fff;border:1px solid #e4eaf3;font-size:12px;color:#55637a;cursor:pointer;
+       transition:transform .18s cubic-bezier(.34,1.4,.64,1),background .25s,color .25s,box-shadow .25s;
+       font-weight:500;white-space:nowrap}
+  .tab .ic{font-size:14px;opacity:.65}
+  .tab:active{transform:scale(.95)}
+  .tab.on{color:#fff;font-weight:800;border-color:transparent;
+          background:linear-gradient(135deg,#2547a8,#2547a8c7);box-shadow:0 6px 15px rgba(37,71,168,.35)}
+  .tab.on .ic{opacity:1}
+  .badge{background:rgba(37,71,168,.13);color:#2547a8;font-size:9.5px;font-weight:800;
+         padding:1px 5px;border-radius:9px;min-width:17px;text-align:center}
+  .tab.on .badge{background:rgba(255,255,255,.3);color:#fff}
+
+  /* ---------- جست‌وجو ---------- */
+  .searchrow{display:flex;gap:8px;padding:4px 12px 8px}
+  .search{flex:1;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid #e4eaf3;
+          border-radius:14px;padding:11px 13px;font-size:12.5px;color:#a3aec0}
+  .iconbtn{width:42px;height:42px;border-radius:14px;background:#fff;border:1px solid #e4eaf3;
+           display:grid;place-items:center;color:#55637a;font-size:16px;cursor:pointer}
+  .chips{display:flex;gap:6px;overflow-x:auto;padding:2px 12px 8px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:7px 11px;border-radius:12px;
+        background:#fff;border:1px solid #e4eaf3;font-size:11.5px;color:#55637a;cursor:pointer}
+  .chip.on{background:#2547a8;color:#fff;border-color:#2547a8;font-weight:700}
+
+  /* ---------- کارت دستور کار ---------- */
+  .card{position:relative;background:#fff;border-radius:18px;border:1px solid #e4eaf3;margin:0 12px 11px;
+        padding:13px 15px 13px 15px;overflow:hidden;cursor:pointer;
+        box-shadow:0 4px 12px rgba(84,110,150,.07);
+        transition:transform .15s cubic-bezier(.34,1.4,.64,1),box-shadow .2s;
+        animation:rise .45s cubic-bezier(.22,1,.36,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+  .card:active{transform:scale(.975)}
+  .card.sel{border-color:#2547a8;border-width:1.8px;box-shadow:0 6px 20px rgba(37,71,168,.22)}
+  .stripe{position:absolute;right:0;top:0;bottom:0;width:5px}
+  .g-open{background:linear-gradient(180deg,#3fb27f,#1a7f37)}
+  .g-over{background:linear-gradient(180deg,#e05357,#a4262c)}
+  .g-urgent{background:linear-gradient(180deg,#f3a33c,#d2691e)}
+  .g-high{background:linear-gradient(180deg,#4f7ce8,#2547a8)}
+  .g-closed{background:linear-gradient(180deg,#8d99ae,#5d6b80)}
+  .glow{position:absolute;inset:0;pointer-events:none;
+        background:linear-gradient(215deg,rgba(209,52,56,.07),transparent 55%);
+        animation:pulse 1.6s ease-in-out infinite alternate}
+  @keyframes pulse{from{opacity:.45}to{opacity:1}}
+  .crow{display:flex;align-items:flex-start;gap:8px}
+  .num{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:7px;letter-spacing:.3px}
+  .dot{width:7px;height:7px;border-radius:50%;align-self:center;animation:blink 1.4s ease-in-out infinite alternate}
+  @keyframes blink{from{opacity:.35}to{opacity:1}}
+  .ctitle{font-size:14.5px;font-weight:700;line-height:1.45;margin:6px 0 0}
+  .cdesc{font-size:12px;color:#8695ab;line-height:1.6;margin-top:8px;
+         display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .prio{flex:0 0 auto;display:grid;place-items:center;gap:1px;padding:4px 7px;border-radius:9px;font-size:9px;font-weight:700}
+  .prio .pi{font-size:14px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .tg{display:flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;
+      padding:3.5px 8px;border-radius:20px}
+  .prog{display:flex;align-items:center;gap:8px;margin-top:11px}
+  .bar{flex:1;height:5px;border-radius:6px;background:#e4eaf3;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:6px;background:#1a7f37;
+         animation:grow .9s cubic-bezier(.22,1,.36,1) both}
+  @keyframes grow{from{width:0!important}}
+  .pnum{font-size:10.5px;font-weight:700;color:#8695ab}
+  .meta{display:flex;align-items:center;gap:5px;margin-top:11px;font-size:11px;color:#6c7a92;font-weight:600}
+  .meta .sp{flex:1}
+  .avs{display:flex;flex-direction:row-reverse}
+  .av{width:24px;height:24px;border-radius:50%;border:1.6px solid #fff;margin-right:-7px;
+      display:grid;place-items:center;color:#fff;font-size:9.5px;font-weight:700}
+
+  /* ---------- فرم جزئیات ---------- */
+  .hero{position:relative;overflow:hidden;border-radius:0 0 26px 26px;padding:16px 18px 20px;
+        background:linear-gradient(135deg,#152a63,#2547a8 55%,#5b47d6);color:#fff;
+        box-shadow:0 10px 24px rgba(21,42,99,.28)}
+  .bub{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%)}
+  .hb{display:flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;
+      padding:4px 9px;border-radius:9px;border:1px solid rgba(255,255,255,.28)}
+  .hero h2{font-size:19px;line-height:1.5;margin:13px 0 10px;font-weight:800}
+  .hero .who{display:flex;align-items:center;gap:5px;font-size:11.5px;color:rgba(255,255,255,.9)}
+  .hero .plabel{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.8);margin-top:16px}
+  .hero .pbar{height:7px;border-radius:8px;background:rgba(255,255,255,.24);margin-top:7px;overflow:hidden}
+  .hero .pbar>i{display:block;height:100%;background:#fff;border-radius:8px;animation:grow .95s both}
+
+  .body{padding:14px}
+  .statrow{display:flex;align-items:center;justify-content:space-evenly;background:#fff;
+           border:1px solid #e4eaf3;border-radius:18px;padding:14px 6px}
+  .ring{position:relative;width:60px;height:60px;display:grid;place-items:center}
+  .ring svg{transform:rotate(-90deg)}
+  .ring b{position:absolute;font-size:12px;font-weight:800;color:#1a7f37}
+  .ministat{display:grid;justify-items:center;gap:5px;font-size:10px;color:#8695ab}
+  .ministat .circ{width:34px;height:34px;border-radius:50%;background:rgba(37,71,168,.08);
+                  display:grid;place-items:center;color:#2547a8;font-size:15px}
+  .ministat b{font-size:13.5px;color:#203047}
+  .vdiv{width:1px;height:34px;background:#e4eaf3}
+
+  .gcard{background:#fff;border:1px solid #e4eaf3;border-radius:18px;padding:15px;margin-top:12px;
+         box-shadow:0 4px 14px rgba(84,110,150,.05)}
+  .ghead{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .ghead .gi{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-size:15px}
+  .ghead b{font-size:13.5px;font-weight:800}
+  .desc{font-size:13px;line-height:1.95;color:#2c3a4f}
+  .itile{display:flex;align-items:center;gap:10px;padding:7px 0}
+  .itile .ii{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+  .itile .lab{font-size:10.5px;color:#98a4b8}
+  .itile .val{font-size:13px;font-weight:600;margin-top:1px}
+  .tagpill{padding:5px 10px;border-radius:20px;font-size:11.5px;font-weight:600;
+           background:rgba(91,71,214,.08);color:#5b47d6;border:1px solid rgba(91,71,214,.2)}
+
+  .assignee{border:1px solid rgba(26,127,55,.22);border-radius:14px;padding:11px;margin-top:9px}
+  .arow{display:flex;align-items:center;gap:10px}
+  .aav{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
+  .aname{flex:1;font-size:13.5px;font-weight:700}
+  .abadge{display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:3.5px 8px;border-radius:9px}
+  .areply{margin-top:9px;background:#f4f7fb;border-right:3px solid #2547a8;border-radius:10px;
+          padding:9px;font-size:12px;line-height:1.7}
+  .btnrow{display:flex;gap:8px;margin-top:9px}
+  .btn{flex:1;height:38px;border-radius:11px;display:grid;place-items:center;font-size:12px;font-weight:700;cursor:pointer;border:none}
+  .btn.ok{background:#1a7f37;color:#fff}
+  .btn.no{background:#fff;color:#d13438;border:1px solid rgba(209,52,56,.4)}
+
+  .checkrow{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #e4eaf3;
+            border-radius:14px;padding:10px 10px;margin:0 12px 8px}
+  .checkrow.done{background:rgba(26,127,55,.05);border-color:rgba(26,127,55,.25)}
+  .cb{width:20px;height:20px;border-radius:5px;border:2px solid #c3cddc;display:grid;place-items:center;
+      color:#fff;font-size:12px;flex:0 0 auto}
+  .checkrow.done .cb{background:#1a7f37;border-color:#1a7f37}
+  .checkrow .ct{font-size:13px;line-height:1.6}
+  .checkrow.done .ct{text-decoration:line-through;color:#98a4b8}
+
+  .bubble{max-width:290px;border-radius:16px;padding:10px 13px 8px;margin:0 12px 10px;
+          font-size:13px;line-height:1.75;background:#fff;border:1px solid #e4eaf3;
+          border-bottom-right-radius:4px}
+  .bubble.me{margin-left:auto;border-bottom-right-radius:16px;border-bottom-left-radius:4px;
+             background:linear-gradient(135deg,rgba(37,71,168,.1),rgba(37,71,168,.04));
+             border-color:rgba(37,71,168,.18)}
+  .bubhead{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;margin-bottom:5px}
+  .bubhead span{width:22px;height:22px;border-radius:50%;background:#2547a8;color:#fff;
+                display:grid;place-items:center;font-size:9px}
+  .bubtime{font-size:9.5px;color:#98a4b8;margin-top:5px}
+  .composer{display:flex;gap:8px;padding:8px 12px 0;align-items:flex-end}
+  .composer input{flex:1;border:1px solid #e4eaf3;border-radius:16px;padding:13px;font:inherit;font-size:13px;background:#fff}
+  .send{width:46px;height:46px;border-radius:14px;background:#2547a8;color:#fff;display:grid;
+        place-items:center;border:none;font-size:17px;cursor:pointer}
+
+  .note{font-size:11.5px;color:#71809b;background:#fff;border:1px dashed #cdd8e8;border-radius:12px;
+        padding:11px 13px;margin-top:22px;line-height:1.9}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:11.5px;color:#55637a}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-left:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>طراحی جدید ماژول دستور کار</h1>
+  <div class="sub">پیش‌نمایش زندهٔ سه بخشی که بازطراحی شد — همان مقادیر و ساختاری که در فلاتر پیاده شدند</div>
+
+  <div class="sechead">۱ • لیست ویو انیمیشنی</div>
+  <div class="cols">
+    <div class="phone">
+      <div class="appbar">
+        <div class="logo">☰</div>
+        <div class="titles"><b>دستور کار</b><small>فروغ آریا</small></div>
+        <div class="iconbtn" style="width:36px;height:36px;border:none;background:transparent">⟳</div>
+        <div class="iconbtn" style="width:36px;height:36px;border:none;background:transparent">◯</div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab on"><span class="ic">▤</span>دستورهای من<span class="badge">۱۲</span></div>
+        <div class="tab"><span class="ic">▥</span>محول به من<span class="badge">۵</span></div>
+        <div class="tab"><span class="ic">▨</span>بایگانی<span class="badge">۳</span></div>
+        <div class="tab"><span class="ic">◫</span>کانبان</div>
+        <div class="tab"><span class="ic">▦</span>تقویم</div>
+        <div class="tab"><span class="ic">◔</span>آمار</div>
+      </div>
+
+      <div class="searchrow">
+        <div class="search">🔍 شماره، عنوان، شخص یا برچسب</div>
+        <div class="iconbtn">⤓</div>
+      </div>
+      <div class="chips">
+        <div class="chip on">⚑ فوری</div>
+        <div class="chip">✓ تأییدشده</div>
+        <div class="chip">✕ ردشده</div>
+        <div class="chip">⧗ در انتظار پاسخ</div>
+      </div>
+
+      <!-- کارت ۱: فوری + دیرکرد -->
+      <div class="card">
+        <div class="stripe g-over"></div><div class="glow"></div>
+        <div class="crow">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span class="num" style="background:rgba(209,52,56,.1);color:#d13438">۱۴۰۵/د-۱۲</span>
+              <span class="dot" style="background:#d13438"></span>
+            </div>
+            <div class="ctitle">بازبینی قرارداد توسعه نرم‌افزار</div>
+          </div>
+          <div class="prio" style="background:rgba(224,123,0,.09);color:#e07b00;border:1px solid rgba(224,123,0,.22)">
+            <span class="pi">⚡</span>فوری
+          </div>
+        </div>
+        <div class="cdesc">بررسی بندهای مالی و حقوقی قرارداد و ارسال نظر کارشناسی به واحد حقوقی.</div>
+        <div class="tags">
+          <span class="tg" style="background:rgba(209,52,56,.07);color:#d13438;border:1px solid rgba(209,52,56,.16)">⚠ دیرکرد</span>
+          <span class="tg" style="background:rgba(13,125,140,.07);color:#0d7d8c;border:1px solid rgba(13,125,140,.16)">↻ ماهانه</span>
+          <span class="tg" style="background:rgba(107,79,216,.07);color:#6b4fd8;border:1px solid rgba(107,79,216,.16)">🏷 قرارداد</span>
+        </div>
+        <div class="prog">
+          <div class="bar"><i style="width:25%;background:#d13438"></i></div>
+          <span class="pnum">۱/۴</span>
+        </div>
+        <div class="meta">
+          📅 ۱۴۰۵/۰۸/۱۰ <span class="sp"></span>
+          💬 ۳ &nbsp; 📎 ۲
+          <div class="avs" style="margin-right:9px">
+            <div class="av" style="background:#2547a8">ع</div>
+            <div class="av" style="background:#1a7f37">م</div>
+            <div class="av" style="background:#d2691e">ر</div>
+            <div class="av" style="background:#b6c0d0">+۲</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- کارت ۲ -->
+      <div class="card" style="animation-delay:.09s">
+        <div class="stripe g-high"></div>
+        <div class="crow">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span class="num" style="background:rgba(37,71,168,.1);color:#2547a8">۱۴۰۵/د-۰۹</span>
+              <span class="dot" style="background:#1a7f37"></span>
+            </div>
+            <div class="ctitle">تهیه گزارش عملکرد سه‌ماهه واحد فروش</div>
+          </div>
+          <div class="prio" style="background:rgba(37,71,168,.09);color:#2547a8;border:1px solid rgba(37,71,168,.22)">
+            <span class="pi">↑</span>بالا
+          </div>
+        </div>
+        <div class="cdesc">جمع‌آوری آمار فروش مهر تا آذر و مقایسه با دورهٔ مشابه سال قبل.</div>
+        <div class="tags">
+          <span class="tg" style="background:rgba(26,127,55,.07);color:#1a7f37;border:1px solid rgba(26,127,55,.16)">▶ باز</span>
+          <span class="tg" style="background:rgba(107,79,216,.07);color:#6b4fd8;border:1px solid rgba(107,79,216,.16)">🏷 گزارش</span>
+        </div>
+        <div class="prog">
+          <div class="bar"><i style="width:66%;background:#2547a8"></i></div>
+          <span class="pnum">۲/۳</span>
+        </div>
+        <div class="meta">
+          📅 ۱۴۰۵/۰۸/۲۰ <span class="sp"></span>
+          💬 ۱ &nbsp; 📎 ۴
+          <div class="avs" style="margin-right:9px">
+            <div class="av" style="background:#6b4fd8">س</div>
+            <div class="av" style="background:#0d7d8c">ن</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- کارت ۳: بسته -->
+      <div class="card" style="animation-delay:.18s">
+        <div class="stripe g-closed"></div>
+        <div class="crow">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span class="num" style="background:rgba(107,122,144,.1);color:#6b7a90">۱۴۰۵/د-۰۳</span>
+            </div>
+            <div class="ctitle">هماهنگی جلسهٔ هیئت‌مدیره</div>
+          </div>
+          <div class="prio" style="background:rgba(107,122,144,.09);color:#6b7a90;border:1px solid rgba(107,122,144,.22)">
+            <span class="pi">🔒</span>بسته
+          </div>
+        </div>
+        <div class="tags">
+          <span class="tg" style="background:rgba(107,122,144,.07);color:#6b7a90;border:1px solid rgba(107,122,144,.16)">🔒 بسته</span>
+          <span class="tg" style="background:rgba(26,127,55,.07);color:#1a7f37;border:1px solid rgba(26,127,55,.16)">✓ تأیید شد</span>
+        </div>
+        <div class="meta">
+          📅 ۱۴۰۵/۰۷/۲۵ <span class="sp"></span>
+          <div class="avs" style="margin-right:9px"><div class="av" style="background:#2547a8">م</div></div>
+        </div>
+      </div>
+
+      <div class="legend" style="padding:0 16px">
+        <span><i style="background:#1a7f37"></i>باز</span>
+        <span><i style="background:#4f7ce8"></i>بالا</span>
+        <span><i style="background:#f3a33c"></i>فوری</span>
+        <span><i style="background:#e05357"></i>دیرکرد</span>
+        <span><i style="background:#8d99ae"></i>بسته</span>
+      </div>
+    </div>
+
+    <!-- ستون دوم: جزئیات -->
+    <div class="phone">
+      <div class="appbar" style="background:#152a63;color:#fff;padding:12px 16px">
+        <div class="iconbtn" style="border:none;background:transparent;color:#fff;width:32px;height:32px">‹</div>
+        <div class="titles"><b style="font-size:14px">۱۴۰۵/د-۱۲</b></div>
+        <div class="iconbtn" style="border:none;background:transparent;color:#fff;width:32px;height:32px">✎</div>
+        <div class="iconbtn" style="border:none;background:transparent;color:#fff;width:32px;height:32px">⋮</div>
+      </div>
+      <div style="background:#152a63;padding:0 0 6px">
+        <div class="tabs">
+          <div class="tab on"><span class="ic">ⓘ</span>جزئیات</div>
+          <div class="tab"><span class="ic">☑</span>چک‌لیست<span class="badge">۴</span></div>
+          <div class="tab"><span class="ic">💬</span>گفتگو<span class="badge">۳</span></div>
+          <div class="tab"><span class="ic">📎</span>پیوست<span class="badge">۲</span></div>
+          <div class="tab"><span class="ic">🕐</span>تاریخچه</div>
+        </div>
+      </div>
+
+      <div class="hero">
+        <div class="bub" style="width:150px;height:150px;left:-40px;top:-50px"></div>
+        <div class="bub" style="width:190px;height:190px;right:-30px;bottom:-60px"></div>
+        <div style="display:flex;align-items:center;gap:6px;position:relative">
+          <div class="hb" style="background:rgba(255,255,255,.24)">⚠ دیرکرد</div>
+          <div class="hb" style="background:rgba(255,255,255,.24)">⚑ فوری</div>
+          <div style="flex:1"></div>
+          <div class="hb" style="background:rgba(255,255,255,.24)"># ۱۴۰۵/د-۱۲</div>
+        </div>
+        <h2>بازبینی قرارداد توسعه نرم‌افزار</h2>
+        <div class="who">👤 محمد فروغی &nbsp;&nbsp; 📅 ۱۴۰۵/۰۸/۱۰</div>
+        <div class="plabel">☑ پیشرفت چک‌لیست <span style="flex:1"></span> ۱ از ۴</div>
+        <div class="pbar"><i style="width:25%"></i></div>
+      </div>
+
+      <div class="body">
+        <div class="statrow">
+          <div class="ring">
+            <svg width="60" height="60">
+              <circle cx="30" cy="30" r="25" fill="none" stroke="#1a7f371f" stroke-width="5.5"/>
+              <circle cx="30" cy="30" r="25" fill="none" stroke="#1a7f37" stroke-width="5.5"
+                      stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="118"/>
+            </svg>
+            <b>۲۵٪</b>
+          </div>
+          <div class="vdiv"></div>
+          <div class="ministat"><div class="circ">👥</div><b>۲</b>گیرنده</div>
+          <div class="vdiv"></div>
+          <div class="ministat"><div class="circ">💬</div><b>۳</b>گفتگو</div>
+          <div class="vdiv"></div>
+          <div class="ministat"><div class="circ">📎</div><b>۲</b>پیوست</div>
+        </div>
+
+        <div class="gcard">
+          <div class="ghead">
+            <div class="gi" style="background:rgba(37,71,168,.1);color:#2547a8">📄</div>
+            <b>شرح دستور کار</b>
+          </div>
+          <div class="desc">بررسی بندهای مالی و حقوقی قرارداد توسعه نرم‌افزار، تطبیق با مصوبهٔ هیئت‌مدیره و ارسال نظر کارشناسی به واحد حقوقی تا پایان هفته.</div>
+        </div>
+
+        <div class="gcard">
+          <div class="ghead">
+            <div class="gi" style="background:rgba(37,71,168,.1);color:#2547a8">🪪</div>
+            <b>مشخصات</b>
+          </div>
+          <div class="itile"><div class="ii" style="background:rgba(107,122,144,.09);color:#6b7a90">👤</div>
+            <div><div class="lab">دستوردهنده</div><div class="val">محمد فروغی</div></div></div>
+          <div class="itile"><div class="ii" style="background:rgba(209,52,56,.09);color:#d13438">📅</div>
+            <div><div class="lab">مهلت انجام</div><div class="val" style="color:#d13438">۱۴۰۵/۰۸/۱۰ — ۱۰:۳۰</div></div></div>
+          <div class="itile"><div class="ii" style="background:rgba(107,122,144,.09);color:#6b7a90">➕</div>
+            <div><div class="lab">تاریخ ثبت</div><div class="val">۱۴۰۵/۰۸/۰۲ — ۰۹:۱۵</div></div></div>
+          <div class="itile"><div class="ii" style="background:rgba(224,123,0,.09);color:#e07b00">⏱</div>
+            <div><div class="lab">تعداد تمدید</div><div class="val" style="color:#e07b00">۱ بار</div></div></div>
+          <div class="itile"><div class="ii" style="background:rgba(107,122,144,.09);color:#6b7a90">🧩</div>
+            <div><div class="lab">پروژه</div><div class="val">PRJ-204 توسعه سامانهٔ فروش</div></div></div>
+        </div>
+
+        <div class="gcard">
+          <div class="ghead">
+            <div class="gi" style="background:rgba(91,71,214,.1);color:#5b47d6">🏷</div>
+            <b>برچسب‌ها</b>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:7px">
+            <span class="tagpill">#قرارداد</span>
+            <span class="tagpill">#مالی</span>
+            <span class="tagpill">#حقوقی</span>
+          </div>
+        </div>
+
+        <div class="gcard">
+          <div class="ghead">
+            <div class="gi" style="background:rgba(37,71,168,.1);color:#2547a8">👥</div>
+            <b>گیرندگان (۲)</b>
+          </div>
+
+          <div class="assignee">
+            <div class="arow">
+              <div class="aav" style="background:linear-gradient(135deg,#e05357,#a4262c)">ع</div>
+              <div class="aname">علی رضایی</div>
+              <div class="abadge" style="background:rgba(26,127,55,.1);color:#1a7f37">✓ انجام شد</div>
+            </div>
+            <div class="areply">بند ۴ و ۷ قرارداد بررسی شد؛ ایراد در شرط جریمهٔ تأخیر وجود دارد و به اصلاح نیاز است.</div>
+            <div style="font-size:10.5px;color:#8695ab;margin-top:6px">🕐 پاسخ: ۱۴۰۵/۰۸/۰۸ — ۱۶:۲۰</div>
+            <div class="btnrow">
+              <button class="btn no">✕ رد</button>
+              <button class="btn ok">✓ تأیید</button>
+            </div>
+          </div>
+
+          <div class="assignee" style="border-color:rgba(224,123,0,.22)">
+            <div class="arow">
+              <div class="aav" style="background:linear-gradient(135deg,#f3a33c,#d2691e)">م</div>
+              <div class="aname">مریم احمدی</div>
+              <div class="abadge" style="background:rgba(224,123,0,.1);color:#e07b00">⧗ در انتظار رویت</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sechead">۲ • تب چک‌لیست و ۳ • گفتگو</div>
+  <div class="cols">
+    <div class="phone" style="padding-top:14px">
+      <div style="margin:0 14px 10px;background:#fff;border:1px solid #e4eaf3;border-radius:16px;padding:13px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700">
+          <span style="color:#1a7f37">☑</span> پیشرفت کار
+          <span style="flex:1"></span>
+          <span style="font-size:11px;font-weight:800;color:#1a7f37">۱ از ۴</span>
+        </div>
+        <div class="bar" style="margin-top:8px;height:8px"><i style="width:25%;background:#2547a8"></i></div>
+      </div>
+      <div class="checkrow done"><div class="cb">✓</div><div class="ct">دریافت نسخهٔ نهایی قرارداد از واحد بازرگانی</div></div>
+      <div class="checkrow"><div class="cb"></div><div class="ct">بررسی بند جریمهٔ تأخیر</div></div>
+      <div class="checkrow"><div class="cb"></div><div class="ct">استعلام نظر واحد حقوقی</div></div>
+      <div class="checkrow"><div class="cb"></div><div class="ct">ارسال جمع‌بندی به مدیرعامل</div></div>
+    </div>
+
+    <div class="phone" style="padding-top:14px">
+      <div class="bubble">
+        <div class="bubhead"><span>م</span>محمد فروغی</div>
+        لطفاً بند جریمهٔ تأخیر را با قرارداد سال قبل مقایسه کنید.
+        <div class="bubtime">۱۴۰۵/۰۸/۰۵ — ۱۱:۰۲</div>
+      </div>
+      <div class="bubble me">
+        <div class="bubhead"><span style="background:#1a7f37">ع</span>علی رضایی</div>
+        بند ۷ تغییر محسوسی نداشته، ولی درصد جریمه از ۰٫۵ به ۱ افزایش پیدا کرده است.
+        <div class="bubtime">۱۴۰۵/۰۸/۰۶ — ۰۹:۴۰</div>
+      </div>
+      <div class="bubble">
+        <div class="bubhead"><span>م</span>محمد فروغی</div>
+        ممنون؛ همین مورد را در گزارش نهایی لحاظ کن.
+        <div class="bubtime">۱۴۰۵/۰۸/۰۶ — ۱۰:۱۵</div>
+      </div>
+      <div class="composer">
+        <input placeholder="نوشتن پیام…">
+        <button class="send">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>یادداشت پیاده‌سازی:</b> این پیش‌نمایش با HTML بازسازی شده تا طراحی را قبل از نصب ببینی؛
+    نسخهٔ واقعی با ویجت‌های فلاتر (<code>GlowWorkOrderCard</code>، <code>SlidingTabs</code>،
+    <code>DetailHero</code>، <code>GlassCard</code>، <code>RingStat</code>، <code>FadeSlideIn</code>)
+    ساخته شده و ۶ تست رندر آن پاس شده است.
+  </div>
+</div>
+</body>
+</html>

@@ -35,6 +35,13 @@ class Fa {
     3 => 'ماهانه',
     _ => 'بدون تکرار',
   };
+  /// خواندن عدد از مقدارهای ناهمگون پاسخ سرور (عدد، رشته، null)
+  static int? digitInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
   static String bytes(int n) => n < 1024
       ? '${digits(n)} بایت'
       : n < 1048576
