@@ -1,0 +1,125 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+class ApiException implements Exception {
+  ApiException(this.message, [this.statusCode]);
+  final String message;
+  final int? statusCode;
+  @override
+  String toString() => message;
+}
+
+class ApiClient {
+  ApiClient(this._storage) {
+    dio = Dio(
+      BaseOptions(
+        baseUrl: const String.fromEnvironment(
+          'API_BASE_URL',
+          defaultValue: 'http://localhost:5100',
+        ),
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(minutes: 2),
+        sendTimeout: const Duration(minutes: 2),
+        headers: const {'Accept': 'application/json'},
+      ),
+    );
+    dio.interceptors.add(
+      QueuedInterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await _storage.read(key: 'auth_token');
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+      ),
+    );
+  }
+
+  final FlutterSecureStorage _storage;
+  late final Dio dio;
+  void Function()? onUnauthorized;
+
+  String get baseUrl => dio.options.baseUrl;
+
+  Future<void> setBaseUrl(String value) async {
+    var url = value.trim();
+    while (url.endsWith('/')) url = url.substring(0, url.length - 1);
+    if (!url.startsWith('http://') && !url.startsWith('https://'))
+      url = 'https://$url';
+    dio.options.baseUrl = url;
+    await _storage.write(key: 'api_base_url', value: url);
+  }
+
+  Future<void> setCompanyId(int id) async {
+    await _storage.write(key: 'company_id', value: id.toString());
+  }
+
+  Future<void> restoreBaseUrl() async {
+    final saved = await _storage.read(key: 'api_base_url');
+    if (saved != null && saved.isNotEmpty) dio.options.baseUrl = saved;
+  }
+
+  Future<Response<T>> request<T>(
+    String method,
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? query,
+    Options? options,
+  }) async {
+    try {
+      return await dio.request<T>(
+        path,
+        data: data,
+        queryParameters: query,
+        options: (options ?? Options()).copyWith(method: method),
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) onUnauthorized?.call();
+      throw ApiException(_message(e), e.response?.statusCode);
+    }
+  }
+
+  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) =>
+      request<T>('GET', path, query: query);
+  Future<Response<T>> post<T>(String path, [dynamic data]) =>
+      request<T>('POST', path, data: data);
+  Future<Response<T>> put<T>(String path, [dynamic data]) =>
+      request<T>('PUT', path, data: data);
+  Future<Response<T>> delete<T>(String path) => request<T>('DELETE', path);
+
+  static String _message(DioException e) {
+    final d = e.response?.data;
+    if (d is Map) {
+      if (d['message'] != null) return d['message'].toString();
+      if (d['title'] != null) return d['title'].toString();
+      if (d['errors'] is Map)
+        return (d['errors'] as Map).values
+            .expand((v) => v is List ? v : [v])
+            .join('\n');
+    }
+    if (d is String && d.trim().isNotEmpty) {
+      try {
+        final j = jsonDecode(d);
+        if (j is Map && j['message'] != null) return j['message'].toString();
+      } catch (_) {}
+      return d.length > 350 ? d.substring(0, 350) : d;
+    }
+    return switch (e.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout => 'زمان اتصال به سرور تمام شد.',
+      DioExceptionType.connectionError =>
+        'اتصال به سرور برقرار نشد. آدرس سرور و شبکه را بررسی کنید.',
+      _ => switch (e.response?.statusCode) {
+        401 => 'نشست شما منقضی شده است. دوباره وارد شوید.',
+        403 => 'شما دسترسی انجام این عملیات را ندارید.',
+        404 => 'موردی با این مشخصات پیدا نشد.',
+        _ =>
+          'خطا در ارتباط با سرور (${e.response?.statusCode ?? 'بدون پاسخ'}).',
+      },
+    };
+  }
+}
