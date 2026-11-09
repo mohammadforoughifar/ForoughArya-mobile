@@ -56,6 +56,9 @@ class AuthController extends ChangeNotifier {
         key: 'auth_session',
         value: jsonEncode(value.toJson()),
       );
+      try {
+        await _api.ensureCompanyId();
+      } catch (_) {}
       return true;
     } on ApiException catch (e) {
       error = e.statusCode == 401
@@ -82,6 +85,7 @@ class AuthController extends ChangeNotifier {
     _session = null;
     await _storage.delete(key: 'auth_token');
     await _storage.delete(key: 'auth_session');
+    await _api.setCompanyId(null);
     if (notify) notifyListeners();
   }
 }

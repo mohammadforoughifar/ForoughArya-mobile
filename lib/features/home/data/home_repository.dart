@@ -298,10 +298,18 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     tabIndex: 3,
   ),
   ModuleTile(
+    name: 'فرم‌های متفرقه',
+    subtitle: 'صورتجلسه و مصوبات',
+    icon: Icons.library_books_rounded,
+    color: const Color(0xff0f766e),
+    onTapName: 'misc',
+  ),
+  ModuleTile(
     name: 'فروش',
     subtitle: 'فاکتور و سفارش',
     icon: Icons.point_of_sale_rounded,
     color: const Color(0xff4f7ce8),
+    badge: 'به‌زودی',
     onTapName: 'sales',
   ),
   ModuleTile(
@@ -309,6 +317,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'رسید و حواله',
     icon: Icons.inventory_2_outlined,
     color: const Color(0xffc2410c),
+    badge: 'به‌زودی',
     onTapName: 'inventory',
   ),
   ModuleTile(
@@ -316,6 +325,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'چک و اقساط',
     icon: Icons.account_balance_wallet_rounded,
     color: const Color(0xff1a7f37),
+    badge: 'به‌زودی',
     onTapName: 'treasury',
   ),
   ModuleTile(
@@ -323,6 +333,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'پرسنل و احکام',
     icon: Icons.groups_rounded,
     color: const Color(0xff5b47d6),
+    badge: 'به‌زودی',
     onTapName: 'hr',
   ),
   ModuleTile(
@@ -330,6 +341,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'کارتزنی',
     icon: Icons.schedule_rounded,
     color: const Color(0xff7c3aed),
+    badge: 'به‌زودی',
     onTapName: 'attendance',
   ),
   ModuleTile(
@@ -337,6 +349,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'صورتحساب الکترونیک',
     icon: Icons.receipt_long_rounded,
     color: const Color(0xffd13438),
+    badge: 'به‌زودی',
     onTapName: 'moadian',
   ),
   ModuleTile(
@@ -344,6 +357,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'سیستم و شبکه',
     icon: Icons.dns_rounded,
     color: const Color(0xff1e3a8a),
+    badge: 'به‌زودی',
     onTapName: 'it-assets',
   ),
   ModuleTile(
@@ -351,6 +365,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'دوربین و NVR',
     icon: Icons.videocam_rounded,
     color: const Color(0xff0d7d8c),
+    badge: 'به‌زودی',
     onTapName: 'cctv',
   ),
   ModuleTile(
@@ -358,6 +373,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'پوشه و مدارک',
     icon: Icons.folder_special_rounded,
     color: const Color(0xff6b7a90),
+    badge: 'به‌زودی',
     onTapName: 'archive',
   ),
   ModuleTile(
@@ -365,6 +381,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'گزارش دلخواه',
     icon: Icons.insights_rounded,
     color: const Color(0xff2a6bd4),
+    badge: 'به‌زودی',
     onTapName: 'reports',
   ),
   ModuleTile(
@@ -372,6 +389,7 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'کارفرما و گزارش',
     icon: Icons.layers_rounded,
     color: const Color(0xff1a7f37),
+    badge: 'به‌زودی',
     onTapName: 'projects',
   ),
 ];

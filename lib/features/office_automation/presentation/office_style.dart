@@ -32,6 +32,7 @@ class OfficeColors {
   static const archive = Color(0xff6b7a90); // بایگانی — خاکستری
   static const email = Color(0xff0e7490); // پست الکترونیک — آبی نفتی
   static const emailPersonal = Color(0xff7c3aed); // ایمیل شخصی — بنفش
+  static const minutes = Color(0xff0f766e); // صورتجلسه — سبزآبی اداری
 
   static const danger = Color(0xffd13438);
   static const gold = Color(0xffe0a800);

@@ -33,6 +33,15 @@ class ApiClient {
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
+          var cid = _companyId;
+          if (cid == null) {
+            final saved = await _storage.read(key: 'company_id');
+            cid = saved == null ? null : int.tryParse(saved);
+            _companyId = cid;
+          }
+          if (cid != null && cid > 0 && options.headers['X-Company-Id'] == null) {
+            options.headers['X-Company-Id'] = cid.toString();
+          }
           handler.next(options);
         },
       ),
@@ -42,8 +51,10 @@ class ApiClient {
   final FlutterSecureStorage _storage;
   late final Dio dio;
   void Function()? onUnauthorized;
+  int? _companyId;
 
   String get baseUrl => dio.options.baseUrl;
+  int? get companyId => _companyId;
 
   Future<void> setBaseUrl(String value) async {
     var url = value.trim();
@@ -54,13 +65,56 @@ class ApiClient {
     await _storage.write(key: 'api_base_url', value: url);
   }
 
-  Future<void> setCompanyId(int id) async {
+  Future<void> setCompanyId(int? id) async {
+    if (id == null || id <= 0) {
+      _companyId = null;
+      await _storage.delete(key: 'company_id');
+      return;
+    }
+    _companyId = id;
     await _storage.write(key: 'company_id', value: id.toString());
+  }
+
+  Future<void> restoreCompanyId() async {
+    final saved = await _storage.read(key: 'company_id');
+    _companyId = saved == null ? null : int.tryParse(saved);
+  }
+
+  /// اگر شرکت فعال هنوز مشخص نشده باشد، از `GET /api/company-context` خوانده و ذخیره می‌شود.
+  Future<int?> ensureCompanyId() async {
+    if (_companyId != null && _companyId! > 0) return _companyId;
+    await restoreCompanyId();
+    if (_companyId != null && _companyId! > 0) return _companyId;
+    final r = await get<dynamic>('/api/company-context');
+    final d = r.data;
+    if (d is Map) {
+      var active = (d['activeCompanyId'] as num?)?.toInt();
+      if (active == null || active <= 0) {
+        final list = d['companies'];
+        if (list is List) {
+          for (final item in list.whereType<Map>()) {
+            if (item['isActive'] != false) {
+              final cid = (item['id'] as num?)?.toInt();
+              if (cid != null && cid > 0) {
+                active = cid;
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (active != null && active > 0) {
+        await setCompanyId(active);
+        return active;
+      }
+    }
+    return null;
   }
 
   Future<void> restoreBaseUrl() async {
     final saved = await _storage.read(key: 'api_base_url');
     if (saved != null && saved.isNotEmpty) dio.options.baseUrl = saved;
+    await restoreCompanyId();
   }
 
   Future<Response<T>> request<T>(
@@ -111,7 +165,12 @@ class ApiClient {
   Future<Response<T>> delete<T>(String path) => request<T>('DELETE', path);
 
   static String _message(DioException e) {
-    final d = e.response?.data;
+    var d = e.response?.data;
+    if (d is List<int> && d.isNotEmpty) {
+      try {
+        d = utf8.decode(d, allowMalformed: true);
+      } catch (_) {}
+    }
     if (d is Map) {
       if (d['message'] != null) return d['message'].toString();
       if (d['title'] != null) return d['title'].toString();

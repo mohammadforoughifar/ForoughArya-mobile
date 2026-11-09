@@ -18,6 +18,7 @@ import 'package:shamsi_date/shamsi_date.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../misc/presentation/misc_forms_page.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
 import 'company_picker_sheet.dart';
@@ -66,6 +67,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _load() async {
+    final api = context.read<ApiClient>();
     setState(() {
       _loading = true;
       _error = null;
@@ -80,6 +82,10 @@ class _HomePageState extends State<HomePage> {
       final companies = results[0] as CompanyContext;
       final unread = results[1] as int;
       final widgets = results[2] as Map<String, WidgetData>;
+      if (companies.activeCompanyId != null && companies.activeCompanyId! > 0) {
+        await api.setCompanyId(companies.activeCompanyId);
+      }
+      if (!mounted) return;
       setState(() {
         _companies = companies;
         _unread = unread;
@@ -95,7 +101,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _pickCompany(CompanyOption c) {
+  Future<void> _pickCompany(CompanyOption c) async {
+    await context.read<ApiClient>().setCompanyId(c.id);
+    if (!mounted) return;
     setState(() {
       _companies = CompanyContext(
         companies: _companies.companies,
@@ -103,7 +111,7 @@ class _HomePageState extends State<HomePage> {
       );
     });
     // دادهٔ ویجت‌ها وابسته به شرکت است — دوباره خوانده می‌شود.
-    _reloadWidgets();
+    await _reloadWidgets();
   }
 
   Future<void> _reloadWidgets() async {
@@ -154,9 +162,16 @@ class _HomePageState extends State<HomePage> {
       widget.onOpenTab(m.tabIndex!);
       return;
     }
+    if (m.onTapName == 'misc') {
+      HapticFeedback.selectionClick();
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const MiscFormsPage()));
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('ماژول «${m.name}» در نسخهٔ وب در دسترس است.'),
+        content: Text('ماژول «${m.name}» به‌زودی به نسخهٔ موبایل اضافه می‌شود.'),
         behavior: SnackBarBehavior.floating,
       ),
     );

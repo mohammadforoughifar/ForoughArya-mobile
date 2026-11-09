@@ -11,6 +11,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
+import '../../misc/presentation/minutes_list_page.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
 import '../models/office_common.dart';
@@ -585,6 +586,16 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                   icon: Icons.mark_email_read_outlined,
                   color: OfficeColors.emailPersonal,
                   onTap: () => _goTab(9),
+                ),
+                _QuickTile(
+                  label: 'صورتجلسه',
+                  icon: Icons.description_outlined,
+                  color: OfficeColors.minutes,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const MinutesListPage(),
+                    ),
+                  ),
                 ),
               ],
             ),
