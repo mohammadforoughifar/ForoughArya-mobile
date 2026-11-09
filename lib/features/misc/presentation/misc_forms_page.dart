@@ -82,7 +82,7 @@ class _MiscFormsPageState extends State<MiscFormsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'فرم‌های متفرقه',
+                              'صورتجلسه و فرم‌های متفرقه',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 18,

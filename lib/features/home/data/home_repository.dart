@@ -298,9 +298,11 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     tabIndex: 3,
   ),
   ModuleTile(
-    name: 'فرم‌های متفرقه',
-    subtitle: 'صورتجلسه و مصوبات',
-    icon: Icons.library_books_rounded,
+    // نام کاشی صریحاً «صورتجلسه» است تا در صفحهٔ خانه قابل تشخیص باشد؛
+    // داخل آن هم صورتجلسه و هم فرم‌های متفرقه/مصوبات قرار دارد.
+    name: 'صورتجلسه',
+    subtitle: 'مصوبات جلسات و فرم‌ها',
+    icon: Icons.description_rounded,
     color: const Color(0xff0f766e),
     onTapName: 'misc',
   ),
