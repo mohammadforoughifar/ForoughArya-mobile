@@ -296,7 +296,7 @@ void main() {
       await tester.pumpWidget(_wrap(const MiscFormsPage(), api, storage));
       await tester.pumpAndSettle();
 
-      expect(find.text('فرم‌های متفرقه'), findsOneWidget);
+      expect(find.text('صورتجلسه و فرم‌های متفرقه'), findsOneWidget);
       expect(find.text('صورتجلسه'), findsOneWidget);
       expect(find.text('۱ مورد'), findsOneWidget);
       expect(find.text('به‌زودی'), findsNWidgets(4));
