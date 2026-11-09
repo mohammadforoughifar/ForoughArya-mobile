@@ -1,0 +1,6 @@
+# فایل‌های فونت و تصویر باینری هستند
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.webp binary
