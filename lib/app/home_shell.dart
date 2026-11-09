@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../features/office_automation/presentation/email_page.dart';
 import '../features/office_automation/presentation/office_home_page.dart';
 import '../features/work_orders/presentation/work_orders_page.dart';
 
@@ -29,6 +30,7 @@ class _HomeShellState extends State<HomeShell> {
         children: const [
           WorkOrdersPage(),
           OfficeAutomationPage(),
+          EmailPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -43,9 +45,14 @@ class _HomeShellState extends State<HomeShell> {
             label: 'دستور کار',
           ),
           NavigationDestination(
-            icon: Icon(Icons.mark_email_unread_outlined),
-            selectedIcon: Icon(Icons.mark_email_unread),
+            icon: Icon(Icons.account_balance_outlined),
+            selectedIcon: Icon(Icons.account_balance),
             label: 'اتوماسیون اداری',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.alternate_email),
+            selectedIcon: Icon(Icons.mark_email_unread),
+            label: 'پست الکترونیک',
           ),
         ],
       ),

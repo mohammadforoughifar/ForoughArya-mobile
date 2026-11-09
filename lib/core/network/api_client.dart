@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -84,8 +85,27 @@ class ApiClient {
 
   Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) =>
       request<T>('GET', path, query: query);
-  Future<Response<T>> post<T>(String path, [dynamic data]) =>
-      request<T>('POST', path, data: data);
+  Future<Response<T>> post<T>(String path, [dynamic data, Map<String, dynamic>? query]) =>
+      request<T>('POST', path, data: data, query: query);
+
+  /// ارسال multipart (فرم + فایل) با همان تبدیل خطاهای API
+  Future<Response<T>> postForm<T>(String path, FormData data) => request<T>(
+    'POST',
+    path,
+    data: data,
+    options: Options(contentType: 'multipart/form-data'),
+  );
+
+  /// دریافت فایل خام (پیوست، PDF) با همان تبدیل خطاهای API
+  Future<Uint8List> getBytes(String path, {Map<String, dynamic>? query}) async {
+    final r = await request<List<int>>(
+      'GET',
+      path,
+      query: query,
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(r.data ?? const <int>[]);
+  }
   Future<Response<T>> put<T>(String path, [dynamic data]) =>
       request<T>('PUT', path, data: data);
   Future<Response<T>> delete<T>(String path) => request<T>('DELETE', path);

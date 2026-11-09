@@ -30,6 +30,8 @@ class OfficeColors {
   static const signing = Color(0xffe07b00); // در انتظار امضا — نارنجی
   static const dabirkhane = Color(0xff5b47d6); // دبیرخانه — بنفش
   static const archive = Color(0xff6b7a90); // بایگانی — خاکستری
+  static const email = Color(0xff0e7490); // پست الکترونیک — آبی نفتی
+  static const emailPersonal = Color(0xff7c3aed); // ایمیل شخصی — بنفش
 
   static const danger = Color(0xffd13438);
   static const gold = Color(0xffe0a800);
@@ -37,6 +39,7 @@ class OfficeColors {
 
   static const bg = Color(0xfff4f7fb);
   static const line = Color(0xffe4eaf3);
+  static const ink = Color(0xff1e293b);
 
   /// رنگ پایه هر نوع نامه
   static Color forKind(LetterKind? kind) => switch (kind) {

@@ -16,6 +16,7 @@ import '../models/letter_models.dart';
 import '../models/office_common.dart';
 import 'letter_detail_page.dart';
 import 'letter_editor_page.dart';
+import 'email_page.dart';
 import 'office_archive_page.dart';
 import 'office_drafts_page.dart';
 import 'office_style.dart';
@@ -56,6 +57,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
     (label: 'دبیرخانه', icon: Icons.account_balance_outlined, key: 'dabirkhane'),
     (label: 'بایگانی', icon: Icons.account_tree_outlined, key: 'archive'),
     (label: 'پیش‌نویس', icon: Icons.drafts_outlined, key: 'drafts'),
+    (label: 'ایمیل سازمانی', icon: Icons.alternate_email, key: 'email_corporate'),
+    (label: 'ایمیل شخصی', icon: Icons.person_outline, key: 'email_personal'),
   ];
 
   @override
@@ -67,6 +70,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
         setState(() => _tabIndex = _tabs.index);
       }
       if (_tabs.indexIsChanging) return;
+      if (_tabKey(_tabs.index).startsWith('email_')) return;
       _ensureLoaded(_tabKey(_tabs.index));
     });
     _loadStats();
@@ -88,6 +92,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
     3 => 'incoming_inbox',
     4 => 'signing',
     5 => 'dabirkhane',
+    8 => 'email_corporate',
+    9 => 'email_personal',
     _ => 'inner_inbox',
   };
 
@@ -216,6 +222,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
 
   void _goTab(int i) {
     _tabs.animateTo(i);
+    if (_tabKey(i).startsWith('email_')) return;
     _ensureLoaded(_tabKey(i));
   }
 
@@ -317,7 +324,9 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                                 onTap: () {
                                   setState(() => _items.clear());
                                   _loadStats();
-                                  _ensureLoaded(_tabKey(_tabs.index));
+                                  if (!_tabKey(_tabs.index).startsWith('email_')) {
+                                    _ensureLoaded(_tabKey(_tabs.index));
+                                  }
                                 },
                               ),
                               _HeaderBtn(
@@ -372,18 +381,23 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                     emptyLabel: 'کارتابل دبیرخانه خالی است.'),
                 const OfficeArchivePage(),
                 const OfficeDraftsPage(),
+                const EmailPage(initialScope: EmailScope.corporate, embedded: true),
+                const EmailPage(initialScope: EmailScope.personal, embedded: true),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _newLetter(_kindOf(_tabKey(_tabs.index))),
-        backgroundColor: OfficeColors.seed,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('نامهٔ جدید', style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
+      floatingActionButton: _tabKey(_tabIndex).startsWith('email_')
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'office_new_letter_fab',
+              onPressed: () => _newLetter(_kindOf(_tabKey(_tabs.index))),
+              backgroundColor: OfficeColors.seed,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('نامهٔ جدید', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
     );
   }
 
@@ -508,9 +522,9 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
               crossAxisCount: 4,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 9,
-              crossAxisSpacing: 9,
-              childAspectRatio: .84,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: .80,
               children: [
                 _QuickTile(
                   label: 'داخلی',
@@ -559,6 +573,18 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                   icon: Icons.drafts_outlined,
                   color: const Color(0xffb04fbf),
                   onTap: () => _goTab(7),
+                ),
+                _QuickTile(
+                  label: 'ایمیل سازمانی',
+                  icon: Icons.alternate_email,
+                  color: OfficeColors.email,
+                  onTap: () => _goTab(8),
+                ),
+                _QuickTile(
+                  label: 'ایمیل شخصی',
+                  icon: Icons.mark_email_read_outlined,
+                  color: OfficeColors.emailPersonal,
+                  onTap: () => _goTab(9),
                 ),
               ],
             ),
