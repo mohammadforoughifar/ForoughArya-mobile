@@ -143,11 +143,15 @@ class MinutesAccessDiagnosticCard extends StatelessWidget {
     required this.error,
     required this.onRetry,
     this.onPickCompany,
+    this.apiBaseUrl,
   });
 
   final Object error;
   final VoidCallback onRetry;
   final VoidCallback? onPickCompany;
+
+  /// آدرس سروری که اپ به آن وصل است — برای تشخیص «سرور اشتباه در بیلد»
+  final String? apiBaseUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -238,6 +242,40 @@ class MinutesAccessDiagnosticCard extends StatelessWidget {
               color: MiscColors.inkSoft,
             ),
           ),
+          if (isForbidden && apiBaseUrl != null && apiBaseUrl!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: MiscColors.bg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: MiscColors.line),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.dns_rounded,
+                    size: 14,
+                    color: MiscColors.inkFaint,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'سرور فعلی اپ: ‎$apiBaseUrl',
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.left,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: MiscColors.inkFaint,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if ((isForbidden || isCompanyErr) && msg.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(

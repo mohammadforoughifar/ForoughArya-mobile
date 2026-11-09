@@ -1135,6 +1135,7 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
                           child: MinutesAccessDiagnosticCard(
                             error: _error!,
                             onRetry: _load,
+                            apiBaseUrl: _repo.api.baseUrl,
                           ),
                         ),
                       ),

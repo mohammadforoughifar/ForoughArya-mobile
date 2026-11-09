@@ -415,6 +415,7 @@ class _MinutesListPageState extends State<MinutesListPage> {
             error: _error!,
             onRetry: _initAndLoad,
             onPickCompany: _openCompanyPicker,
+            apiBaseUrl: _repo.api.baseUrl,
           ),
         ),
       );

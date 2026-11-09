@@ -471,6 +471,7 @@ class _MinutesEditorPageState extends State<MinutesEditorPage> {
                 child: MinutesAccessDiagnosticCard(
                   error: _loadError!,
                   onRetry: _loadUsers,
+                  apiBaseUrl: _repo.api.baseUrl,
                 ),
               )
             : ListView(
