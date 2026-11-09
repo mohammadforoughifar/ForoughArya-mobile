@@ -42,6 +42,19 @@ class Fa {
     return int.tryParse(value.toString());
   }
 
+  /// عدد با جداکنندهٔ هزارگان فارسی — مثل «۱٬۲۴۰٬۰۰۰» یا «۳٫۵»
+  static String number(num value, {int decimals = 0}) {
+    final s = value.toStringAsFixed(decimals);
+    final dot = s.indexOf('.');
+    final intPart = dot < 0 ? s : s.substring(0, dot);
+    final frac = dot < 0 ? '' : s.substring(dot + 1);
+    final grouped = intPart.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => '٬',
+    );
+    return digits(frac.isEmpty ? grouped : '$grouped٫$frac');
+  }
+
   static String bytes(int n) => n < 1024
       ? '${digits(n)} بایت'
       : n < 1048576
