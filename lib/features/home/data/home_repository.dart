@@ -298,12 +298,18 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     tabIndex: 3,
   ),
   ModuleTile(
-    // نام کاشی صریحاً «صورتجلسه» است تا در صفحهٔ خانه قابل تشخیص باشد؛
-    // داخل آن هم صورتجلسه و هم فرم‌های متفرقه/مصوبات قرار دارد.
+    // ماژول مستقل «صورتجلسه» — ورود مستقیم به فهرست صورتجلسه‌ها
     name: 'صورتجلسه',
-    subtitle: 'مصوبات جلسات و فرم‌ها',
+    subtitle: 'مصوبات و امضای جلسات',
     icon: Icons.description_rounded,
     color: const Color(0xff0f766e),
+    onTapName: 'minutes',
+  ),
+  ModuleTile(
+    name: 'فرم‌های متفرقه',
+    subtitle: 'فرم‌های داخلی سازمان',
+    icon: Icons.library_books_rounded,
+    color: const Color(0xff0b7285),
     onTapName: 'misc',
   ),
   ModuleTile(

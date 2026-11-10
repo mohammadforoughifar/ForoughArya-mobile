@@ -18,6 +18,7 @@ import 'package:shamsi_date/shamsi_date.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../misc/presentation/minutes_list_page.dart';
 import '../../misc/presentation/misc_forms_page.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
@@ -160,6 +161,13 @@ class _HomePageState extends State<HomePage> {
     if (m.tabIndex != null) {
       HapticFeedback.selectionClick();
       widget.onOpenTab(m.tabIndex!);
+      return;
+    }
+    if (m.onTapName == 'minutes') {
+      HapticFeedback.selectionClick();
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const MinutesListPage()));
       return;
     }
     if (m.onTapName == 'misc') {

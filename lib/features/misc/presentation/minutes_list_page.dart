@@ -219,7 +219,15 @@ class _MinutesListPageState extends State<MinutesListPage> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
+                    // در ورود مستقیم (تب ماژول) دکمهٔ خانه؛ در ورود پشته‌ای، بازگشت
+                    onPressed: () {
+                      final nav = Navigator.of(context);
+                      if (nav.canPop()) {
+                        nav.maybePop();
+                      } else {
+                        nav.popUntil((r) => r.isFirst);
+                      }
+                    },
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.white.withValues(alpha: 0.14),
                       foregroundColor: Colors.white,
