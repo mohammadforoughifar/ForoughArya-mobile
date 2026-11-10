@@ -72,7 +72,11 @@ class _ChatPageState extends State<ChatPage> {
     });
     try {
       final me = context.read<AuthController>().session?.userId;
-      final list = await _repo.messages(widget.thread.id, myUserId: me);
+      final list = await _repo.messages(
+        widget.thread.id,
+        myUserId: me,
+        peerName: widget.thread.title,
+      );
       if (!mounted) return;
       setState(() {
         _items = list;
@@ -121,7 +125,7 @@ class _ChatPageState extends State<ChatPage> {
     _text.clear();
     _toBottom();
     try {
-      await _repo.sendText(widget.thread.id, t);
+      await _repo.sendText(widget.thread.id, t, to: widget.thread.title);
       if (!mounted) return;
       setState(() => _sending = false);
       await _load();
@@ -227,7 +231,12 @@ class _ChatPageState extends State<ChatPage> {
     });
     _toBottom();
     try {
-      await _repo.sendVoice(widget.thread.id, target, durationSec: secs);
+      await _repo.sendVoice(
+        widget.thread.id,
+        target,
+        durationSec: secs,
+        to: widget.thread.title,
+      );
       await _load();
     } catch (e) {
       if (!mounted) return;

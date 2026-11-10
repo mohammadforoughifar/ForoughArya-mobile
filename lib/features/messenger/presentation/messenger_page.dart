@@ -167,7 +167,9 @@ class _MessengerPageState extends State<MessengerPage> {
             return _Empty(
               icon: Icons.cloud_off_rounded,
               title: 'گفت‌وگوها دریافت نشد',
-              text: _error!,
+              text: '$_error\n\nسرور: ${context.read<ApiClient>().baseUrl}\n'
+                  'اگر صندوق ایمیل سازمانی خالی است، ابتدا در ماژول ایمیل '
+                  'حساب سازمانی را تنظیم کنید.',
               action: TextButton.icon(
                 onPressed: _load,
                 icon: const Icon(Icons.refresh_rounded, size: 17),
@@ -180,7 +182,9 @@ class _MessengerPageState extends State<MessengerPage> {
             return _Empty(
               icon: Icons.forum_outlined,
               title: 'گفت‌وگویی نیست',
-              text: 'با دکمهٔ بالا یک گفت‌وگوی تازه با همکاران شروع کنید.',
+              text: 'صندوق ایمیل سازمانی خالی است. با دکمهٔ پایین یک گفت‌وگوی '
+                  'تازه با همکاران شروع کنید (پیام‌ها از ایمیل سازمانی '
+                  'خوانده و ارسال می‌شوند).',
               action: TextButton.icon(
                 onPressed: () => _newChat(),
                 icon: const Icon(Icons.add_rounded, size: 17),
