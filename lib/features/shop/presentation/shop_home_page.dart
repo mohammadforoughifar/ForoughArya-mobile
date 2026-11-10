@@ -28,6 +28,9 @@ import 'trs_accounts_page.dart';
 import 'trs_cheques_page.dart';
 import 'trs_vouchers_page.dart';
 import 'sale_orders_page.dart';
+import 'kardex_page.dart';
+import 'ops_dashboard_page.dart';
+import 'referrer_panel_pages.dart';
 import 'referrer_wallets_page.dart';
 import 'referrers_page.dart';
 import 'shop_guide_page.dart';
@@ -107,8 +110,45 @@ class ShopHomePage extends StatelessWidget {
                         ),
                       ),
                     ],
+                    // وب: کاردکس‌ها زیر گیت مستقل ReportPages.Kardex
+                    if (perms.has('ReportPages.Kardex') ||
+                        perms.canSeeModule('ReportPages')) ...[
+                      _Item(
+                        'کاردکس تعداد کالاها',
+                        'رهگیری خط‌به‌خط وارده/صادره و مانده فیزیکی کالا',
+                        Icons.list_alt_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const KardexPage()),
+                      ),
+                      _Item(
+                        'کاردکس ریالی کالاها',
+                        'فی تمام‌شده، ارزش دفتری و میانگین بهای مانده',
+                        Icons.currency_exchange_rounded,
+                        enabled: true,
+                        onTap: () =>
+                            _push(context, const KardexPage(rial: true)),
+                      ),
+                    ],
                   ],
                 ),
+                // ---------- داشبورد عملیاتی (وب: /operations/reports/dashboard) ----------
+                if (perms.has('Dashboards.Financial') ||
+                    perms.canSeeModule('Orders') ||
+                    perms.canSeeModule('Repairs'))
+                  _group(
+                    context,
+                    'داشبورد',
+                    Icons.speed_rounded,
+                    [
+                      _Item(
+                        'داشبورد عملیاتی (خرید، فروش و تعمیرات)',
+                        'تحلیل زنده خرید، فروش، خدمات تعمیراتی، سودآوری و معرف‌ها',
+                        Icons.bar_chart_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const OpsDashboardPage()),
+                      ),
+                    ],
+                  ),
                 // ---------- اطلاعات پایه ----------
                 _group(
                   context,
@@ -387,6 +427,37 @@ class ShopHomePage extends StatelessWidget {
                     ],
                   ),
                 // ---------- راهنما ----------
+                // ---------- پنل معرف (وب: نوار پایین نقش Referrer) ----------
+                if (isReferrerSession(context.read<AuthController>())) ...[
+                  _group(
+                    context,
+                    'پنل معرف',
+                    Icons.badge_rounded,
+                    [
+                      _Item(
+                        'کیف پول من',
+                        'مانده پورسانت و اسناد دریافت',
+                        Icons.account_balance_wallet_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const MyWalletPage()),
+                      ),
+                      _Item(
+                        'کالاهای موجود',
+                        'فهرست کالاهای دارای موجودی — قیمت فروش روز',
+                        Icons.inventory_2_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const MyProductsPage()),
+                      ),
+                      _Item(
+                        'کارت ویزیت من',
+                        'پیش‌نمایش کارت معرف',
+                        Icons.contact_page_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const MyCardPage()),
+                      ),
+                    ],
+                  ),
+                ],
                 if (perms.canSeeModule('ShopGuide'))
                   _group(
                     context,

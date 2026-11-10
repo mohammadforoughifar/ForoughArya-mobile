@@ -20,6 +20,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
+import '../models/report_models.dart';
 import '../models/treasury_models.dart';
 import '../models/visit_models.dart';
 import '../models/shop_models.dart';
@@ -949,6 +950,97 @@ class ShopRepository {
   /// `POST /api/dashboard/installments/{id}/unpay`
   Future<void> unpayInstallment(int id) =>
       _api.post<dynamic>('/api/dashboard/installments/$id/unpay', {});
+
+  // ---------- پنل معرف (نقش Referrer) ----------
+
+  /// `GET /api/my/dashboard` — داشبورد معرف
+  Future<ReferrerDashboard> myReferrerDashboard() async {
+    final r = await _api.get<dynamic>('/api/my/dashboard');
+    return r.data is Map
+        ? ReferrerDashboard.fromJson(Map<String, dynamic>.from(r.data as Map))
+        : const ReferrerDashboard();
+  }
+
+  /// `GET /api/my/payments?skip&take` — اسناد دریافت پورسانت
+  Future<ShopPage<ReferrerPaymentRow>> myReferrerPayments({
+    int skip = 0,
+    int take = 50,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/my/payments',
+      query: {'skip': skip, 'take': take},
+    );
+    return ShopPage.parse(r.data, ReferrerPaymentRow.fromJson);
+  }
+
+  /// `GET /api/my/products?search` — کالاهای موجود برای معرف
+  Future<List<ReferrerProductItem>> myReferrerProducts({String? search}) async {
+    final r = await _api.get<dynamic>(
+      '/api/my/products',
+      query: {
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, ReferrerProductItem.fromJson).items;
+  }
+
+  // ------------------------------------------------------------
+  //  فاز ۷ — گزارش کاردکس (تعدادی و ریالی)
+  // ------------------------------------------------------------
+
+  /// `GET /api/kardex?productId&warehouseId&from&to` — کاردکس تعدادی
+  Future<List<KardexRow>> kardexQuantity({
+    required int productId,
+    int? warehouseId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/kardex',
+      query: {
+        'productId': productId,
+        if (warehouseId != null && warehouseId > 0)
+          'warehouseId': warehouseId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    final d = r.data;
+    if (d is! List) return const [];
+    return d
+        .whereType<Map>()
+        .map((e) => KardexRow.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  /// `GET /api/inv/reports/kardex?productId&warehouseId&from&to` — کاردکس ریالی
+  Future<KardexRialResult> kardexRial({
+    required int productId,
+    int? warehouseId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/inv/reports/kardex',
+      query: {
+        'productId': productId,
+        if (warehouseId != null && warehouseId > 0)
+          'warehouseId': warehouseId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? KardexRialResult.fromJson(Map<String, dynamic>.from(d))
+        : const KardexRialResult();
+  }
+
+  /// `GET /api/warehouses/lookups` — انتخابگر انبار
+  Future<List<ShopLookup>> warehouseLookups() async {
+    final r = await _api.get<dynamic>('/api/warehouses/lookups');
+    return ShopPage.parse(r.data, ShopLookup.fromJson).items;
+  }
 
   // ------------------------------------------------------------
   //  فاز ۶ — فروش و ویزیتوری (سفارش میدانی) و معرف‌ها
