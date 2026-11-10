@@ -22,6 +22,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../data/fa_num.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/order_models.dart';
@@ -78,47 +79,6 @@ class _InstRow {
   String amount = '';
   DateTime? dueDate;
   double get amountValue => parseNum(amount);
-}
-
-/// نرمال‌سازی ارقام فارسی/عربی به لاتین
-String toEnDigits(String input) {
-  const fa = '۰۱۲۳۴۵۶۷۸۹';
-  const ar = '٠١٢٣٤٥٦٧٨٩';
-  final sb = StringBuffer();
-  for (final ch in input.split('')) {
-    final i = fa.indexOf(ch);
-    final j = ar.indexOf(ch);
-    if (i >= 0) {
-      sb.write(i);
-    } else if (j >= 0) {
-      sb.write(j);
-    } else if (ch == '٫') {
-      sb.write('.');
-    } else if (ch == '٬' || ch == ',') {
-      // جداکنندهٔ هزارگان حذف می‌شود
-    } else {
-      sb.write(ch);
-    }
-  }
-  return sb.toString();
-}
-
-double parseNum(String? v) =>
-    double.tryParse(toEnDigits(v ?? '').trim()) ?? 0;
-
-/// قالب‌بندی زندهٔ عدد با جداکنندهٔ هزارگان (مثل FormatNum وب)
-String formatNumText(String? value) {
-  final raw = toEnDigits(value ?? '');
-  if (raw.trim().isEmpty) return '';
-  final parts = raw.split('.');
-  final digits = parts.first.replaceAll(RegExp(r'[^0-9]'), '');
-  final intPart = digits.isEmpty ? '0' : digits;
-  final grouped = Fa.number((num.tryParse(intPart) ?? 0).toInt());
-  if (parts.length > 1) {
-    final frac = parts[1].replaceAll(RegExp(r'[^0-9]'), '');
-    return frac.isEmpty ? grouped : '$grouped٫${Fa.digits(frac)}';
-  }
-  return grouped;
 }
 
 class _OrderFormPageState extends State<OrderFormPage> {

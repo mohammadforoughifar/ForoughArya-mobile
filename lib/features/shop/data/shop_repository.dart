@@ -18,6 +18,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
+import '../models/ops_models.dart';
 import '../models/order_models.dart';
 import '../models/shop_models.dart';
 
@@ -411,5 +412,223 @@ class ShopRepository {
     final r = await _api.post<dynamic>('/api/trs/accounts', a.toJson());
     final d = r.data;
     return d is Map ? TrsAccount.fromJson(Map<String, dynamic>.from(d)) : a;
+  }
+
+  // ------------------------------------------------------------
+  //  فاز ۴ — بیجک، تعمیرات، هزینه‌ها و گزارش‌های عملیات
+  // ------------------------------------------------------------
+
+  // ---------- بیجک (حوالهٔ تحویل کالا) ----------
+
+  /// `GET /api/goods-issues?partyId&from&to&search` — پاسخ آرایه است
+  Future<List<GoodsIssue>> goodsIssues({
+    int? partyId,
+    DateTime? from,
+    DateTime? to,
+    String? search,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/goods-issues',
+      query: {
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, GoodsIssue.fromJson).items;
+  }
+
+  /// `GET /api/goods-issues/{id}`
+  Future<GoodsIssue?> goodsIssue(int id) async {
+    final r = await _api.get<dynamic>('/api/goods-issues/$id');
+    final d = r.data;
+    return d is Map ? GoodsIssue.fromJson(Map<String, dynamic>.from(d)) : null;
+  }
+
+  /// `POST /api/goods-issues` — همان متد برای ثبت و ویرایش (Id در بدنه)
+  Future<GoodsIssue> saveGoodsIssue(Map<String, dynamic> cmd) async {
+    final r = await _api.post<dynamic>('/api/goods-issues', cmd);
+    final d = r.data;
+    return d is Map
+        ? GoodsIssue.fromJson(Map<String, dynamic>.from(d))
+        : GoodsIssue();
+  }
+
+  Future<void> deleteGoodsIssue(int id) =>
+      _api.delete<dynamic>('/api/goods-issues/$id');
+
+  // ---------- تعمیرات ----------
+
+  /// `GET /api/repairs?search&status&technicianId&page&pageSize`
+  Future<ShopPage<RepairOrder>> repairs({
+    String? search,
+    int? status,
+    int? technicianId,
+    int page = 1,
+    int pageSize = 15,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/repairs',
+      query: {
+        'search': (search ?? '').trim(),
+        if (status != null && status >= 0) 'status': status,
+        if (technicianId != null && technicianId > 0)
+          'technicianId': technicianId,
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, RepairOrder.fromJson);
+  }
+
+  /// `GET /api/repairs/{id}`
+  Future<RepairOrder?> repair(int id) async {
+    final r = await _api.get<dynamic>('/api/repairs/$id');
+    final d = r.data;
+    return d is Map ? RepairOrder.fromJson(Map<String, dynamic>.from(d)) : null;
+  }
+
+  /// `POST /api/repairs` — همان `RepairOrderDto` برای ثبت و ویرایش
+  Future<RepairOrder> saveRepair(RepairOrder r0) async {
+    final r = await _api.post<dynamic>('/api/repairs', r0.toJson());
+    final d = r.data;
+    return d is Map
+        ? RepairOrder.fromJson(Map<String, dynamic>.from(d))
+        : RepairOrder();
+  }
+
+  Future<void> deleteRepair(int id) => _api.delete<dynamic>('/api/repairs/$id');
+
+  /// `POST /api/repairs/{id}/status/{status}`
+  Future<RepairOrder> setRepairStatus(int id, int status) async {
+    final r = await _api.post<dynamic>('/api/repairs/$id/status/$status');
+    final d = r.data;
+    return d is Map
+        ? RepairOrder.fromJson(Map<String, dynamic>.from(d))
+        : RepairOrder();
+  }
+
+  /// `POST /api/repairs/{id}/invoice` — صدور فاکتور فروش + تحویل دستگاه
+  Future<RepairOrder> invoiceRepair(int id, Map<String, dynamic> request) async {
+    final r = await _api.post<dynamic>('/api/repairs/$id/invoice', request);
+    final d = r.data;
+    return d is Map
+        ? RepairOrder.fromJson(Map<String, dynamic>.from(d))
+        : RepairOrder();
+  }
+
+  /// `GET /api/technicians?activeOnly` — پاسخ آرایه/صفحه
+  Future<List<Technician>> technicians({bool activeOnly = false}) async {
+    final r = await _api.get<dynamic>(
+      '/api/technicians',
+      query: {'activeOnly': activeOnly},
+    );
+    return ShopPage.parse(r.data, Technician.fromJson).items;
+  }
+
+  Future<Technician> saveTechnician(Technician t) async {
+    final r = await _api.post<dynamic>('/api/technicians', t.toJson());
+    final d = r.data;
+    return d is Map ? Technician.fromJson(Map<String, dynamic>.from(d)) : t;
+  }
+
+  Future<void> deleteTechnician(int id) =>
+      _api.delete<dynamic>('/api/technicians/$id');
+
+  // ---------- هزینه‌ها ----------
+
+  /// `GET /api/expenses?search&categoryId&from&to&page&pageSize`
+  Future<ShopPage<ShopExpense>> expenses({
+    String? search,
+    int? categoryId,
+    DateTime? from,
+    DateTime? to,
+    int page = 1,
+    int pageSize = 15,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/expenses',
+      query: {
+        'search': (search ?? '').trim(),
+        if (categoryId != null && categoryId > 0) 'categoryId': categoryId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, ShopExpense.fromJson);
+  }
+
+  Future<ShopExpense> saveExpense(ShopExpense e) async {
+    final r = await _api.post<dynamic>('/api/expenses', e.toJson());
+    final d = r.data;
+    return d is Map ? ShopExpense.fromJson(Map<String, dynamic>.from(d)) : e;
+  }
+
+  Future<void> deleteExpense(int id) => _api.delete<dynamic>('/api/expenses/$id');
+
+  /// `GET /api/expense-categories?activeOnly`
+  Future<List<ExpenseCategory>> expenseCategories({
+    bool activeOnly = false,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/expense-categories',
+      query: {'activeOnly': activeOnly},
+    );
+    return ShopPage.parse(r.data, ExpenseCategory.fromJson).items;
+  }
+
+  Future<ExpenseCategory> saveExpenseCategory(ExpenseCategory c) async {
+    final r = await _api.post<dynamic>('/api/expense-categories', c.toJson());
+    final d = r.data;
+    return d is Map
+        ? ExpenseCategory.fromJson(Map<String, dynamic>.from(d))
+        : c;
+  }
+
+  Future<void> deleteExpenseCategory(int id) =>
+      _api.delete<dynamic>('/api/expense-categories/$id');
+
+  // ---------- گزارش‌های عملیات ----------
+
+  /// `GET /api/operations/reports/orders?type&from&to&partyId&warehouseId`
+  Future<OrderReport> orderReport({
+    required int type,
+    DateTime? from,
+    DateTime? to,
+    int? partyId,
+    int? warehouseId,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/operations/reports/orders',
+      query: {
+        'type': type,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? OrderReport.fromJson(Map<String, dynamic>.from(d))
+        : const OrderReport();
+  }
+
+  /// `GET /api/operations/reports/dashboard?from&to`
+  Future<OpsDashboard> opsDashboard({DateTime? from, DateTime? to}) async {
+    final r = await _api.get<dynamic>(
+      '/api/operations/reports/dashboard',
+      query: {
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? OpsDashboard.fromJson(Map<String, dynamic>.from(d))
+        : const OpsDashboard();
   }
 }

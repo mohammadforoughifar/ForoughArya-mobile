@@ -15,9 +15,13 @@ import '../../../core/auth/auth_controller.dart';
 import '../data/shop_perms.dart';
 import '../models/order_models.dart';
 import 'categories_page.dart';
+import 'expenses_page.dart';
+import 'goods_issues_page.dart';
 import 'parties_page.dart';
 import 'party_statements_page.dart';
+import 'order_report_page.dart';
 import 'products_page.dart';
+import 'repairs_page.dart';
 import 'sale_orders_page.dart';
 import 'shop_style.dart';
 import 'stock_page.dart';
@@ -67,6 +71,29 @@ class ShopHomePage extends StatelessWidget {
                       enabled: true,
                       onTap: () => _push(context, const PartyStatementsPage()),
                     ),
+                    // مثل وب: گزارش خرید/فروش زیر گیت CanSee("Orders")
+                    if (perms.canSeeModule('Orders')) ...[
+                      _Item(
+                        'گزارش خرید',
+                        'تحلیل روند، رتبه‌بندی تأمین‌کنندگان و مقادیر',
+                        Icons.shopping_bag_rounded,
+                        enabled: true,
+                        onTap: () => _push(
+                          context,
+                          const OrderReportPage(type: TxnType.purchase),
+                        ),
+                      ),
+                      _Item(
+                        'گزارش فروش',
+                        'تحلیل روند، رتبه‌بندی مشتریان و مقادیر',
+                        Icons.shopping_cart_rounded,
+                        enabled: true,
+                        onTap: () => _push(
+                          context,
+                          const OrderReportPage(type: TxnType.sale),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 // ---------- اطلاعات پایه ----------
@@ -174,24 +201,52 @@ class ShopHomePage extends StatelessWidget {
                         Icons.receipt_long_rounded,
                         phase: 3,
                       ),
-                    _Item(
-                      'بیجک',
-                      'حوالهٔ خروج کالا',
-                      Icons.local_shipping_rounded,
-                      phase: 4,
-                    ),
-                    _Item(
-                      'تعمیرات',
-                      'سفارش‌های تعمیرات',
-                      Icons.build_rounded,
-                      phase: 4,
-                    ),
-                    _Item(
-                      'هزینه‌ها',
-                      'ثبت هزینه‌ها',
-                      Icons.payments_rounded,
-                      phase: 4,
-                    ),
+                    // وب: هر سه زیر گیت مستقل خودشان هستند
+                    if (perms.canSeeModule('GoodsIssues'))
+                      _Item(
+                        'بیجک',
+                        'حوالهٔ خروج کالا — فقط مقدار، بدون قیمت',
+                        Icons.local_shipping_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const GoodsIssuesPage()),
+                      )
+                    else
+                      const _Item(
+                        'بیجک',
+                        'حوالهٔ خروج کالا',
+                        Icons.local_shipping_rounded,
+                        phase: 4,
+                      ),
+                    if (perms.canSeeModule('Repairs'))
+                      _Item(
+                        'تعمیرات',
+                        'پذیرش، کارها و قطعات، تبدیل به فروش',
+                        Icons.build_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const RepairsPage()),
+                      )
+                    else
+                      const _Item(
+                        'تعمیرات',
+                        'سفارش‌های تعمیرات',
+                        Icons.build_rounded,
+                        phase: 4,
+                      ),
+                    if (perms.canSeeModule('Expenses'))
+                      _Item(
+                        'هزینه‌ها',
+                        'ثبت اسناد هزینه و انواع هزینه',
+                        Icons.payments_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const ExpensesPage()),
+                      )
+                    else
+                      const _Item(
+                        'هزینه‌ها',
+                        'ثبت هزینه‌ها',
+                        Icons.payments_rounded,
+                        phase: 4,
+                      ),
                     _Item(
                       'مدیریت اقساط و چک‌ها',
                       'اقساط و چک‌های دریافتی/پرداختی',
