@@ -38,6 +38,7 @@ class ChatRepository {
   String lastSource = 'none';
 
   ChatEndpoints get endpoints => _endpoints;
+  ApiClient get api => _api;
   String? get resolvedBase => _resolvedBase;
 
   /// مسیر چت را پیدا (یا از تنظیمات بخوان)
@@ -73,17 +74,15 @@ class ChatRepository {
   Future<bool> ping() async {
     final base = await resolve();
     if (base == null) return false;
-    try {
-      await _api.get<dynamic>('$base/threads', query: {'take': 1});
-      return true;
-    } catch (_) {
+    for (final p in ['$base/threads', base]) {
       try {
-        await _api.get<dynamic>(base, query: {'take': 1});
-        return true;
-      } catch (_) {
-        return false;
-      }
+        final r = await _api.get<dynamic>(p, query: {'take': 1});
+        final d = r.data;
+        // فقط JSON واقعی قبول است؛ HTML یعنی صفحهٔ وب نه API
+        if (d is List || d is Map) return true;
+      } catch (_) {}
     }
+    return false;
   }
 
   // ------------------------------------------------------------

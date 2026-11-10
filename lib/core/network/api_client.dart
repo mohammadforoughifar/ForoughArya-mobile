@@ -170,7 +170,14 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? query,
     String? baseOverride,
-  }) => request<T>('GET', path, query: query, baseOverride: baseOverride);
+    Options? options,
+  }) => request<T>(
+    'GET',
+    path,
+    query: query,
+    baseOverride: baseOverride,
+    options: options,
+  );
   Future<Response<T>> post<T>(
     String path, [
     dynamic data,

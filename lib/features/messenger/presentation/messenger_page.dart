@@ -192,7 +192,8 @@ class _MessengerPageState extends State<MessengerPage> {
             return _Empty(
               icon: Icons.cloud_off_rounded,
               title: 'گفت‌وگوها دریافت نشد',
-              text: '$_error\n\nسرور پیام‌رسان: '
+              text: '$_error\n\nاگر «شناسایی خودکار» پیام «صفحهٔ وب (HTML)» '
+                  'داد یعنی آدرس API چت باید عوض شود.\nسرور پیام‌رسان: '
                   '${ChatEndpoints.defaultServer}${ChatEndpoints.defaultChatPath}\n'
                   'اگر باز هم وصل نشد، در «تنظیمات اتصال» مسیر API چت را '
                   'وارد کنید.',

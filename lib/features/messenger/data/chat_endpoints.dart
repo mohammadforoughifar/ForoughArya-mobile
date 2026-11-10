@@ -7,9 +7,11 @@
 //  کاربر هم می‌تواند در تنظیمات پیام‌رسان، مسیر را دستی وارد کند.
 // ============================================================
 
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/network/api_client.dart';
+import 'chat_source_probe.dart';
 
 class ChatEndpoints {
   ChatEndpoints(this._api, this._storage);
@@ -97,6 +99,9 @@ class ChatEndpoints {
   /// گزارش آخرین تلاش‌ها (برای صفحهٔ تنظیمات)
   final List<ProbeResult> probes = [];
 
+  /// نتیجهٔ تحلیل منابع داده (نوع پاسخ هر مسیر: JSON چت / HTML / خطا)
+  List<SourceProbe> lastSources = const [];
+
   Future<Discovery?> discover({bool force = false}) async {
     probes.clear();
     if (!force) {
@@ -106,29 +111,42 @@ class ChatEndpoints {
       }
     }
 
-    // ۰) سرور مستقل پیام‌رسان (آدرسی که کاربر داده) — اولویت اول
+    // ۰) سرور مستقل پیام‌رسان (آدرسی که کاربر داده) — اولویت اول.
+    //    نکتهٔ مهم: فقط «۲۰۰ گرفتن» کافی نیست؛ بعضی مسیرها صفحهٔ HTML
+    //    برمی‌گردانند و چت را بالا نمی‌آورند. پس اینجا نوع پاسخ هم
+    //    بررسی می‌شود و فقط مسیرهایی پذیرفته می‌شوند که دادهٔ واقعی
+    //    (فهرست گفت‌وگو/کاربر/پیام) بدهند.
     final server = await savedServer();
-    for (final candidate in const [
-      defaultChatPath,
-      '$defaultChatPath/api',
-      '/api/chat',
-      '/api/chatmessage',
-      '/',
-    ]) {
-      final url = fullUrl(server, candidate);
-      try {
-        final r = await _api.get<dynamic>(url);
-        probes.add(ProbeResult(url, status: r.statusCode, ok: true));
-        await saveServer(server);
-        await saveApiBase(url);
-        await saveKind('rest');
-        return Discovery(base: url, kind: 'rest', probePath: url);
-      } catch (e) {
-        final st = e is ApiException ? e.statusCode : null;
-        probes.add(
-          ProbeResult(url, status: st, note: st == null ? 'شبکه' : null),
-        );
-      }
+    final sourceProbe = ChatSourceProbe(_api);
+    final analyzed = await sourceProbe.run(server);
+    probes.addAll(
+      analyzed.map(
+        (p) => ProbeResult(
+          p.url,
+          status: p.status,
+          ok: p.usable,
+          note: p.kind == SourceKind.html
+              ? 'صفحهٔ وب، نه API'
+              : (p.note ?? p.kind.name),
+        ),
+      ),
+    );
+    lastSources = analyzed;
+    for (final p in analyzed) {
+      if (!p.usable) continue;
+      await saveServer(server);
+      await saveApiBase(p.url);
+      await saveKind('rest');
+      return Discovery(base: p.url, kind: 'rest', probePath: p.url);
+    }
+    // هیچ دادهٔ JSON‌ای نبود. اگر /chat دست‌کم باز است، همان را به‌عنوان
+    // پایه نگه می‌داریم تا خطای دقیق به کاربر نشان داده شود.
+    final chatUrl = fullUrl(server, defaultChatPath);
+    if (analyzed.any((p) => p.url == chatUrl && p.status != null)) {
+      await saveServer(server);
+      await saveApiBase(chatUrl);
+      await saveKind('rest');
+      return Discovery(base: chatUrl, kind: 'rest', probePath: chatUrl);
     }
 
     // ۱) از فهرست مسیرهای swagger سرور استفاده کن (اگر باز باشد)

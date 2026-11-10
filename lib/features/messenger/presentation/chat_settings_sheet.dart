@@ -5,8 +5,11 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:flutter/services.dart';
+
 import '../data/chat_endpoints.dart';
 import '../data/chat_repository.dart';
+import '../data/chat_source_probe.dart';
 import 'messenger_style.dart';
 
 class ChatSettingsSheet extends StatefulWidget {
@@ -27,6 +30,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
   String? _msg;
   bool _ok = false;
   List<ProbeResult> _probes = const [];
+  List<SourceProbe> _sources = const [];
 
   @override
   void initState() {
@@ -69,15 +73,26 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
         ChatEndpoints.normalizeBase(_hub.text, ''),
       );
     }
-    final alive = await widget.repo.ping();
+    // بررسی واقعی: آیا این مسیر «دادهٔ چت» می‌دهد یا فقط صفحهٔ وب است؟
+    final probe = await ChatSourceProbe(
+      widget.repo.api,
+    ).probeUrl(widget.repo.api.resolveUrl(base));
     if (!mounted) return;
+    final path = widget.repo.api.resolveUrl(base);
     setState(() {
       _busy = false;
-      _ok = alive;
-      _msg = alive
-          ? 'اتصال برقرار شد ✅  درخواست به $base جواب داد.'
-          : 'این مسیر جواب نداد. مسیر دیگری را امتحان کنید '
-                '(مثلاً /api/chat یا /api/messages).';
+      _sources = [probe];
+      _ok = probe.usable;
+      if (probe.usable) {
+        _msg = 'اتصال برقرار شد ✅  ${probe.count} رکورد از $path خوانده شد.';
+      } else if (probe.kind == SourceKind.html) {
+        _msg = 'این آدرس باز است ولی صفحهٔ وب (HTML) برمی‌گرداند، نه دادهٔ چت. '
+            'مسیر API چت را وارد کنید (مثلاً /chat/api/chatmessage) یا '
+            '«شناسایی خودکار» را بزنید.';
+      } else {
+        _msg = 'این مسیر دادهٔ چت نداد (${probe.status ?? "بدون پاسخ"}). '
+            'مسیر دیگری را امتحان کنید.';
+      }
     });
   }
 
@@ -89,20 +104,53 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
     });
     final found = await widget.repo.endpoints.discover(force: true);
     final probes = List<ProbeResult>.from(widget.repo.endpoints.probes);
+    final sources = List<SourceProbe>.from(widget.repo.endpoints.lastSources);
     if (!mounted) return;
+    final realData = sources.where((s) => s.usable).toList();
     setState(() {
       _busy = false;
       _probes = probes;
-      _ok = found != null;
-      if (found != null) {
-        _ctrl.text = found.base;
-        _msg = 'مسیر پیدا شد: ${found.probePath ?? found.base}\n'
-            'از این به بعد پیام‌رسان از همین مسیر داده می‌خواند.';
+      _sources = sources;
+      _ok = realData.isNotEmpty;
+      if (realData.isNotEmpty) {
+        _ctrl.text = realData.first.url;
+        _msg = 'مسیر دادهٔ چت پیدا شد:\n${realData.first.url}\n'
+            '(${realData.first.count} رکورد) — از این به بعد از همین خوانده می‌شود.';
+      } else if (sources.any((s) => s.kind == SourceKind.html)) {
+        _msg = 'این سرور بالاست، ولی مسیرهای امتحان‌شده صفحهٔ وب (HTML) '
+            'برگرداندند، نه دادهٔ چت. یعنی آدرس API چت چیز دیگری است.\n'
+            'گزارش بالا را بفرستید (دکمهٔ «کپی گزارش») تا مسیر دقیق را '
+            'اضافه کنم.';
       } else {
-        _msg = 'هیچ مسیر چتی روی این سرور پیدا نشد. گزارش بالا را بفرستید '
-            'تا مسیر دقیق اضافه شود، یا مسیر را دستی وارد کنید.';
+        _msg = 'هیچ دادهٔ چتی روی این سرور پیدا نشد. گزارش را کپی و بفرستید.';
       }
     });
+  }
+
+  /// کپی کل گزارش (برای ارسال به پشتیبانی) — شامل نوع واقعی پاسخ هر مسیر
+  Future<void> _copyReport() async {
+    final b = StringBuffer()
+      ..writeln('گزارش اتصال پیام‌رسان')
+      ..writeln('سرور: ${_server.text.trim()}')
+      ..writeln('نسخهٔ اپ: 1.29.0')
+      ..writeln('--- منابع داده ---');
+    for (final s in _sources) {
+      b.writeln('${s.label}${s.note != null ? " | ${s.note}" : ""}');
+      if (s.sample.isNotEmpty) b.writeln('    نمونه: ${s.sample}');
+    }
+    if (_sources.isEmpty) {
+      for (final p in _probes) {
+        b.writeln(p.label);
+      }
+    }
+    await Clipboard.setData(ClipboardData(text: b.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('گزارش کپی شد — می‌توانید در چت بفرستید.'),
+      ),
+    );
   }
 
   @override
@@ -237,8 +285,9 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  const Text(
-                    'گزارش شناسایی (روی همین سرور):',
+                  if (_sources.isEmpty)
+                    const Text(
+                      'گزارش شناسایی (روی همین سرور):',
                     style: TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
@@ -246,21 +295,71 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  for (final p in _probes.take(30))
+                  for (final p in _sources)
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 1),
-                      child: Text(
-                        p.label,
-                        textDirection: TextDirection.ltr,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: p.ok
-                              ? const Color(0xff15803d)
-                              : MessengerColors.inkFaint,
-                        ),
+                      padding: const EdgeInsets.symmetric(vertical: 1.5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.label,
+                            textDirection: TextDirection.ltr,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: p.usable
+                                  ? const Color(0xff15803d)
+                                  : MessengerColors.inkFaint,
+                            ),
+                          ),
+                          if ((p.note ?? '').isNotEmpty)
+                            Text(
+                              p.note!,
+                              textDirection: TextDirection.rtl,
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                color: MessengerColors.inkFaint,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
+                  if (_sources.isEmpty)
+                    for (final p in _probes.take(30))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: Text(
+                          p.label,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: p.ok
+                                ? const Color(0xff15803d)
+                                : MessengerColors.inkFaint,
+                          ),
+                        ),
+                      ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _copyReport,
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text(
+                        'کپی گزارش',
+                        style: TextStyle(fontSize: 10.5),
+                      ),
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
