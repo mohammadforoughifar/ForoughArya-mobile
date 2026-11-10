@@ -196,6 +196,24 @@ class ChatErpApi {
     return ChatMessage.fromErp(Map<String, dynamic>.from(d));
   }
 
+  /// آپلود پیوست با گزارش درصد پیشرفت (برای نمایش «در حال ارسال ۴۵٪»)
+  Future<ChatUpload> uploadAttachmentWithProgress(
+    int conversationId,
+    File file, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final name = file.uri.pathSegments.last;
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: name),
+    });
+    final r = await _api.postForm<dynamic>(
+      _u('/conversations/$conversationId/attachments'),
+      form,
+      onSendProgress: onProgress,
+    );
+    return _uploadFromResponse(r.data, name);
+  }
+
   /// آپلود پیوست (سقف ۵۰ مگابایت) → خروجی شامل fileUrl برای ارسال پیام
   Future<ChatUpload> uploadAttachment(int conversationId, File file) async {
     final name = file.uri.pathSegments.last;
@@ -206,13 +224,16 @@ class ChatErpApi {
       _u('/conversations/$conversationId/attachments'),
       form,
     );
-    final d = r.data;
+    return _uploadFromResponse(r.data, name);
+  }
+
+  ChatUpload _uploadFromResponse(dynamic d, String fallbackName) {
     if (d is! Map) throw Exception('پاسخ آپلود نامعتبر بود.');
     final m = Map<String, dynamic>.from(d);
     return ChatUpload(
       id: (m['id'] ?? '').toString(),
       fileUrl: (m['fileUrl'] ?? '').toString(),
-      fileName: (m['fileName'] ?? name).toString(),
+      fileName: (m['fileName'] ?? fallbackName).toString(),
       fileSizeBytes: (m['fileSizeBytes'] as num?)?.toInt() ?? 0,
       fileContentType: (m['fileContentType'] ?? 'application/octet-stream')
           .toString(),

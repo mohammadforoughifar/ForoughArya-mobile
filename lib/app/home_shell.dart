@@ -11,8 +11,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/utils/fa.dart';
 import '../features/home/presentation/home_page.dart';
+import '../features/messenger/data/upload_queue.dart';
 import '../features/messenger/presentation/messenger_page.dart';
+import '../features/messenger/presentation/messenger_style.dart';
 import '../features/office_automation/presentation/email_page.dart';
 import '../features/office_automation/presentation/office_home_page.dart';
 import '../features/work_orders/presentation/work_orders_page.dart';
@@ -96,7 +99,9 @@ class _HomeShellState extends State<HomeShell> {
               child: child,
             ),
           ),
-          child: KeyedSubtree(
+          child: Stack(
+            children: [
+              KeyedSubtree(
             key: ValueKey<int>(_index),
             child: IndexedStack(
               index: _index,
@@ -108,6 +113,15 @@ class _HomeShellState extends State<HomeShell> {
                 const MessengerPage(),
               ],
             ),
+          ),
+              // نوار زندهٔ ارسال پیوست‌ها — بیرون از صفحهٔ چت هم دیده می‌شود
+              const Positioned(
+                left: 10,
+                right: 10,
+                bottom: 86,
+                child: _UploadsBanner(),
+              ),
+            ],
           ),
         ),
         extendBody: true,
@@ -148,4 +162,113 @@ class _HomeShellState extends State<HomeShell> {
       ),
     );
   }
+}
+
+/// نوار کوچک بالای نوار پایین: «در حال ارسال فایل… ۴۵٪»
+/// با StreamBuilder به صف پس‌زمینه وصل است، پس با خروج از چت هم می‌ماند.
+class _UploadsBanner extends StatelessWidget {
+  const _UploadsBanner();
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<UploadTask>>(
+    stream: UploadQueue.instance.changes,
+    initialData: UploadQueue.instance.tasks,
+    builder: (context, _) {
+      final active = UploadQueue.instance.active;
+      final failed = UploadQueue.instance.tasks
+          .where((t) => t.state == UploadState.failed)
+          .toList();
+      if (active.isEmpty && failed.isEmpty) return const SizedBox.shrink();
+      final tasks = active.isNotEmpty ? active : failed;
+      final t = tasks.first;
+      final uploading = active.isNotEmpty;
+      final p = t.progress;
+      return Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: MessengerColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: MessengerColors.line),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    uploading
+                        ? Icons.cloud_upload_outlined
+                        : Icons.error_outline_rounded,
+                    size: 17,
+                    color: uploading
+                        ? MessengerColors.brand
+                        : MessengerColors.danger,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      uploading
+                          ? '${t.fileName} — در حال ارسال '
+                                '${Fa.digits((p * 100).round())}٪'
+                          : 'ارسال ${t.fileName} ناموفق بود',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: MessengerColors.ink,
+                      ),
+                    ),
+                  ),
+                  if (!uploading)
+                    TextButton(
+                      onPressed: () => UploadQueue.instance.retry(t),
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'تلاش دوباره',
+                        style: TextStyle(fontSize: 10.5),
+                      ),
+                    ),
+                  if (active.length > 1)
+                    Text(
+                      '+${Fa.digits(active.length - 1)}',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: MessengerColors.inkSoft,
+                      ),
+                    ),
+                ],
+              ),
+              if (uploading)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 2, right: 2),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(100),
+                    child: LinearProgressIndicator(
+                      value: p == 0 ? null : p,
+                      minHeight: 3,
+                      backgroundColor: MessengerColors.line,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }

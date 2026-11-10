@@ -159,6 +159,7 @@ class ApiClient {
           // سرور پیام‌رسان جدا از اتوماسیون است؛ هدر شرکت نباید برود
           if (baseOverride != null || foreign) 'noCompanyHeader': true,
         },
+        onSendProgress: options?.extra?['sendProgress'] as void Function(int, int)?,
       );
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) onUnauthorized?.call();
@@ -192,11 +193,21 @@ class ApiClient {
   );
 
   /// ارسال multipart (فرم + فایل) با همان تبدیل خطاهای API
-  Future<Response<T>> postForm<T>(String path, FormData data) => request<T>(
+  /// [onSendProgress] برای نمایش درصد آپلود فایل‌های بزرگ.
+  Future<Response<T>> postForm<T>(
+    String path,
+    FormData data, {
+    void Function(int sent, int total)? onSendProgress,
+  }) => request<T>(
     'POST',
     path,
     data: data,
-    options: Options(contentType: 'multipart/form-data'),
+    options: Options(
+      contentType: 'multipart/form-data',
+      extra: onSendProgress == null
+          ? null
+          : {'sendProgress': onSendProgress},
+    ),
   );
 
   /// دریافت فایل خام (پیوست، PDF) با همان تبدیل خطاهای API

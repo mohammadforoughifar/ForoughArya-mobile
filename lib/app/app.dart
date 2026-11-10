@@ -7,6 +7,7 @@ import '../core/auth/auth_controller.dart';
 import '../core/network/api_client.dart';
 import '../core/notifications/notification_launcher.dart';
 import '../core/notifications/push_service.dart';
+import '../features/messenger/data/upload_queue.dart';
 import '../features/auth/login_page.dart';
 import 'home_shell.dart';
 class ForoughApp extends StatelessWidget {
@@ -82,6 +83,8 @@ class ForoughApp extends StatelessWidget {
             final api = context.read<ApiClient>();
             // مقصد کلیک روی اعلان‌ها را وصل کن (صفِ کلیک‌های زودرس هم باز می‌شود)
             NotificationLauncher.instance.attach(api);
+            // صف ارسال پیوست‌ها به عمر اپ بسته است، نه به صفحهٔ چت
+            UploadQueue.instance.attach(api);
             PushService.instance.start(
               ApiClientPushAdapter(api),
               const FlutterSecureStorage(),

@@ -24,6 +24,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../data/chat_repository.dart';
+import '../data/upload_queue.dart';
 import '../data/voice_recorder.dart';
 import '../models/chat_models.dart';
 import 'messenger_style.dart';
@@ -483,8 +484,16 @@ class _ChatPageState extends State<ChatPage> {
       );
       return;
     }
+    // ارسال به صف پس‌زمینه سپرده می‌شود: بیرون رفتن از چت ارسال را
+    // کنسل نمی‌کند و آپلود فایل‌های حجیم ادامه پیدا می‌کند.
+    final task = UploadQueue.instance.enqueue(
+      conversationId: widget.thread.id,
+      file: file,
+      isImage: choice != 'file',
+      threadTitle: widget.thread.title,
+    );
     final temp = ChatMessage(
-      id: -DateTime.now().millisecondsSinceEpoch,
+      id: task.localId,
       kind: choice == 'file' ? ChatKind.file : ChatKind.image,
       mine: true,
       at: DateTime.now(),
@@ -494,27 +503,14 @@ class _ChatPageState extends State<ChatPage> {
     );
     setState(() => _items = [..._items, temp]);
     _toBottom();
-
-    try {
-      await _repo.sendFile(widget.thread.id, file);
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _items = _items
-            .map(
-              (m) =>
-                  m.id == temp.id ? m.copyWith(status: ChatStatus.failed) : m,
-            )
-            .toList();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('فایل ارسال نشد: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    // وقتی همین آپلود تمام شد، فهرست را تازه کن (اگر صفحه باز باشد)
+    UploadQueue.instance.changes.firstWhere(
+      (list) => list.any(
+        (t) => t.localId == task.localId && !t.isActive,
+      ),
+    ).then((_) {
+      if (mounted) _load();
+    });
   }
 
   Widget _buildComposer() {
@@ -751,6 +747,11 @@ class _Bubble extends StatelessWidget {
                   ),
                 ),
               ),
+            if ((message.kind == ChatKind.file ||
+                    message.kind == ChatKind.image) &&
+                message.status == ChatStatus.sending &&
+                message.id < 0)
+              _UploadProgress(localId: message.id),
             if (message.kind == ChatKind.voice)
               VoiceBubble(message: message)
             else if (message.kind == ChatKind.image)
@@ -1065,5 +1066,87 @@ class _FileAttachment extends StatelessWidget {
           ),
         ),
     ],
+  );
+}
+
+/// نوار پیشرفت آپلود — از صف پس‌زمینه خوانده می‌شود، پس با بیرون رفتن
+/// از صفحه هم متوقف نمی‌شود.
+class _UploadProgress extends StatelessWidget {
+  const _UploadProgress({required this.localId});
+  final int localId;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<UploadTask>>(
+    stream: UploadQueue.instance.changes,
+    initialData: UploadQueue.instance.tasks,
+    builder: (context, snap) {
+      final task = UploadQueue.instance.taskOf(localId);
+      final p = task?.progress ?? 0;
+      final failed = task?.state == UploadState.failed;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (failed)
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 14,
+                    color: MessengerColors.danger,
+                  )
+                else
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.8),
+                  ),
+                const SizedBox(width: 6),
+                Text(
+                  failed
+                      ? 'ارسال نشد'
+                      : 'در حال ارسال ${Fa.digits((p * 100).round())}٪',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: failed
+                        ? MessengerColors.danger
+                        : MessengerColors.inkSoft,
+                  ),
+                ),
+                if (failed && task != null) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => UploadQueue.instance.retry(task),
+                    child: const Text(
+                      'تلاش دوباره',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: MessengerColors.brand,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (!failed)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(100),
+                  child: LinearProgressIndicator(
+                    value: p == 0 ? null : p,
+                    minHeight: 3,
+                    backgroundColor: MessengerColors.line,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    },
   );
 }
