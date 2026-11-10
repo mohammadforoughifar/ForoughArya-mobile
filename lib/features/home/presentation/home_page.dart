@@ -766,7 +766,8 @@ class _HomePageState extends State<HomePage> {
               child: _SectionHeader(title: 'ماژول‌ها'),
             ),
             _buildModules(),
-            const SliverToBoxAdapter(child: SizedBox(height: 22)),
+            // فضای پایین برای نوار شیشه‌ای شناور
+            const SliverToBoxAdapter(child: SizedBox(height: 104)),
           ],
         ),
       ),

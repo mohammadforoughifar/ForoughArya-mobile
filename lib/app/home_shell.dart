@@ -16,6 +16,7 @@ import '../features/messenger/presentation/messenger_page.dart';
 import '../features/office_automation/presentation/email_page.dart';
 import '../features/office_automation/presentation/office_home_page.dart';
 import '../features/work_orders/presentation/work_orders_page.dart';
+import 'widgets/glass_nav_bar.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, this.initialIndex = 0});
@@ -80,46 +81,67 @@ class _HomeShellState extends State<HomeShell> {
         }
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: [
-            HomePage(onOpenTab: _go),
-            const WorkOrdersPage(),
-            const OfficeAutomationPage(),
-            const EmailPage(),
-            const MessengerPage(),
-          ],
+        // انتقال نرم بین تب‌ها: محو + بالا آمدن ملایم
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.025),
+                end: Offset.zero,
+              ).animate(anim),
+              child: child,
+            ),
+          ),
+          child: KeyedSubtree(
+            key: ValueKey<int>(_index),
+            child: IndexedStack(
+              index: _index,
+              children: [
+                HomePage(onOpenTab: _go),
+                const WorkOrdersPage(),
+                const OfficeAutomationPage(),
+                const EmailPage(),
+                const MessengerPage(),
+              ],
+            ),
+          ),
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _go,
-          height: 64,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
+        extendBody: true,
+        // نوار ناوبری شیشه‌ای شناور با پیل کشویی
+        bottomNavigationBar: GlassNavBar(
+          index: _index,
+          accent: const Color(0xff2547a8),
+          tint: const Color(0xff0d7d8c),
+          onSelected: _go,
+          items: const [
+            NavItem(
               label: 'خانه',
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
             ),
-            NavigationDestination(
-              icon: Icon(Icons.assignment_outlined),
-              selectedIcon: Icon(Icons.assignment),
+            NavItem(
               label: 'دستور کار',
+              icon: Icons.assignment_outlined,
+              activeIcon: Icons.assignment_rounded,
             ),
-            NavigationDestination(
-              icon: Icon(Icons.account_balance_outlined),
-              selectedIcon: Icon(Icons.account_balance),
+            NavItem(
               label: 'اتوماسیون',
+              icon: Icons.account_balance_outlined,
+              activeIcon: Icons.account_balance_rounded,
             ),
-            NavigationDestination(
-              icon: Icon(Icons.alternate_email),
-              selectedIcon: Icon(Icons.mark_email_unread),
+            NavItem(
               label: 'ایمیل',
+              icon: Icons.alternate_email_rounded,
+              activeIcon: Icons.mark_email_unread_rounded,
             ),
-            NavigationDestination(
-              icon: Icon(Icons.forum_outlined),
-              selectedIcon: Icon(Icons.forum_rounded),
+            NavItem(
               label: 'پیام‌رسان',
+              icon: Icons.forum_outlined,
+              activeIcon: Icons.forum_rounded,
             ),
           ],
         ),

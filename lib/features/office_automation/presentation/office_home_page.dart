@@ -551,7 +551,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
     return RefreshIndicator(
       onRefresh: _loadStats,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 96),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 108),
         children: [
           // --- کارت قهرمان ---
           OFadeSlideIn(

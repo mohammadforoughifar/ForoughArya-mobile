@@ -913,7 +913,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 onRefresh: () => _load(key, reset: true),
                 child: ListView.builder(
                   controller: _scrollFor(key),
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 92),
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 104),
                   itemCount: items.length + (_hasMore(key) ? 1 : 0),
                   itemBuilder: (context, i) {
                     if (i >= items.length) {
@@ -953,7 +953,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
     return RefreshIndicator(
       onRefresh: _loadDrafts,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 92),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 104),
         itemCount: _drafts.length,
         itemBuilder: (context, i) {
           final d = _drafts[i];
