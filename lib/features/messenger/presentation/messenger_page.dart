@@ -318,9 +318,8 @@ class _ThreadRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = thread.lastAt == null
-        ? ''
-        : Fa.date(thread.lastAt!.toIso8601String(), time: false);
+    // مثل dialog-time وب: ساعت امروز، «دیروز» یا تاریخ شمسی
+    final time = Fa.chatTime(thread.lastAt);
     return Material(
       color: Colors.transparent,
       child: InkWell(

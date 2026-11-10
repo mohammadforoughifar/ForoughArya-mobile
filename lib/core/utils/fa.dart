@@ -49,6 +49,51 @@ class Fa {
         : result;
   }
 
+  /// خواندن تاریخ/ساعت از پاسخ سرور.
+  ///
+  /// سرور ASP.NET تاریخ‌ها را به‌صورت UTC می‌فرستد ولی گاهی مقدار بدون
+  /// پسوند منطقه (`Z` یا `+03:30`) می‌رسد (مثلاً از SQLite یا سریال‌های
+  /// SignalR). `DateTime.parse` چنین مقداری را «ساعت محلی» فرض می‌کند و
+  /// نتیجه چند ساعت جلو/عقب می‌شود. این تابع همان مقداری را که وب
+  /// (‏`DateTime.ToLocalTime`) درست می‌خواند، درست بخوان: بدون منطقه =
+  /// UTC. اگر مقدار تقویم شمسی باشد، خالی برمی‌گردد.
+  static DateTime? parseServerDate(Object? value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty || raw == 'null') return null;
+    if (isJalaliString(raw)) return null;
+    var text = raw;
+    final hasZone = RegExp(
+      r'(Z|z|[+-]\d{2}:?\d{2})$',
+    ).hasMatch(text.replaceFirst(' ', 'T'));
+    if (!hasZone) text = '${text.replaceFirst(' ', 'T')}Z';
+    final d = DateTime.tryParse(text);
+    return d?.toLocal();
+  }
+
+  /// ساعت پیام‌رسان — عیناً مثل `FormatTime` وب:
+  /// امروز → «۱۴:۰۵»، دیروز → «دیروز»، قبل‌تر → تاریخ شمسی «۱۴۰۴/۰۸/۱۹».
+  static String chatTime(DateTime? at, {DateTime? now}) {
+    if (at == null) return '';
+    final local = at.toLocal();
+    final today = (now ?? DateTime.now()).toLocal();
+    final day = DateTime(local.year, local.month, local.day);
+    final today0 = DateTime(today.year, today.month, today.day);
+    final diff = today0.difference(day).inDays;
+    if (diff == 0) {
+      return digits(
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}',
+      );
+    }
+    if (diff == 1) return 'دیروز';
+    return digits(
+      '${Jalali.fromDateTime(local).year}/'
+      '${Jalali.fromDateTime(local).month.toString().padLeft(2, '0')}/'
+      '${Jalali.fromDateTime(local).day.toString().padLeft(2, '0')}',
+    );
+  }
+
   static String priority(int p) => switch (p) {
     0 => 'کم',
     2 => 'بالا',

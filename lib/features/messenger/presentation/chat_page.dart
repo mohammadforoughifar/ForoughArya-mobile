@@ -703,9 +703,8 @@ class _Bubble extends StatelessWidget {
       );
     }
     final mine = message.mine;
-    final time = message.at == null
-        ? ''
-        : Fa.date(message.at!.toIso8601String());
+    // مثل bubble-time وب: «۱۴:۰۵» امروز، «دیروز» یا تاریخ شمسی
+    final time = Fa.chatTime(message.at);
     return Align(
       alignment: mine
           ? AlignmentDirectional.centerEnd

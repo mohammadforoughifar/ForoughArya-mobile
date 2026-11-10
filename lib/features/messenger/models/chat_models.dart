@@ -5,9 +5,12 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/fa.dart';
+
 int _i(dynamic v) => (v as num?)?.toInt() ?? 0;
-DateTime? _d(dynamic v) =>
-    DateTime.tryParse(v?.toString() ?? '')?.toLocal();
+
+/// ‏سرور UTC می‌فرستد و گاهی بدون پسوند منطقه؛ خواندن درست در `Fa`.
+DateTime? _d(dynamic v) => Fa.parseServerDate(v);
 
 /// یک گفت‌وگو (چت یک‌به‌یک یا گروه)
 class ChatThread {
@@ -78,9 +81,7 @@ class ChatThread {
       lastMessage: (j['lastMessageSnippet'] ?? j['pinnedMessageSnippet'])
           ?.toString(),
       lastSender: j['lastMessageSenderName']?.toString(),
-      lastAt: DateTime.tryParse(
-        (j['lastMessageAt'] ?? j['createdAt'] ?? '').toString(),
-      )?.toLocal(),
+      lastAt: Fa.parseServerDate(j['lastMessageAt'] ?? j['createdAt']),
       unread: (j['unreadCount'] as num?)?.toInt() ?? 0,
       online: j['directPeerIsOnline'] == true,
       pinned: j['isPinned'] == true,
@@ -218,7 +219,7 @@ class ChatMessage {
       mine: senderId != null && myUserId != null
           ? senderId == myUserId
           : j['isOutgoing'] == true,
-      at: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+      at: Fa.parseServerDate(j['createdAt']),
       senderName: j['senderName']?.toString(),
       senderId: senderId,
       messageType: type,
