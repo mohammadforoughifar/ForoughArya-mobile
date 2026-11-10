@@ -9,6 +9,7 @@ import 'features/misc/data/minutes_repository.dart';
 import 'features/office_automation/data/email_draft_store.dart';
 import 'features/office_automation/data/email_repository.dart';
 import 'features/office_automation/data/office_repository.dart';
+import 'features/shop/data/shop_repository.dart';
 import 'features/work_orders/data/work_order_repository.dart';
 
 void main() {
@@ -31,6 +32,7 @@ void main() {
         Provider(create: (_) => EmailRepository(api)),
         Provider(create: (_) => EmailDraftStore(storage)),
         Provider(create: (_) => MinutesRepository(api)),
+        Provider(create: (_) => ShopRepository(api)),
       ],
       child: const ForoughApp(),
     ),

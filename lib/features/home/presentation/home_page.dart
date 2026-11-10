@@ -21,6 +21,7 @@ import '../../../core/notifications/push_service.dart';
 import '../../../core/utils/fa.dart';
 import '../../misc/presentation/minutes_detail_page.dart';
 import '../../misc/presentation/minutes_list_page.dart';
+import '../../shop/presentation/shop_home_page.dart';
 import '../data/notification_target.dart';
 import '../../misc/presentation/misc_forms_page.dart';
 import '../../office_automation/data/email_repository.dart';
@@ -603,6 +604,13 @@ class _HomePageState extends State<HomePage> {
       Navigator.of(
         context,
       ).push(MaterialPageRoute<void>(builder: (_) => const MinutesListPage()));
+      return;
+    }
+    if (m.onTapName == 'sales') {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ShopHomePage()),
+      );
       return;
     }
     if (m.onTapName == 'misc') {

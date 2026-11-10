@@ -353,7 +353,6 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     subtitle: 'فاکتور و سفارش',
     icon: Icons.point_of_sale_rounded,
     color: const Color(0xff4f7ce8),
-    badge: 'به‌زودی',
     onTapName: 'sales',
   ),
   ModuleTile(

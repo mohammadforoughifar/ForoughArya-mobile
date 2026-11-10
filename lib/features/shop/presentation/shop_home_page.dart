@@ -1,0 +1,386 @@
+// ============================================================
+//  اسکلت ماژول «سامانه فروشگاهی» در موبایل
+//  ساختار منو دقیقاً از Layout/NavMenu.razor وب گرفته شده است.
+//
+//  فاز ۱ (اکنون): «اطلاعات پایه ← طرف حساب‌ها» + «گزارش ← طلب و بدهی اشخاص».
+//  بقیهٔ آیتم‌های منو همان‌جا فهرست می‌شوند و با آمدن هر فاز وصل می‌شوند؛
+//  تا آن روز به‌جای کلیک بی‌اثر، پیام «در فاز بعدی» نشان داده می‌شود.
+//  هیچ آیتمی خارج از منوی وب ساخته نشده است.
+// ============================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../core/auth/auth_controller.dart';
+import '../data/shop_perms.dart';
+import 'parties_page.dart';
+import 'party_statements_page.dart';
+import 'shop_style.dart';
+
+class ShopHomePage extends StatelessWidget {
+  const ShopHomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final perms = ShopPerms(context.read<AuthController>().session);
+
+    // ---- گیت‌های منو، عیناً مثل NavMenu.razor ----
+    final showParties = perms.canSeeCustomers || perms.canSeeSuppliers;
+    final partiesLabel = perms.canSeeSuppliers && !perms.canSeeCustomers
+        ? 'تأمین‌کنندگان'
+        : perms.canSeeCustomers && !perms.canSeeSuppliers
+        ? 'مشتریان'
+        : 'طرف حساب‌ها';
+
+    return Scaffold(
+      backgroundColor: ShopColors.bg,
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: ShopHeader(
+              title: 'سامانه فروشگاهی',
+              subtitle: 'عملیات خرید و فروش، اطلاعات پایه، گزارش‌ها و ویزیتوری',
+              icon: Icons.point_of_sale_rounded,
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
+            sliver: SliverList.list(
+              children: [
+                // ---------- گزارش‌ها (اکنون) ----------
+                _group(
+                  context,
+                  'گزارش‌ها',
+                  Icons.insights_rounded,
+                  [
+                    _Item(
+                      'گزارش طلب و بدهی اشخاص',
+                      'گردش حساب، مانده افتتاحیه و ریز صورت‌حساب',
+                      Icons.account_balance_wallet_rounded,
+                      enabled: true,
+                      onTap: () => _push(context, const PartyStatementsPage()),
+                    ),
+                  ],
+                ),
+                // ---------- اطلاعات پایه ----------
+                _group(
+                  context,
+                  'اطلاعات پایه',
+                  Icons.dataset_rounded,
+                  [
+                    if (showParties)
+                      _Item(
+                        partiesLabel,
+                        perms.canSeeCustomers && perms.canSeeSuppliers
+                            ? 'مشتریان و تأمین‌کنندگان'
+                            : (perms.canSeeCustomers
+                                  ? 'خریداران حقیقی و حقوقی'
+                                  : 'فروشندگان کالا و خدمات'),
+                        Icons.people_alt_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const PartiesPage()),
+                      ),
+                    const _Item(
+                      'کالاها',
+                      'کالا، گروه، واحد و بارکد',
+                      Icons.inventory_2_rounded,
+                      phase: 2,
+                    ),
+                    const _Item(
+                      'گروه‌های کالا',
+                      'دسته‌بندی کالاها',
+                      Icons.sell_rounded,
+                      phase: 2,
+                    ),
+                    const _Item(
+                      'واحدهای شمارش',
+                      'عدد، کیلوگرم، متر و…',
+                      Icons.straighten_rounded,
+                      phase: 2,
+                    ),
+                    const _Item(
+                      'انبارها',
+                      'انبارها و موجودی',
+                      Icons.warehouse_rounded,
+                      phase: 2,
+                    ),
+                    const _Item(
+                      'معرف‌ها',
+                      'بازاریابان و پروندهٔ فروش',
+                      Icons.badge_rounded,
+                      phase: 6,
+                    ),
+                    const _Item(
+                      'بانک، صندوق و کارتخوان (POS)',
+                      'حساب‌های خزانه',
+                      Icons.account_balance_rounded,
+                      phase: 5,
+                    ),
+                  ],
+                ),
+                // ---------- عملیات ----------
+                _group(
+                  context,
+                  'عملیات',
+                  Icons.receipt_long_rounded,
+                  const [
+                    _Item(
+                      'خرید',
+                      'سفارش/فاکتور خرید',
+                      Icons.shopping_bag_rounded,
+                      phase: 3,
+                    ),
+                    _Item(
+                      'فروش',
+                      'سفارش/فاکتور فروش',
+                      Icons.shopping_cart_rounded,
+                      phase: 3,
+                    ),
+                    _Item(
+                      'بیجک',
+                      'حوالهٔ خروج کالا',
+                      Icons.local_shipping_rounded,
+                      phase: 4,
+                    ),
+                    _Item(
+                      'تعمیرات',
+                      'سفارش‌های تعمیرات',
+                      Icons.build_rounded,
+                      phase: 4,
+                    ),
+                    _Item(
+                      'هزینه‌ها',
+                      'ثبت هزینه‌ها',
+                      Icons.payments_rounded,
+                      phase: 4,
+                    ),
+                    _Item(
+                      'مدیریت اقساط و چک‌ها',
+                      'اقساط و چک‌های دریافتی/پرداختی',
+                      Icons.event_note_rounded,
+                      phase: 5,
+                    ),
+                    _Item(
+                      'افتتاح حساب و مانده‌های اولیه',
+                      'مانده اول دورهٔ اشخاص',
+                      Icons.play_circle_outline_rounded,
+                      phase: 5,
+                    ),
+                    _Item(
+                      'تسویه فاکتورها',
+                      'دریافت/پرداخت و تسویه',
+                      Icons.swap_horiz_rounded,
+                      phase: 5,
+                    ),
+                  ],
+                ),
+                // ---------- ویزیت فروش ----------
+                _group(
+                  context,
+                  'فروش و ویزیتوری',
+                  Icons.directions_walk_rounded,
+                  const [
+                    _Item(
+                      'سفارش‌های من',
+                      'سفارش‌های ثبت‌شدهٔ ویزیتور',
+                      Icons.assignment_rounded,
+                      phase: 6,
+                    ),
+                    _Item(
+                      'ثبت سفارش جدید',
+                      'ثبت سفارش میدانی',
+                      Icons.add_box_rounded,
+                      phase: 6,
+                    ),
+                    _Item(
+                      'تأیید سفارش‌ها',
+                      'بررسی و تأیید مدیر فروش',
+                      Icons.verified_rounded,
+                      phase: 6,
+                    ),
+                    _Item(
+                      'همهٔ درخواست‌ها',
+                      'فهرست کامل درخواست‌ها',
+                      Icons.collections_rounded,
+                      phase: 6,
+                    ),
+                    _Item(
+                      'صف مالی سفارش‌ها',
+                      'تأیید مالی سفارش‌ها',
+                      Icons.receipt_rounded,
+                      phase: 6,
+                    ),
+                  ],
+                ),
+                // ---------- راهنما ----------
+                _group(
+                  context,
+                  'راهنما',
+                  Icons.help_outline_rounded,
+                  const [
+                    _Item(
+                      'راهنمای سامانه',
+                      'آموزش گام‌به‌گام سامانه فروشگاهی',
+                      Icons.menu_book_rounded,
+                      phase: 6,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _push(BuildContext context, Widget page) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
+  Widget _group(
+    BuildContext context,
+    String title,
+    IconData icon,
+    List<_Item> items,
+  ) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        decoration: BoxDecoration(
+          color: ShopColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: ShopColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 15, color: ShopColors.seed),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                    color: ShopColors.ink,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final it in items) _row(context, it),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, _Item it) {
+    final on = it.enabled;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: on
+          ? it.onTap
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '«${it.title}» در فاز ${_faDigits(it.phase)} همین ماژول اضافه می‌شود.',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: (on ? ShopColors.seed : ShopColors.inkFaint).withValues(
+                  alpha: 0.1,
+                ),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                it.icon,
+                size: 17,
+                color: on ? ShopColors.seed : ShopColors.inkFaint,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    it.title,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: on ? ShopColors.ink : ShopColors.inkSoft,
+                    ),
+                  ),
+                  Text(
+                    it.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: ShopColors.inkFaint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (on)
+              const Icon(
+                Icons.chevron_left_rounded,
+                size: 18,
+                color: ShopColors.inkFaint,
+              )
+            else
+              ShopTag(text: 'فاز ${_faDigits(it.phase)}', color: ShopColors.warn),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _faDigits(int? n) {
+    const en = '0123456789';
+    const fa = '۰۱۲۳۴۵۶۷۸۹';
+    return (n ?? 0).toString().split('').map((c) {
+      final i = en.indexOf(c);
+      return i < 0 ? c : fa[i];
+    }).join();
+  }
+}
+
+class _Item {
+  const _Item(
+    this.title,
+    this.subtitle,
+    this.icon, {
+    this.enabled = false,
+    this.onTap,
+    this.phase = 2,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback? onTap;
+  final int phase;
+}
