@@ -159,6 +159,40 @@ class _MinutesListPageState extends State<MinutesListPage> {
     if (mounted) await _reloadList();
   }
 
+  /// حذف صورتجلسه از فهرست (با تأیید)
+  Future<void> _confirmDelete(MinutesListItem m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('حذف صورتجلسه'),
+          content: Text('صورتجلسه «${m.title}» حذف شود؟ این کار بازگشت‌پذیر نیست.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('انصراف'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: MiscColors.danger),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.deleteMinutes(m.id);
+      if (!mounted) return;
+      showMessage(context, 'صورتجلسه حذف شد.');
+      await _reloadList();
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+    }
+  }
+
   Future<void> _openDetail(MinutesListItem m) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => MinutesDetailPage(minutesId: m.id)),
@@ -513,6 +547,7 @@ class _MinutesListPageState extends State<MinutesListPage> {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _MinutesCard(
           item: _items[i],
+          onDelete: () => _confirmDelete(_items[i]),
           onTap: () => _openDetail(_items[i]),
         ),
       ),
@@ -554,10 +589,15 @@ class _FilterChipBtn extends StatelessWidget {
 }
 
 class _MinutesCard extends StatelessWidget {
-  const _MinutesCard({required this.item, required this.onTap});
+  const _MinutesCard({
+    required this.item,
+    required this.onTap,
+    this.onDelete,
+  });
 
   final MinutesListItem item;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -600,14 +640,31 @@ class _MinutesCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   MinutesStatusBadge(status: item.status),
                   const Spacer(),
-                  Text(
-                    formatJalaliDate(item.meetingDate),
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: MiscColors.inkSoft,
+                  Flexible(
+                    child: Text(
+                      formatJalaliDate(item.meetingDate),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: MiscColors.inkSoft,
+                      ),
                     ),
                   ),
+                  if (onDelete != null)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 30,
+                        minHeight: 30,
+                      ),
+                      tooltip: 'حذف صورتجلسه',
+                      color: MiscColors.danger,
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    ),
                 ],
               ),
               const SizedBox(height: 10),
