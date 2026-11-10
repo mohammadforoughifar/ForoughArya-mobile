@@ -156,32 +156,49 @@ class _ChatPageState extends State<ChatPage> {
 
   // ---------------- ویس ----------------
 
+  /// پیام راهنما وقتی اجازهٔ میکروفن نیست — با دکمهٔ رفتن به تنظیمات
+  void _micDeniedHint() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        content: const Text(
+          'اجازهٔ میکروفن داده نشده. برای ضبط صدا اجازه بدهید.',
+        ),
+        action: SnackBarAction(
+          label: 'تنظیمات',
+          onPressed: () => VoiceRecorder.openSettings(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _startRecording() async {
     if (_recording) return;
     HapticFeedback.mediumImpact();
-    final ok = await VoiceRecorder.requestPermission();
+
+    // ۱) اجازه: اگر از قبل داده شده، پنجره باز نمی‌شود
+    var ok = await VoiceRecorder.hasPermission();
+    if (!ok) ok = await VoiceRecorder.requestPermission();
     if (!ok) {
-      // اندروید مجوز میکروفن را از منیفست می‌دهد؛ پیام روشن نمایش می‌دهیم.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('برای ضبط صدا، اجازهٔ میکروفن لازم است.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _micDeniedHint();
       return;
     }
+
+    // ۲) شروع ضبط (خطای بومی با پیام فارسی برمی‌گردد)
     final f = await VoiceRecorder.start();
     if (f == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ضبط صدا آغاز نشد.'),
-            behavior: SnackBarBehavior.floating,
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            VoiceRecorder.lastError ?? 'ضبط صدا آغاز نشد.',
           ),
-        );
-      }
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
     setState(() {
@@ -413,14 +430,14 @@ class _ChatPageState extends State<ChatPage> {
                 });
                 _finishRecording(send: !cancel);
               },
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('برای ضبط ویس، دکمهٔ میکروفن را نگه دارید.'),
-                    behavior: SnackBarBehavior.floating,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+              // یک ضربه = شروع/پایان ضبط (برای گوشی‌هایی که نگه‌داشتن
+              // در آن‌ها با اسکرول/ژست سیستم قاطی می‌شود)
+              onTap: () async {
+                if (_recording) {
+                  await _finishRecording(send: !_cancelled);
+                } else {
+                  await _startRecording();
+                }
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),

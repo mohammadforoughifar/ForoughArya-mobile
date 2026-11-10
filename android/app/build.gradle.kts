@@ -64,4 +64,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // برای درخواست مجوز میکروفن (ContextCompat / ActivityCompat)
+    implementation("androidx.core:core-ktx:1.13.1")
 }

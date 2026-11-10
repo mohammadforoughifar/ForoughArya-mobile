@@ -24,6 +24,7 @@ class VoiceRecorder {
     }
   }
 
+  /// درخواست واقعی اجازهٔ میکروفن — پنجرهٔ سیستم باز می‌شود.
   static Future<bool> requestPermission() async {
     try {
       return await _channel.invokeMethod<bool>('requestPermission') ?? false;
@@ -32,16 +33,45 @@ class VoiceRecorder {
     }
   }
 
+  /// آیا اجازه از قبل داده شده است؟ (بدون باز کردن پنجره)
+  static Future<bool> hasPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('hasPermission') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// باز کردن صفحهٔ تنظیمات برنامه (وقتی کاربر «هرگز اجازه نده» زده است)
+  static Future<bool> openSettings() async {
+    try {
+      return await _channel.invokeMethod<bool>('openSettings') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// آخرین خطای ضبط (برای نمایش به کاربر)
+  static String? lastError;
+
   /// شروع ضبط؛ فایل خروجی برگردانده می‌شود.
   static Future<File?> start() async {
+    lastError = null;
     try {
       final dir = await getTemporaryDirectory();
       final path =
           '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       final ok = await _channel.invokeMethod<bool>('start', {'path': path});
-      if (ok != true) return null;
+      if (ok != true) {
+        lastError = 'شروع ضبط صدا ناموفق بود (دسترسی میکروفن یا مشغول بودن آن).';
+        return null;
+      }
       return File(path);
-    } catch (_) {
+    } on PlatformException catch (e) {
+      lastError = e.message ?? 'خطای ضبط صدا';
+      return null;
+    } catch (e) {
+      lastError = e.toString();
       return null;
     }
   }
