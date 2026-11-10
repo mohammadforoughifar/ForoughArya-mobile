@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../data/it_perms.dart';
 import 'hardware_dashboard_page.dart';
+import 'it_requests_page.dart';
 import '../../shop/presentation/shop_style.dart';
 
 class ItHomePage extends StatelessWidget {
@@ -91,6 +92,16 @@ class ItHomePage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
+            if (perms.canSeeItRequests)
+              _card(
+                context,
+                title: 'درخواست خدمت IT',
+                subtitle:
+                    'ثبت درخواست پشتیبانی، تخصیص کارشناس و پیگیری وضعیت انجام',
+                icon: Icons.headset_mic_rounded,
+                color: const Color(0xff0284c7),
+                onTap: () => _push(context, const ItRequestsPage()),
+              ),
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
@@ -111,7 +122,6 @@ class ItHomePage extends StatelessWidget {
   /// متن راهنمای گروه — تا فازهای بعدی که صفحات را اضافه می‌کنند.
   static String _pendingNote(ItPerms perms) {
     final parts = <String>[];
-    if (perms.canSeeItRequests) parts.add('درخواست خدمت IT');
     if (perms.canSeeSystemUsers) parts.add('سیستم‌ها و شناسنامه');
     if (perms.canSeeServers) parts.add('سرورها');
     if (perms.canSeeIpam) parts.add('مدیریت آی‌پی');
