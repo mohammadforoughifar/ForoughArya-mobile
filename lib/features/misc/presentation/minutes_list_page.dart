@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
@@ -159,8 +160,39 @@ class _MinutesListPageState extends State<MinutesListPage> {
     if (mounted) await _reloadList();
   }
 
-  /// حذف صورتجلسه از فهرست (با تأیید)
+  /// حذف صورتجلسه — فقط «ایجادکننده» و فقط اگر «هیچ امضایی» ثبت نشده باشد.
+  /// برای اطمینان، جزئیات تازه از سرور خوانده می‌شود.
   Future<void> _confirmDelete(MinutesListItem m) async {
+    final myId = context.read<AuthController>().session?.userId ?? 0;
+    if (myId <= 0) {
+      showMessage(context, 'برای حذف باید وارد حساب شوید.', error: true);
+      return;
+    }
+    MinutesDetail d;
+    try {
+      d = await _repo.fetchDetail(m.id);
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+      return;
+    }
+    if (!mounted) return;
+    if (d.createdByUserId != myId) {
+      showMessage(
+        context,
+        'فقط ایجادکنندهٔ صورتجلسه («${d.createdByName}») می‌تواند آن را حذف کند.',
+        error: true,
+      );
+      return;
+    }
+    final signed = d.participants.where((p) => p.isSigned).toList();
+    if (signed.isNotEmpty) {
+      showMessage(
+        context,
+        'این صورتجلسه ${Fa.digits(signed.length)} امضا دارد و قابل حذف نیست؛ ابتدا امضاها را بردارید.',
+        error: true,
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => Directionality(

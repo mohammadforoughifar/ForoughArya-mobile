@@ -28,7 +28,19 @@ class EmailComposePage extends StatefulWidget {
     this.replyAll = false,
     this.forwardOf,
     this.draft,
+    this.initialTo,
+    this.initialSubject,
+    this.initialBody,
+    this.initialFiles = const [],
+    this.initialAccountId,
   });
+
+  /// مقادیر آغازین (برای ارسال از ماژول‌های دیگر مثل صورتجلسه)
+  final String? initialTo;
+  final String? initialSubject;
+  final String? initialBody;
+  final List<({String name, Uint8List bytes, String? mimeType})> initialFiles;
+  final int? initialAccountId;
 
   final EmailScope scope;
   final List<EmailAccount> accounts;
@@ -89,7 +101,17 @@ class _EmailComposePageState extends State<EmailComposePage> {
       initSub = forwardSubject(fwd.subject);
       initBody = quotedBody(fwd);
       preferredAccount = fwd.accountId > 0 ? fwd.accountId : null;
+    } else {
+      // مقادیر آغازین از ماژول مبدأ (صورتجلسه / بند صورتجلسه)
+      initTo = widget.initialTo ?? '';
+      initSub = widget.initialSubject ?? '';
+      initBody = widget.initialBody ?? '';
     }
+
+    if (widget.initialAccountId != null && widget.initialAccountId! > 0) {
+      preferredAccount = widget.initialAccountId;
+    }
+    if (widget.initialFiles.isNotEmpty) _files.addAll(widget.initialFiles);
 
     _toCtrl = TextEditingController(text: initTo);
     _ccCtrl = TextEditingController(text: initCc);

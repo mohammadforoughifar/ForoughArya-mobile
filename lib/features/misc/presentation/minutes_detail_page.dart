@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
+import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -18,6 +19,12 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
+import '../../office_automation/data/office_repository.dart';
+import '../../office_automation/presentation/email_compose_page.dart';
+import '../../office_automation/presentation/email_page.dart';
+import '../../office_automation/presentation/letter_editor_page.dart';
+import '../../office_automation/presentation/letter_detail_page.dart';
+import '../../work_orders/presentation/work_order_editor_page.dart';
 import '../data/minutes_repository.dart';
 import '../models/minutes_models.dart';
 import 'minutes_dispatch_sheet.dart';
@@ -58,6 +65,14 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
 
   bool _isCreator(MinutesDetail d) =>
       _myUserId > 0 && d.createdByUserId == _myUserId;
+
+  /// طبق قاعدهٔ کسب‌وکار: حذف فقط برای «ایجادکننده» و تنها وقتی
+  /// «هیچ امضایی» روی صورتجلسه ثبت نشده باشد.
+  bool _canDelete(MinutesDetail d) {
+    if (!_isCreator(d)) return false;
+    final anySignature = d.participants.any((p) => p.isSigned);
+    return !anySignature;
+  }
 
   Future<void> _load() async {
     setState(() {
@@ -104,6 +119,17 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
   Future<void> _deleteMinutes() async {
     final d = _detail;
     if (d == null) return;
+    if (!_canDelete(d)) {
+      final signed = d.participants.where((p) => p.isSigned).length;
+      showMessage(
+        context,
+        signed > 0
+            ? 'صورتجلسه دارای امضاست و قابل حذف نیست.'
+            : 'فقط ایجادکنندهٔ صورتجلسه می‌تواند آن را حذف کند.',
+        error: true,
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => Directionality(
@@ -690,7 +716,7 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
   Future<void> _openDispatch({MinutesItem? item}) async {
     final d = _detail;
     if (d == null) return;
-    final done = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<DispatchResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -701,13 +727,113 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
         users: _users,
       ),
     );
-    if (done == true && mounted) {
-      showMessage(
-        context,
-        item == null
-            ? 'صورتجلسه به ماژول مقصد ارسال شد.'
-            : 'بند ${Fa.digits(item.rowNo)} ارسال شد.',
-      );
+    if (result == null || !mounted) return;
+
+    // ── برای «کل صورتجلسه»: PDF کامل با سربرگ، یک‌بار گرفته می‌شود ──
+    Uint8List? pdf;
+    if (result.wholeMinutes && result.attachPdf) {
+      try {
+        pdf = await _repo.downloadPrintPdf(d.id);
+      } catch (e) {
+        if (mounted) showMessage(context, e.toString(), error: true);
+        return;
+      }
+      if (!mounted) return;
+    }
+
+    // ── هدایت به خودِ ماژول مقصد تا داده سر جای خودش بنشیند ──
+    switch (result.channel) {
+      case DispatchChannel.email:
+        // فرم نگارش ایمیل با دادهٔ پر شده + پیوست PDF (در حالت کل صورتجلسه)
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => EmailComposePage(
+              scope: EmailScope.corporate,
+              accounts: const [],
+              initialTo: result.toEmail,
+              initialSubject: result.subject,
+              initialBody: result.body,
+              initialAccountId: result.accountId > 0 ? result.accountId : null,
+              initialFiles: pdf == null
+                  ? const []
+                  : [
+                      (
+                        name: 'minutes-${d.id}.pdf',
+                        bytes: pdf,
+                        mimeType: 'application/pdf',
+                      ),
+                    ],
+            ),
+          ),
+        );
+        return;
+
+      case DispatchChannel.innerLetter:
+        final id = await Navigator.of(context).push<Object?>(
+          MaterialPageRoute<Object?>(
+            builder: (_) => LetterEditorPage(
+              kind: LetterKind.inner,
+              prefillTitle: result.subject,
+              prefillText: result.body,
+              attachRecipients: result.recipientUserIds,
+              attachPdf: pdf,
+              attachPdfName: 'minutes-${d.id}.pdf',
+              sourceMinutesId: d.id,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        if (id is int) {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  LetterDetailPage(kind: LetterKind.inner, letterId: id),
+            ),
+          );
+        }
+        return;
+
+      case DispatchChannel.outgoingLetter:
+        final id = await Navigator.of(context).push<Object?>(
+          MaterialPageRoute<Object?>(
+            builder: (_) => LetterEditorPage(
+              kind: LetterKind.outgoing,
+              prefillTitle: result.subject,
+              prefillText: result.body,
+              prefillOrganization: result.organization,
+              prefillReceiverName: result.receiverName,
+              attachRecipients: result.recipientUserIds,
+              attachPdf: pdf,
+              attachPdfName: 'minutes-${d.id}.pdf',
+              sourceMinutesId: d.id,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        if (id is int) {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  LetterDetailPage(kind: LetterKind.outgoing, letterId: id),
+            ),
+          );
+        }
+        return;
+
+      case DispatchChannel.workOrder:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkOrderEditorPage(
+              prefillTitle: result.subject,
+              prefillDescription: result.body,
+              prefillAssigneeIds: result.recipientUserIds,
+              prefillTags: const ['صورتجلسه'],
+              prefillDue: result.dueAt,
+              sourceLabel: 'صورتجلسه «${d.title}»',
+            ),
+          ),
+        );
+        return;
     }
   }
 
@@ -1312,7 +1438,7 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
                   title: Text('ارسال کل صورتجلسه (ایمیل/نامه/دستور کار)'),
                 ),
               ),
-              if (canEdit)
+              if (canEdit && _canDelete(d))
                 const PopupMenuItem(
                   value: 'delete',
                   child: ListTile(

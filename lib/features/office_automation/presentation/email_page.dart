@@ -43,7 +43,17 @@ class EmailPage extends StatefulWidget {
     super.key,
     this.initialScope = EmailScope.corporate,
     this.embedded = false,
+    this.prefillTo,
+    this.prefillSubject,
+    this.prefillBody,
+    this.prefillAccountId,
   });
+
+  /// پیش‌پر کردن فرم نگارش ایمیل از مبدأ (بند صورتجلسه / کل صورتجلسه)
+  final String? prefillTo;
+  final String? prefillSubject;
+  final String? prefillBody;
+  final int? prefillAccountId;
 
   final EmailScope initialScope;
 

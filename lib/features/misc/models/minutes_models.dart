@@ -42,6 +42,21 @@ dynamic _pick(Map<String, dynamic> j, String camel, String pascal) =>
 String _str(Map<String, dynamic> j, String camel, String pascal, [String def = '']) =>
     _pick(j, camel, pascal)?.toString() ?? def;
 
+/// نام نمایشی کاربر: اولین کلید موجود از میان چند نام ممکن
+/// (`displayName` / `fullName` / `name`) — تا هرگز «نام کاربری سیستم» نمایش داده نشود.
+String _displayName(
+  Map<String, dynamic> j,
+  List<String> camelKeys,
+  List<String> pascalKeys, [
+  String def = '—',
+]) {
+  for (var i = 0; i < camelKeys.length; i++) {
+    final v = _pick(j, camelKeys[i], pascalKeys[i])?.toString().trim();
+    if (v != null && v.isNotEmpty) return v;
+  }
+  return def;
+}
+
 int _int(Map<String, dynamic> j, String camel, String pascal, [int def = 0]) =>
     Fa.digitInt(_pick(j, camel, pascal)) ?? def;
 
@@ -149,7 +164,11 @@ class MinutesParticipant {
       MinutesParticipant(
         id: _int(j, 'id', 'Id'),
         userId: _int(j, 'userId', 'UserId'),
-        name: _str(j, 'name', 'Name', '—'),
+        name: _displayName(
+          j,
+          const ['displayName', 'fullName', 'name'],
+          const ['DisplayName', 'FullName', 'Name'],
+        ),
         kind: _str(j, 'kind', 'Kind', 'Attendee'),
         signatureData: _pick(j, 'signatureData', 'SignatureData')?.toString(),
         signedAt: _date(j, 'signedAt', 'SignedAt'),
@@ -215,10 +234,26 @@ class MinutesItem {
     responsibleUserId: Fa.digitInt(
       _pick(j, 'responsibleUserId', 'ResponsibleUserId'),
     ),
-    responsibleName: _pick(j, 'responsibleName', 'ResponsibleName')?.toString(),
+    responsibleName: _displayName(
+      j,
+      const [
+        'responsibleDisplayName',
+        'responsibleFullName',
+        'responsibleName',
+      ],
+      const [
+        'ResponsibleDisplayName',
+        'ResponsibleFullName',
+        'ResponsibleName',
+      ],
+    ),
     followUpDate: _date(j, 'followUpDate', 'FollowUpDate'),
     followUpUserId: Fa.digitInt(_pick(j, 'followUpUserId', 'FollowUpUserId')),
-    followUpName: _pick(j, 'followUpName', 'FollowUpName')?.toString(),
+    followUpName: _displayName(
+      j,
+      const ['followUpDisplayName', 'followUpFullName', 'followUpName'],
+      const ['FollowUpDisplayName', 'FollowUpFullName', 'FollowUpName'],
+    ),
     state: MinutesItemState.fromCode(_str(j, 'itemStatus', 'ItemStatus')),
     respApproved: _bool(j, 'respApproved', 'RespApproved'),
     respApprovedAt: _date(j, 'respApprovedAt', 'RespApprovedAt'),
@@ -280,7 +315,19 @@ class MinutesDetail {
       status: MinutesStatus.fromCode(_str(j, 'status', 'Status')),
       closedAt: _date(j, 'closedAt', 'ClosedAt'),
       createdByUserId: _int(j, 'createdByUserId', 'CreatedByUserId'),
-      createdByName: _str(j, 'createdByName', 'CreatedByName', '—'),
+      createdByName: _displayName(
+        j,
+        const [
+          'createdByDisplayName',
+          'createdByFullName',
+          'createdByName',
+        ],
+        const [
+          'CreatedByDisplayName',
+          'CreatedByFullName',
+          'CreatedByName',
+        ],
+      ),
       participants: (rawParts is List ? rawParts : const [])
           .whereType<Map>()
           .map((e) => MinutesParticipant.fromJson(Map<String, dynamic>.from(e)))
@@ -300,10 +347,15 @@ class MinutesUserOption {
   final int id;
   final String name;
 
+  /// نام نمایشی واقعی کاربر (displayName / fullName) — نه نام کاربری سیستم
   factory MinutesUserOption.fromJson(Map<String, dynamic> j) =>
       MinutesUserOption(
         id: _int(j, 'id', 'Id'),
-        name: _str(j, 'name', 'Name', 'کاربر'),
+        name: _displayName(
+          j,
+          const ['displayName', 'fullName', 'name'],
+          const ['DisplayName', 'FullName', 'Name'],
+        ),
       );
 }
 

@@ -45,8 +45,8 @@ void main() {
 
     expect(find.textContaining('فقط بند'), findsOneWidget);
     expect(find.textContaining('بدون پیوست کل صورتجلسه'), findsOneWidget);
-    // دکمهٔ ارسال هم به همان بند اشاره می‌کند
-    expect(find.textContaining('ارسال بند'), findsOneWidget);
+    // دکمهٔ ادامه هم به همان بند اشاره می‌کند (ادامه و ارسال)
+    expect(find.textContaining('ادامه و ارسال'), findsOneWidget);
     // هیچ گزینه‌ای برای پیوست PDF کل صورتجلسه در حالت بند وجود ندارد
     expect(find.textContaining('پیوست PDF کامل صورتجلسه'), findsNothing);
   });
@@ -61,6 +61,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('کل صورتجلسه'), findsWidgets);
-    expect(find.textContaining('ارسال کل صورتجلسه'), findsOneWidget);
+    expect(find.textContaining('پیوست PDF کامل'), findsWidgets);
+    // در حالت کل صورتجلسه، هیچ اشاره‌ای به «فقط بند» نباید باشد
+    expect(find.textContaining('فقط بند'), findsNothing);
   });
 }

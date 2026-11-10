@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 // ============================================================
 //  ماژول اتوماسیون اداری — لایهٔ دسترسی به API
 //  مسیرها عیناً از کنترلرهای بک‌اند:
@@ -435,11 +436,13 @@ class OfficeAutomationRepository {
     LetterKind kind,
     int id,
     String filePath,
-    String fileName,
-  ) async {
-    final form = FormData.fromMap({
-      'file': await MultipartFile.fromFile(filePath, filename: fileName),
-    });
+    String fileName, {
+    Uint8List? bytes,
+  }) async {
+    final file = bytes != null
+        ? MultipartFile.fromBytes(bytes, filename: fileName)
+        : await MultipartFile.fromFile(filePath, filename: fileName);
+    final form = FormData.fromMap({'file': file});
     await _api.request('POST', '${_rootOf(kind)}/$id/attachments', data: form);
   }
 

@@ -9,8 +9,26 @@ import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
 
 class WorkOrderEditorPage extends StatefulWidget {
-  const WorkOrderEditorPage({super.key, this.order});
+  const WorkOrderEditorPage({
+    super.key,
+    this.order,
+    this.prefillTitle,
+    this.prefillDescription,
+    this.prefillAssigneeIds = const [],
+    this.prefillTags = const [],
+    this.prefillDue,
+    this.sourceLabel,
+  });
+
   final WorkOrder? order;
+
+  /// پیش‌پر کردن فرم از مبدأ (مثلاً یک بند صورتجلسه یا کل صورتجلسه)
+  final String? prefillTitle;
+  final String? prefillDescription;
+  final List<int> prefillAssigneeIds;
+  final List<String> prefillTags;
+  final DateTime? prefillDue;
+  final String? sourceLabel;
   @override
   State<WorkOrderEditorPage> createState() => _WorkOrderEditorPageState();
 }
@@ -29,9 +47,12 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   late int _priority = widget.order?.priority ?? 1;
   late int _recurrence = widget.order?.recurrence ?? 0;
   late int _weight = widget.order?.weight ?? 1;
-  late final List<String> _tags = [...?widget.order?.tags];
+  late final List<String> _tags = [
+    ...?widget.order?.tags,
+    ...widget.prefillTags.where((t) => (t).trim().isNotEmpty),
+  ];
   final List<String> _checklistItems = [];
-  final Set<int> _targets = {};
+  late final Set<int> _targets = {...widget.prefillAssigneeIds};
   List<TargetUser> _users = [];
   List<dynamic> _templates = [];
   final List<PlatformFile> _files = [];
@@ -45,6 +66,15 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   void initState() {
     super.initState();
     _targets.addAll((widget.order?.assignees ?? []).map((e) => e.userId));
+    if (widget.order == null) {
+      if ((widget.prefillTitle ?? '').trim().isNotEmpty) {
+        _title.text = widget.prefillTitle!.trim();
+      }
+      if ((widget.prefillDescription ?? '').trim().isNotEmpty) {
+        _description.text = widget.prefillDescription!.trim();
+      }
+      if (widget.prefillDue != null) _due = widget.prefillDue!;
+    }
     _load();
   }
 

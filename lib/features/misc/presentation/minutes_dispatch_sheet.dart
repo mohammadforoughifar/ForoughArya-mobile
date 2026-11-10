@@ -6,8 +6,6 @@
 //    پیوست PDF کل صورتجلسه اضافه نمی‌گردد.
 // ============================================================
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,12 +14,43 @@ import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
 import '../../office_automation/data/email_repository.dart';
 import '../../office_automation/models/email_models.dart';
-import '../../work_orders/data/work_order_repository.dart';
-import '../data/minutes_repository.dart';
 import '../models/minutes_models.dart';
 import 'misc_style.dart';
 
 enum DispatchChannel { email, innerLetter, outgoingLetter, workOrder }
+
+/// نتیجهٔ ارسال — برای بازکردن ماژول مقصد و نشستن داده سر جای خودش
+class DispatchResult {
+  const DispatchResult({
+    required this.channel,
+    required this.subject,
+    required this.body,
+    this.organization = '',
+    this.receiverName = '',
+    this.recipientUserIds = const [],
+    this.toEmail = '',
+    this.ccEmail = '',
+    this.accountId = 0,
+    this.priority = 2,
+    this.dueAt,
+    this.attachPdf = false,
+    this.wholeMinutes = false,
+  });
+
+  final DispatchChannel channel;
+  final String subject;
+  final String body;
+  final String organization;
+  final String receiverName;
+  final List<int> recipientUserIds;
+  final String toEmail;
+  final String ccEmail;
+  final int accountId;
+  final int priority;
+  final DateTime? dueAt;
+  final bool attachPdf;
+  final bool wholeMinutes;
+}
 
 class MinutesDispatchSheet extends StatefulWidget {
   const MinutesDispatchSheet({
@@ -44,15 +73,9 @@ class MinutesDispatchSheet extends StatefulWidget {
 }
 
 class _MinutesDispatchSheetState extends State<MinutesDispatchSheet> {
-  late final MinutesRepository _minutesRepo =
-      Provider.of<MinutesRepository?>(context, listen: false) ??
-      MinutesRepository(context.read<ApiClient>());
   late final EmailRepository _emailRepo =
       Provider.of<EmailRepository?>(context, listen: false) ??
       EmailRepository(context.read<ApiClient>());
-  late final WorkOrderRepository _woRepo =
-      Provider.of<WorkOrderRepository?>(context, listen: false) ??
-      WorkOrderRepository(context.read<ApiClient>());
 
   DispatchChannel _channel = DispatchChannel.email;
 
@@ -138,128 +161,42 @@ class _MinutesDispatchSheetState extends State<MinutesDispatchSheet> {
     if (mounted) setState(() => _loadingLookups = false);
   }
 
-  Future<void> _send() async {
-    if (_sending) return;
-    setState(() => _sending = true);
-    try {
-      switch (_channel) {
-        case DispatchChannel.email:
-          await _sendEmail();
-        case DispatchChannel.innerLetter:
-          await _sendInnerLetter();
-        case DispatchChannel.outgoingLetter:
-          await _sendOutgoingLetter();
-        case DispatchChannel.workOrder:
-          await _sendWorkOrder();
-      }
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _sending = false);
-      showMessage(context, e.toString(), error: true);
+  /// به‌جای ارسال مستقیم، دادهٔ آمادهٔ فرم ماژول مقصد را برمی‌گردانیم تا
+  /// کاربر همان فرم را با داده‌های پر شده ببیند و تأیید کند.
+  void _submit() {
+    if (_channel == DispatchChannel.email && _toCtrl.text.trim().isEmpty) {
+      showMessage(context, 'ایمیل گیرنده را وارد کنید.', error: true);
+      return;
     }
-  }
-
-  // ---------------- ایمیل ----------------
-  Future<void> _sendEmail() async {
-    if (_accountId <= 0) {
-      throw ApiException('حساب ایمیل سازمانی فعالی انتخاب نشده است.');
+    if (_channel == DispatchChannel.innerLetter && _receiverUserIds.isEmpty) {
+      showMessage(context, 'حداقل یک گیرنده انتخاب کنید.', error: true);
+      return;
     }
-    if (_toCtrl.text.trim().isEmpty) {
-      throw ApiException('ایمیل گیرنده را وارد کنید.');
+    if (_channel == DispatchChannel.outgoingLetter &&
+        _orgCtrl.text.trim().isEmpty) {
+      showMessage(context, 'نام سازمان گیرنده را وارد کنید.', error: true);
+      return;
     }
-    final body = <String>[
-      _payloadText,
-      if (_bodyCtrl.text.trim().isNotEmpty) _bodyCtrl.text.trim(),
-    ].join('\n\n');
-
-    var attachments = <({String name, Uint8List bytes, String? mimeType})>[];
-    if (_isWholeMinutes) {
-      // کل صورتجلسه → PDF کامل با سربرگ شرکت پیوست می‌شود
-      final pdf = await _minutesRepo.downloadPrintPdf(widget.minutesId);
-      attachments = [
-        (
-          name: 'minutes-${widget.minutesId}.pdf',
-          bytes: pdf,
-          mimeType: 'application/pdf',
-        ),
-      ];
+    if (_channel == DispatchChannel.workOrder && _receiverUserIds.isEmpty) {
+      showMessage(context, 'حداقل یک مسئول انتخاب کنید.', error: true);
+      return;
     }
-
-    await _emailRepo.send(
-      emailAccountId: _accountId,
-      to: _toCtrl.text,
-      cc: _ccCtrl.text,
-      subject: _subjectCtrl.text,
-      body: body,
-      attachments: attachments,
+    final result = DispatchResult(
+      channel: _channel,
+      subject: _subjectCtrl.text.trim(),
+      body: _payloadText,
+      organization: _orgCtrl.text.trim(),
+      receiverName: _receiverNameCtrl.text.trim(),
+      recipientUserIds: _receiverUserIds.toList(),
+      toEmail: _toCtrl.text.trim(),
+      ccEmail: _ccCtrl.text.trim(),
+      accountId: _accountId,
+      priority: _woPriority,
+      dueAt: _woDue,
+      attachPdf: _isWholeMinutes && _attachPdf,
+      wholeMinutes: _isWholeMinutes,
     );
-  }
-
-  // ---------------- نامهٔ داخلی ----------------
-  Future<void> _sendInnerLetter() async {
-    if (_receiverUserIds.isEmpty) {
-      throw ApiException('حداقل یک گیرنده برای نامهٔ داخلی انتخاب کنید.');
-    }
-    // itemId فقط برای بند مقدار دارد؛ برای کل صورتجلسه 0 → سرور کل را می‌گیرد
-    await _minutesRepo.toInnerLetter(
-      widget.minutesId,
-      itemId: widget.item?.id ?? 0,
-      title: _subjectCtrl.text,
-      text: _payloadText,
-      girande: _receiverUserIds.toList(),
-    );
-  }
-
-  // ---------------- نامهٔ صادره ----------------
-  Future<void> _sendOutgoingLetter() async {
-    if (_orgCtrl.text.trim().isEmpty) {
-      throw ApiException('نام سازمان گیرنده را وارد کنید.');
-    }
-    await _minutesRepo.toOutgoingLetter(
-      widget.minutesId,
-      receiverOrganization: _orgCtrl.text,
-      title: _subjectCtrl.text,
-      text: _payloadText,
-      receiverName: _receiverNameCtrl.text,
-    );
-  }
-
-  // ---------------- دستور کار ----------------
-  Future<void> _sendWorkOrder() async {
-    if (_receiverUserIds.isEmpty) {
-      throw ApiException('حداقل یک مسئول برای دستور کار انتخاب کنید.');
-    }
-    final body = <String, dynamic>{
-      'title': _woTitleCtrl.text.trim(),
-      'description': _payloadText,
-      'dueAt': _woDue.toIso8601String(),
-      'assigneeUserIds': _receiverUserIds.toList(),
-      'sendSms': false,
-      'priority': _woPriority,
-      'recurrence': 'None',
-      'checklistItems': <String>[],
-      'tags': <String>['صورتجلسه'],
-      'weight': 1,
-      'clientRequestId': 'minutes-${widget.minutesId}-${widget.item?.id ?? 0}',
-    };
-    final res = await _woRepo.save(body);
-    final id = (res['id'] as num?)?.toInt();
-    if (id != null && id > 0 && _isWholeMinutes) {
-      // کل صورتجلسه → PDF کامل به‌عنوان پیوست دستور کار
-      try {
-        final pdf = await _minutesRepo.downloadPrintPdf(widget.minutesId);
-        await _woRepo.upload(
-          id,
-          null,
-          'صورتجلسه-${widget.minutesId}.pdf',
-          bytes: pdf,
-        );
-      } catch (_) {
-        // اگر پیوست نشد، خود دستور کار ثبت شده و مانع کار نیست
-      }
-    }
+    Navigator.of(context).pop(result);
   }
 
   @override
@@ -386,26 +323,17 @@ class _MinutesDispatchSheetState extends State<MinutesDispatchSheet> {
                     ),
                     const Spacer(),
                     FilledButton.icon(
-                      onPressed: _sending ? null : _send,
+                      onPressed: _sending ? null : _submit,
                       style: FilledButton.styleFrom(
                         backgroundColor: MiscColors.teal,
                       ),
-                      icon: _sending
-                          ? const SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.send_rounded, size: 17),
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 17),
                       label: Text(
-                        _sending
-                            ? 'در حال ارسال…'
-                            : _isWholeMinutes
-                            ? 'ارسال کل صورتجلسه'
-                            : 'ارسال بند ${Fa.digits(widget.item!.rowNo)}',
+                        _channel == DispatchChannel.workOrder
+                            ? 'ادامه و ثبت دستور کار'
+                            : _channel == DispatchChannel.email
+                            ? 'ادامه و ارسال ایمیل'
+                            : 'ادامه و ثبت نامه',
                       ),
                     ),
                   ],

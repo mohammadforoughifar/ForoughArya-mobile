@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 // ============================================================
 //  فرم ثبت نامه — داخلی / صادره / وارده
 //  فیلدها عیناً مطابق DTOهای بک‌اند:
@@ -20,10 +22,36 @@ import 'office_style.dart';
 import 'office_widgets.dart';
 
 class LetterEditorPage extends StatefulWidget {
-  const LetterEditorPage({super.key, required this.kind, this.editingId});
+  const LetterEditorPage({
+    super.key,
+    required this.kind,
+    this.editingId,
+    this.prefillTitle,
+    this.prefillText,
+    this.prefillOrganization,
+    this.prefillReceiverName,
+    this.attachPdf,
+    this.attachPdfName = 'minutess.pdf',
+    this.attachRecipients,
+    this.sourceMinutesId,
+  });
 
   final LetterKind kind;
   final int? editingId;
+
+  /// پیش‌پر کردن فرم از مبدأ (مثلاً بند صورتجلسه یا کل صورتجلسه)
+  final String? prefillTitle;
+  final String? prefillText;
+  final String? prefillOrganization;
+  final String? prefillReceiverName;
+
+  /// PDF کامل صورتجلسه که پس از ثبت نامه به آن پیوست می‌شود
+  final Uint8List? attachPdf;
+  final String attachPdfName;
+
+  /// کاربرانی که به‌عنوان گیرنده پیش‌انتخاب می‌شوند (UserId)
+  final List<int>? attachRecipients;
+  final int? sourceMinutesId;
 
   @override
   State<LetterEditorPage> createState() => _LetterEditorPageState();
@@ -52,6 +80,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   final List<LetterRecipient> _signers = [];
   int? _companyId;
   List<Map<String, dynamic>> _companies = const [];
+  int _savedId = 0;
 
   // وارده
   final _ferestande = TextEditingController();
@@ -75,6 +104,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
     super.initState();
     if (widget.kind == LetterKind.outgoing) _loadCompanies();
     if (widget.editingId != null) _loadForEdit();
+    _applyPrefill();
     if (widget.kind == LetterKind.incoming) _reserve();
   }
 
@@ -87,6 +117,36 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// پرکردن فیلدها از دادهٔ مبدأ و انتخاب گیرندگان پیش‌فرض
+  Future<void> _applyPrefill() async {
+    final title = widget.prefillTitle?.trim() ?? '';
+    final text = widget.prefillText?.trim() ?? '';
+    if (title.isNotEmpty) _title.text = title;
+    if (text.isNotEmpty) _text.text = text;
+    if ((widget.prefillOrganization ?? '').trim().isNotEmpty) {
+      _org.text = widget.prefillOrganization!.trim();
+    }
+    if ((widget.prefillReceiverName ?? '').trim().isNotEmpty) {
+      _receiverName.text = widget.prefillReceiverName!.trim();
+    }
+    final ids = widget.attachRecipients ?? const <int>[];
+    if (ids.isEmpty) return;
+    // نام کاربران برای نمایش در لیست گیرندگان
+    try {
+      final all = await _repo.recipients(widget.kind);
+      final picked = all.where((u) => ids.contains(u.userId)).toList();
+      if (picked.isEmpty) return;
+      if (!mounted) return;
+      setState(() {
+        if (widget.kind == LetterKind.outgoing) {
+          _signers.addAll(picked);
+        } else {
+          _girande.addAll(picked);
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _reserve() async {
@@ -250,20 +310,24 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
         case LetterKind.inner:
           if (widget.editingId != null) {
             await _repo.editInner(widget.editingId!, _innerBody());
+            _savedId = widget.editingId!;
           } else {
-            await _repo.createInner(_innerBody());
+            _savedId = await _repo.createInner(_innerBody());
           }
         case LetterKind.outgoing:
           if (widget.editingId != null) {
             await _repo.editOutgoing(widget.editingId!, _outgoingBody());
+            _savedId = widget.editingId!;
           } else {
-            await _repo.createOutgoing(_outgoingBody());
+            _savedId = await _repo.createOutgoing(_outgoingBody());
           }
         case LetterKind.incoming:
           if (widget.editingId != null) {
             await _repo.editIncoming(widget.editingId!, _incomingBody());
+            _savedId = widget.editingId!;
           } else {
             final id = await _repo.createIncoming(_incomingBody());
+            _savedId = id;
             if (id > 0) {
               try {
                 await _repo.finalizeIncoming(id);
@@ -271,9 +335,29 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
             }
           }
       }
+      // پیوست PDF کامل صورتجلسه به نامهٔ ثبت‌شده (فقط در حالت «کل صورتجلسه»)
+      if (!asDraft && widget.attachPdf != null && _savedId > 0) {
+        try {
+          await _repo.uploadAttachment(
+            widget.kind,
+            _savedId,
+            '',
+            widget.attachPdfName,
+            bytes: widget.attachPdf,
+          );
+        } catch (e) {
+          if (mounted) {
+            showMessage(
+              context,
+              'نامه ثبت شد ولی پیوست PDF صورتجلسه بارگذاری نشد: $e',
+              error: true,
+            );
+          }
+        }
+      }
       if (mounted) {
         showMessage(context, widget.editingId != null ? 'نامه ویرایش شد.' : 'نامه ثبت شد.');
-        Navigator.pop(context, true);
+        Navigator.pop(context, _savedId > 0 ? _savedId : true);
       }
     } on ApiException catch (e) {
       if (mounted) {
