@@ -18,6 +18,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
+import '../models/order_models.dart';
 import '../models/shop_models.dart';
 
 /// پاسخ صفحه‌بندی‌شده: یا آرایه است یا { total, items } (وقتی skip/take بفرستیم)
@@ -331,4 +332,84 @@ class ShopRepository {
 
   static String? _nullIfEmptyStr(String? v) =>
       (v == null || v.trim().isEmpty) ? null : v.trim();
+
+  // ------------------------------------------------------------
+  //  فاز ۳ — اسناد خرید و فروش (api/orders)
+  // ------------------------------------------------------------
+
+  /// `GET /api/orders?type&from&to&partyId&warehouseId&page&pageSize`
+  Future<ShopPage<ShopOrder>> orders({
+    required int type,
+    DateTime? from,
+    DateTime? to,
+    int? partyId,
+    int? warehouseId,
+    int page = 1,
+    int pageSize = 15,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders',
+      query: {
+        'type': type,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, ShopOrder.fromJson);
+  }
+
+  /// `GET /api/orders/{id}` — سند کامل همراه اقلام/چک‌ها/اقساط
+  Future<ShopOrder?> order(int id) async {
+    final r = await _api.get<dynamic>('/api/orders/$id');
+    final d = r.data;
+    return d is Map ? ShopOrder.fromJson(Map<String, dynamic>.from(d)) : null;
+  }
+
+  /// `POST /api/orders` — ثبت سند جدید
+  Future<ShopOrder> createOrder(Map<String, dynamic> cmd) async {
+    final r = await _api.post<dynamic>('/api/orders', cmd);
+    final d = r.data;
+    return d is Map ? ShopOrder.fromJson(Map<String, dynamic>.from(d)) : ShopOrder();
+  }
+
+  /// `PUT /api/orders/{id}` — ویرایش سند
+  Future<ShopOrder> updateOrder(int id, Map<String, dynamic> cmd) async {
+    final r = await _api.put<dynamic>('/api/orders/$id', cmd);
+    final d = r.data;
+    return d is Map ? ShopOrder.fromJson(Map<String, dynamic>.from(d)) : ShopOrder();
+  }
+
+  Future<void> deleteOrder(int id) => _api.delete<dynamic>('/api/orders/$id');
+
+  /// `GET /api/orders/last-purchase?productId`
+  Future<ShopOrder?> lastPurchase(int productId) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/last-purchase',
+      query: {'productId': productId},
+    );
+    final d = r.data;
+    return d is Map ? ShopOrder.fromJson(Map<String, dynamic>.from(d)) : null;
+  }
+
+  // ---------- حساب‌های خزانه (برای بخش پرداخت سند) ----------
+
+  /// `GET /api/trs/accounts?activeOnly`
+  Future<List<TrsAccount>> trsAccounts({bool activeOnly = true}) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/accounts',
+      query: {'activeOnly': activeOnly, 'withBalances': false},
+    );
+    return ShopPage.parse(r.data, TrsAccount.fromJson).items;
+  }
+
+  /// `POST /api/trs/accounts` — تعریف سریع بانک/صندوق از داخل فرم سند
+  Future<TrsAccount> saveTrsAccount(TrsAccount a) async {
+    final r = await _api.post<dynamic>('/api/trs/accounts', a.toJson());
+    final d = r.data;
+    return d is Map ? TrsAccount.fromJson(Map<String, dynamic>.from(d)) : a;
+  }
 }

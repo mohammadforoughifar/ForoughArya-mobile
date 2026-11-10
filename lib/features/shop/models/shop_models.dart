@@ -138,10 +138,22 @@ class Party {
 /// یک معرف (بازاریاب) — فقط برای انتخابگر «معرف» در فرم مشتری
 /// (فیلد `ReferrerId` در DTO طرف حساب وجود دارد)
 class Referrer {
-  const Referrer({required this.id, required this.name, this.companyName});
+  const Referrer({
+    required this.id,
+    required this.name,
+    this.companyName,
+    this.goodsCommissionPercent = 0,
+    this.serviceCommissionPercent = 0,
+  });
   final int id;
   final String name;
   final String? companyName;
+
+  /// درصد پورسانت فروش کالا — بر مبنای «سود» سطر
+  final double goodsCommissionPercent;
+
+  /// درصد پورسانت فروش خدمات — بر مبنای «کل مبلغ» سطر
+  final double serviceCommissionPercent;
 
   String get label =>
       companyName == null || companyName!.trim().isEmpty
@@ -152,6 +164,8 @@ class Referrer {
     id: _int(j['id']),
     name: (j['name'] ?? '').toString(),
     companyName: _str(j['companyName']),
+    goodsCommissionPercent: _dbl(j['goodsCommissionPercent']),
+    serviceCommissionPercent: _dbl(j['serviceCommissionPercent']),
   );
 }
 

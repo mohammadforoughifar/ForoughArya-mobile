@@ -13,10 +13,12 @@ import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../data/shop_perms.dart';
+import '../models/order_models.dart';
 import 'categories_page.dart';
 import 'parties_page.dart';
 import 'party_statements_page.dart';
 import 'products_page.dart';
+import 'sale_orders_page.dart';
 import 'shop_style.dart';
 import 'stock_page.dart';
 import 'units_page.dart';
@@ -141,19 +143,37 @@ class ShopHomePage extends StatelessWidget {
                   context,
                   'عملیات',
                   Icons.receipt_long_rounded,
-                  const [
-                    _Item(
-                      'خرید',
-                      'سفارش/فاکتور خرید',
-                      Icons.shopping_bag_rounded,
-                      phase: 3,
-                    ),
-                    _Item(
-                      'فروش',
-                      'سفارش/فاکتور فروش',
-                      Icons.shopping_cart_rounded,
-                      phase: 3,
-                    ),
+                  [
+                    // مثل وب: هر دو زیر گیت `CanSee("Orders")`
+                    if (perms.canSeeModule('Orders')) ...[
+                      _Item(
+                        'خرید',
+                        'سفارش/فاکتور خرید',
+                        Icons.shopping_bag_rounded,
+                        enabled: true,
+                        onTap: () => _push(
+                          context,
+                          const SaleOrdersPage(type: TxnType.purchase),
+                        ),
+                      ),
+                      _Item(
+                        'فروش',
+                        'سفارش/فاکتور فروش',
+                        Icons.shopping_cart_rounded,
+                        enabled: true,
+                        onTap: () => _push(
+                          context,
+                          const SaleOrdersPage(type: TxnType.sale),
+                        ),
+                      ),
+                    ],
+                    if (!perms.canSeeModule('Orders'))
+                      const _Item(
+                        'خرید و فروش',
+                        'سفارش/فاکتور خرید و فروش',
+                        Icons.receipt_long_rounded,
+                        phase: 3,
+                      ),
                     _Item(
                       'بیجک',
                       'حوالهٔ خروج کالا',
