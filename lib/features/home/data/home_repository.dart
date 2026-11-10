@@ -325,6 +325,13 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     tabIndex: 3,
   ),
   ModuleTile(
+    name: 'پیام‌رسان',
+    subtitle: 'چت و پیام صوتی',
+    icon: Icons.forum_rounded,
+    color: const Color(0xff1f8f7a),
+    tabIndex: 4,
+  ),
+  ModuleTile(
     name: 'ERP',
     subtitle: 'سامانهٔ یکپارچه',
     icon: Icons.hub_rounded,

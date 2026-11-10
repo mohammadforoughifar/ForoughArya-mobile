@@ -942,14 +942,15 @@ class _Header extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Column(
+                  Row(
                     children: [
                       HFadeSlideIn(
                         index: 1,
                         offsetY: 14,
                         child: _BellButton(unread: unread, onTap: onBell),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(width: 8),
+                      // چرخ‌دنده سمت چپ زنگوله
                       HFadeSlideIn(
                         index: 2,
                         offsetY: 14,
@@ -1634,46 +1635,54 @@ class _ModuleCard extends StatelessWidget {
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // آیکون و بج وسط‌چین
+            Stack(
+              alignment: Alignment.center,
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 44,
+                  height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(15),
                     color: tile.color.withValues(alpha: 0.13),
                   ),
-                  child: Icon(tile.icon, size: 19, color: tile.color),
+                  child: Icon(tile.icon, size: 22, color: tile.color),
                 ),
-                const Spacer(),
                 if (tile.locked)
-                  Icon(
-                    Icons.lock_outline_rounded,
-                    size: 14,
-                    color: HomeColors.inkFaint,
+                  PositionedDirectional(
+                    end: -6,
+                    top: -4,
+                    child: Icon(
+                      Icons.lock_outline_rounded,
+                      size: 14,
+                      color: HomeColors.inkFaint,
+                    ),
                   )
                 else if ((tile.badge ?? '').isNotEmpty)
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 22),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: tile.color.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      tile.badge!,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        color: tile.color,
+                  PositionedDirectional(
+                    end: -10,
+                    top: -5,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 22),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: tile.color.withValues(alpha: 0.13),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        tile.badge!,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: tile.color,
+                        ),
                       ),
                     ),
                   ),
@@ -1682,10 +1691,12 @@ class _ModuleCard extends StatelessWidget {
             const Spacer(),
             Text(
               tile.name,
-              maxLines: 1,
+              maxLines: 2,
+              textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12.5,
+                height: 1.35,
                 fontWeight: FontWeight.w800,
                 color: HomeColors.ink,
               ),
@@ -1694,6 +1705,7 @@ class _ModuleCard extends StatelessWidget {
             Text(
               tile.locked ? 'بدون مجوز' : tile.subtitle,
               maxLines: 1,
+              textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 10,
