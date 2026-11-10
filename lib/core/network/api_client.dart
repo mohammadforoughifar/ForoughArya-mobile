@@ -39,7 +39,10 @@ class ApiClient {
             cid = saved == null ? null : int.tryParse(saved);
             _companyId = cid;
           }
-          if (cid != null && cid > 0 && options.headers['X-Company-Id'] == null) {
+          if (cid != null &&
+              cid > 0 &&
+              options.extra['noCompanyHeader'] != true &&
+              options.headers['X-Company-Id'] == null) {
             options.headers['X-Company-Id'] = cid.toString();
           }
           handler.next(options);
@@ -123,9 +126,12 @@ class ApiClient {
   /// شروع شود، استاندارد URI آن را مسیر-مطلق می‌فهمد و دامنه دور زده
   /// می‌شود («https://office.ir» + «/api/x» → «https://office.irapi/x»).
   /// همین باگ باعث می‌شد پیام‌رسان به «ارتباط با سرور برقرار نشد» بخورد.
-  String resolveUrl(String path) {
+  String resolveUrl(String path, {String? baseOverride}) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    final base = dio.options.baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final used = (baseOverride == null || baseOverride.trim().isEmpty)
+        ? dio.options.baseUrl
+        : baseOverride.trim();
+    final base = used.replaceAll(RegExp(r'/+$'), '');
     final rel = path.replaceAll(RegExp(r'^/+'), '');
     return '$base/$rel';
   }
@@ -138,13 +144,21 @@ class ApiClient {
     dynamic data,
     Map<String, dynamic>? query,
     Options? options,
+    String? baseOverride,
   }) async {
+    // درخواست به سروری جز سرور اصلی (مثل پیام‌رسان) نباید هدر شرکت را ببرد
+    final foreign = path.startsWith('http') &&
+        !path.startsWith(dio.options.baseUrl.trim());
     try {
       return await dio.request<T>(
-        resolveUrl(path),
+        resolveUrl(path, baseOverride: baseOverride),
         data: data,
         queryParameters: query,
-        options: (options ?? Options()).copyWith(method: method),
+        options: ((options ?? Options()).copyWith(method: method))..extra = {
+          ...?options?.extra,
+          // سرور پیام‌رسان جدا از اتوماسیون است؛ هدر شرکت نباید برود
+          if (baseOverride != null || foreign) 'noCompanyHeader': true,
+        },
       );
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) onUnauthorized?.call();
@@ -152,10 +166,23 @@ class ApiClient {
     }
   }
 
-  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) =>
-      request<T>('GET', path, query: query);
-  Future<Response<T>> post<T>(String path, [dynamic data, Map<String, dynamic>? query]) =>
-      request<T>('POST', path, data: data, query: query);
+  Future<Response<T>> get<T>(
+    String path, {
+    Map<String, dynamic>? query,
+    String? baseOverride,
+  }) => request<T>('GET', path, query: query, baseOverride: baseOverride);
+  Future<Response<T>> post<T>(
+    String path, [
+    dynamic data,
+    Map<String, dynamic>? query,
+    String? baseOverride,
+  ]) => request<T>(
+    'POST',
+    path,
+    data: data,
+    query: query,
+    baseOverride: baseOverride,
+  );
 
   /// ارسال multipart (فرم + فایل) با همان تبدیل خطاهای API
   Future<Response<T>> postForm<T>(String path, FormData data) => request<T>(

@@ -20,6 +20,26 @@ class ChatEndpoints {
   static const _kApiBase = 'chat_api_base'; // مثل /api/chatmessage
   static const _kHubPath = 'chat_hub_path'; // مثل /chatHub
   static const _kKind = 'chat_api_kind'; // rest | hub
+  static const _kServer = 'chat_server_url'; // سرور مستقل پیام‌رسان
+
+  /// سرور پیام‌رسان — جدا از سرور اتوماسیون.
+  /// کاربر این آدرس را داده است: https://94.183.59.57:4457/chat
+  static const defaultServer = 'https://94.183.59.57:4457';
+  static const defaultChatPath = '/chat';
+
+  Future<String> savedServer() async {
+    final v = await _storage.read(key: _kServer);
+    if (v != null && v.trim().isNotEmpty) return v.trim();
+    return defaultServer;
+  }
+
+  Future<void> saveServer(String value) async {
+    var v = value.trim();
+    while (v.endsWith('/')) {
+      v = v.substring(0, v.length - 1);
+    }
+    await _storage.write(key: _kServer, value: v);
+  }
 
   /// نام‌های رایجِ کنترلر چت در بک‌اندهای .NET
   static const apiCandidates = <String>[
@@ -83,6 +103,31 @@ class ChatEndpoints {
       final base = await savedApiBase();
       if (base != null && base.isNotEmpty) {
         return Discovery(base: base, kind: 'rest');
+      }
+    }
+
+    // ۰) سرور مستقل پیام‌رسان (آدرسی که کاربر داده) — اولویت اول
+    final server = await savedServer();
+    for (final candidate in const [
+      defaultChatPath,
+      '$defaultChatPath/api',
+      '/api/chat',
+      '/api/chatmessage',
+      '/',
+    ]) {
+      final url = fullUrl(server, candidate);
+      try {
+        final r = await _api.get<dynamic>(url);
+        probes.add(ProbeResult(url, status: r.statusCode, ok: true));
+        await saveServer(server);
+        await saveApiBase(url);
+        await saveKind('rest');
+        return Discovery(base: url, kind: 'rest', probePath: url);
+      } catch (e) {
+        final st = e is ApiException ? e.statusCode : null;
+        probes.add(
+          ProbeResult(url, status: st, note: st == null ? 'شبکه' : null),
+        );
       }
     }
 
@@ -169,6 +214,18 @@ class ChatEndpoints {
       } catch (_) {}
     }
     return null;
+  }
+
+  /// آدرس کامل یک درخواست روی سرور پیام‌رسان.
+  /// [path] می‌تواند مسیر نسبی (/chat/api/...) یا کامل باشد.
+  static String fullUrl(String server, String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    var base = server.trim();
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+    final rel = path.startsWith('/') ? path.substring(1) : path;
+    return '$base/$rel';
   }
 
   /// تبدیل آدرس کامل واردشده به مسیر نسبی روی همان سرور

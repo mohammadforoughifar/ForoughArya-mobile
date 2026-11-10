@@ -47,8 +47,20 @@ class ChatRepository {
     _discoveryDone = true;
     final d = await _endpoints.discover();
     _resolvedBase = d?.base;
+    if (_resolvedBase == null) {
+      // حتی اگر کاوش جواب نداد، همان سرور پیام‌رسان را امتحان می‌کنیم
+      // تا خطای واقعی (۴۰۱/۴۰۴/شبکه) به کاربر نشان داده شود.
+      final server = await _endpoints.savedServer();
+      _resolvedBase = ChatEndpoints.fullUrl(
+        server,
+        ChatEndpoints.defaultChatPath,
+      );
+    }
     return _resolvedBase;
   }
+
+  /// آدرس سرور پیام‌رسان (برای نمایش در تنظیمات)
+  Future<String> serverUrl() => _endpoints.savedServer();
 
   /// تنظیم دستی مسیر چت از سوی کاربر/مدیر
   Future<void> setChatBase(String base) async {
@@ -86,26 +98,11 @@ class ChatRepository {
         return t;
       }
     }
-    // مسیر حدسی قدیمی
-    try {
-      final r = await _api.get<dynamic>('/api/chat/threads');
-      if (r.data is List) {
-        final list = (r.data as List)
-            .whereType<Map>()
-            .map((e) => ChatThread.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-        if (list.isNotEmpty) {
-          lastSource = 'chat';
-          return list;
-        }
-      }
-    } catch (_) {}
-
     // هیچ fallbackی به ایمیل وجود ندارد — پیام‌رسان باید همان چت وب باشد
     lastSource = 'none';
     throw Exception(
-      'اتصال به سرور پیام‌رسان برقرار نشد. مسیر API چت را در «تنظیمات اتصال» '
-      'وارد یا با دکمهٔ شناسایی خودکار پیدا کنید.',
+      'اتصال به سرور پیام‌رسان برقرار نشد. آدرس سرور و مسیر API چت را در '
+      '«تنظیمات اتصال» بررسی یا با دکمهٔ شناسایی خودکار پیدا کنید.',
     );
   }
 
@@ -125,7 +122,7 @@ class ChatRepository {
     }
     try {
       final r = await _api.get<dynamic>(
-        '/api/chat/$threadId/messages',
+        '$base/$threadId/messages',
         query: {'take': take},
       );
       if (r.data is List) {
@@ -159,15 +156,15 @@ class ChatRepository {
       return;
     }
     try {
-      await _api.post<dynamic>('/api/chat/$threadId/messages', {
+      await _api.post<dynamic>('$base/$threadId/messages', {
         'text': text,
         'kind': 'text',
       });
       return;
     } catch (_) {}
     throw Exception(
-      'پیام ارسال نشد: مسیر API چت روی سرور پیدا نشد. در «تنظیمات اتصال» '
-      'مسیر را مشخص کنید.',
+      'پیام ارسال نشد: مسیر API چت روی سرور پیام‌رسان پیدا نشد. '
+      'در «تنظیمات اتصال» مسیر را مشخص کنید.',
     );
   }
 

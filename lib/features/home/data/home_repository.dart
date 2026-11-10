@@ -64,6 +64,45 @@ class HomeRepository {
   /// علامت‌گذاری یک اعلان به خوانده‌شده — `POST /api/notifications/{id}/read`
   Future<void> markRead(int id) => _api.post<dynamic>('/api/notifications/$id/read');
 
+  /// پاک کردن یک اعلان — چند مسیر رایج بک‌اند امتحان می‌شود.
+  Future<void> deleteNotification(int id) async {
+    final attempts = <Future<void> Function()>[
+      () => _api.delete<dynamic>('/api/notifications/$id'),
+      () => _api.post<dynamic>('/api/notifications/$id/delete'),
+      () => _api.post<dynamic>('/api/notifications/delete/$id'),
+    ];
+    Object? last;
+    for (final a in attempts) {
+      try {
+        await a();
+        return;
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? Exception('اعلان پاک نشد.');
+  }
+
+  /// پاک کردن همهٔ اعلان‌ها — `DELETE /api/notifications` یا `clear`.
+  Future<void> clearNotifications() async {
+    final attempts = <Future<void> Function()>[
+      () => _api.delete<dynamic>('/api/notifications'),
+      () => _api.post<dynamic>('/api/notifications/clear'),
+      () => _api.post<dynamic>('/api/notifications/delete-all'),
+      () => _api.post<dynamic>('/api/notifications/mark-all-deleted'),
+    ];
+    Object? last;
+    for (final a in attempts) {
+      try {
+        await a();
+        return;
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? Exception('اعلان‌ها پاک نشدند.');
+  }
+
   /// دادهٔ یک ویجت داشبورد — `GET /api/my-dashboards/widget-data/{key}`
   ///
   /// [range] مطابق enum `DashRange` سرور: ۰=امروز، ۱=هفته، ۲=ماه.

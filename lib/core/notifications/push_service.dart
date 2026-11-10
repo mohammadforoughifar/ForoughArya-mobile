@@ -124,6 +124,13 @@ class PushService {
     await _registerBackground(api, storage);
   }
 
+  /// پاک کردن همهٔ اعلان‌های نوار گوشی (بعد از «پاک کردن همه» در شیت اعلان‌ها)
+  Future<void> cancelAll() async {
+    try {
+      await _plugin.cancelAll();
+    } catch (_) {}
+  }
+
   void stop() {
     _timer?.cancel();
     _timer = null;

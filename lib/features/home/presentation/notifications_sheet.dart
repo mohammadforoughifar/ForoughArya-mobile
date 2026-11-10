@@ -5,6 +5,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/utils/fa.dart';
 import '../data/home_repository.dart';
@@ -16,12 +17,16 @@ class NotificationsSheet extends StatefulWidget {
     super.key,
     required this.repository,
     this.onOpen,
+    this.onCleared,
   });
 
   final HomeRepository repository;
 
   /// با زدن روی اعلان، همان ماژول/صفحهٔ مربوطه باز می‌شود.
   final void Function(NotificationItem item)? onOpen;
+
+  /// بعد از پاک شدن همهٔ اعلان‌ها صدا زده می‌شود (مثلاً پاک‌کردن نوار گوشی).
+  final Future<void> Function()? onCleared;
 
   @override
   State<NotificationsSheet> createState() => _NotificationsSheetState();
@@ -80,6 +85,67 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
     }
   }
 
+  /// پاک کردن یک اعلان (حذف از فهرست، نه فقط خوانده‌شدن)
+  Future<void> _deleteOne(NotificationItem n) async {
+    setState(() => _items = [...?_items]..removeWhere((e) => e.id == n.id));
+    try {
+      await widget.repository.deleteNotification(n.id);
+    } on Exception {
+      // اگر سرور نپذیرفت، اعلان را برمی‌گردانیم تا کاربر گمراه نشود
+      if (!mounted) return;
+      setState(() => _items = [...?_items, n]..sort((a, b) => b.id.compareTo(a.id)));
+      _toast('این اعلان از سرور پاک نشد؛ دوباره تلاش کنید.');
+    }
+  }
+
+  /// پاک کردن همهٔ اعلان‌ها با تأیید کاربر
+  Future<void> _clearAll() async {
+    final count = _items?.length ?? 0;
+    if (count == 0) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('پاک کردن همهٔ اعلان‌ها'),
+        content: Text(
+          'همهٔ ${Fa.digits(count)} اعلان از فهرست و از سرور پاک شود؟ '
+          'این کار قابل بازگشت نیست.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('انصراف'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: FilledButton.styleFrom(backgroundColor: HomeColors.danger),
+            child: const Text('پاک کن'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final backup = _items ?? const <NotificationItem>[];
+    setState(() => _items = const []);
+    try {
+      await widget.repository.clearNotifications();
+      // حذف نوتیفیکیشن‌های نشان‌داده‌شده در نوار گوشی هم (یک‌جا)
+      await widget.onCleared?.call();
+      _toast('همهٔ اعلان‌ها پاک شد.');
+    } on Exception {
+      if (!mounted) return;
+      setState(() => _items = backup);
+      _toast('پاک کردن همهٔ اعلان‌ها از سرور انجام نشد؛ دوباره تلاش کنید.');
+    }
+  }
+
+  void _toast(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(behavior: SnackBarBehavior.floating, content: Text(text)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _items;
@@ -121,17 +187,18 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
                     ),
                   ),
                   if (unread > 0)
-                    TextButton(
+                    TextButton.icon(
                       onPressed: _markAll,
+                      icon: const Icon(Icons.done_all_rounded, size: 15),
                       style: TextButton.styleFrom(
                         minimumSize: Size.zero,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
+                          horizontal: 8,
                           vertical: 6,
                         ),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: Text(
+                      label: Text(
                         'خواندن همه (${Fa.digits(unread)})',
                         style: const TextStyle(
                           fontSize: 11.5,
@@ -140,60 +207,32 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: Builder(
-                builder: (context) {
-                  if (_error != null) {
-                    return _Center(
-                      icon: Icons.cloud_off_rounded,
-                      text: _error!,
-                      action: TextButton(
-                        onPressed: _load,
-                        child: const Text('تلاش دوباره'),
+                  if ((items?.isNotEmpty ?? false))
+                    TextButton.icon(
+                      onPressed: _clearAll,
+                      icon: const Icon(
+                        Icons.delete_sweep_rounded,
+                        size: 16,
+                        color: HomeColors.danger,
                       ),
-                    );
-                  }
-                  if (items == null) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (items.isEmpty) {
-                    return const _Center(
-                      icon: Icons.notifications_none_rounded,
-                      text: 'اعلانی ندارید.',
-                    );
-                  }
-                  return RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
-                      itemCount: items.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 9),
-                      itemBuilder: (context, i) => HFadeSlideIn(
-                        index: i,
-                        delayMs: 35,
-                        durationMs: 320,
-                        offsetY: 14,
-                        child: _NotificationCard(
-                          item: items[i],
-                          onTap: () async {
-                            await _markRead(items[i]);
-                            if (!context.mounted) return;
-                            // بستن شیت، سپس رفتن به صفحهٔ مربوطه
-                            Navigator.of(context).pop();
-                            widget.onOpen?.call(items[i]);
-                          },
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      label: const Text(
+                        'پاک کردن همه',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: HomeColors.danger,
                         ),
                       ),
                     ),
-                  );
-                },
+                ],
               ),
             ),
           ],
@@ -201,6 +240,24 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
       ),
     );
   }
+}
+
+/// پس‌زمینهٔ کشیدن اعلان به کنار = پاک کردن
+class _DeleteBg extends StatelessWidget {
+  const _DeleteBg({required this.alignRight});
+  final bool alignRight;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 1),
+    padding: EdgeInsets.only(right: alignRight ? 16 : 0, left: alignRight ? 0 : 16),
+    alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+    decoration: BoxDecoration(
+      color: HomeColors.danger.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: const Icon(Icons.delete_outline_rounded, color: HomeColors.danger),
+  );
 }
 
 class _Center extends StatelessWidget {

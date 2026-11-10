@@ -17,6 +17,7 @@ import 'package:shamsi_date/shamsi_date.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/notifications/push_service.dart';
 import '../../../core/utils/fa.dart';
 import '../../misc/presentation/minutes_detail_page.dart';
 import '../../misc/presentation/minutes_list_page.dart';
@@ -404,6 +405,12 @@ class _HomePageState extends State<HomePage> {
       builder: (_) => NotificationsSheet(
         repository: _repo,
         onOpen: _openFromNotification,
+        onCleared: () async {
+          // نوار گوشی هم خالی شود
+          await PushService.instance.cancelAll();
+          final c = await _repo.fetchUnreadCount();
+          if (mounted) setState(() => _unread = c);
+        },
       ),
     );
     // شمارندهٔ زنگوله بعد از بستن شیت به‌روز شود.

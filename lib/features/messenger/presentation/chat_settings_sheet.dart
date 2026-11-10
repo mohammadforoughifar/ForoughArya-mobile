@@ -22,6 +22,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
   late final TextEditingController _ctrl =
       TextEditingController(text: widget.repo.resolvedBase ?? '');
   final _hub = TextEditingController();
+  final _server = TextEditingController(text: ChatEndpoints.defaultServer);
   bool _busy = false;
   String? _msg;
   bool _ok = false;
@@ -33,12 +34,16 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
     widget.repo.endpoints.savedHubPath().then((v) {
       if (mounted && v != null) _hub.text = v;
     });
+    widget.repo.endpoints.savedServer().then((v) {
+      if (mounted) setState(() => _server.text = v);
+    });
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
     _hub.dispose();
+    _server.dispose();
     super.dispose();
   }
 
@@ -47,6 +52,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
       _busy = true;
       _msg = null;
     });
+    await widget.repo.endpoints.saveServer(_server.text);
     final base = ChatEndpoints.normalizeBase(_ctrl.text, '');
     if (base.isEmpty) {
       setState(() {
@@ -143,6 +149,17 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
             ),
           ),
           const SizedBox(height: 14),
+          TextField(
+            controller: _server,
+            textDirection: TextDirection.ltr,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'آدرس سرور پیام‌رسان',
+              hintText: 'https://94.183.59.57:4457',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _ctrl,
             textDirection: TextDirection.ltr,
