@@ -18,8 +18,7 @@ import '../models/office_common.dart';
 import 'letter_detail_page.dart';
 import 'letter_editor_page.dart';
 import 'email_page.dart';
-import 'office_archive_page.dart';
-import 'office_drafts_page.dart';
+import 'letter_mailbox_page.dart';
 import 'office_style.dart';
 
 class OfficeAutomationPage extends StatefulWidget {
@@ -49,15 +48,15 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
   /// تب جاری برای همگام‌سازی تب کشویی با TabBarView
   int _tabIndex = 0;
 
+  // هر ماژول (داخلی / صادره / وارده) یک تب کامل است و کارتابل‌های خودش را
+  // داخل همان صفحه دارد: دریافتی، ارسالی، پیش‌نویس، بایگانی (+ امضا و دبیرخانه برای صادره).
+  // دیگر «کارتابل داخلی / صادره / وارده / بایگانی / پیش‌نویس» به‌صورت تب‌های
+  // پراکنده و تکراری وجود ندارد.
   static const _tabsDef = [
     (label: 'داشبورد', icon: Icons.dashboard_outlined, key: 'dashboard'),
-    (label: 'کارتابل داخلی', icon: Icons.edit_note, key: 'inner_inbox'),
-    (label: 'صادره', icon: Icons.north_east, key: 'outgoing_inbox'),
-    (label: 'وارده', icon: Icons.south_west, key: 'incoming_inbox'),
-    (label: 'امضا', icon: Icons.draw_outlined, key: 'signing'),
-    (label: 'دبیرخانه', icon: Icons.account_balance_outlined, key: 'dabirkhane'),
-    (label: 'بایگانی', icon: Icons.account_tree_outlined, key: 'archive'),
-    (label: 'پیش‌نویس', icon: Icons.drafts_outlined, key: 'drafts'),
+    (label: 'داخلی', icon: Icons.edit_note, key: 'inner'),
+    (label: 'صادره', icon: Icons.north_east, key: 'outgoing'),
+    (label: 'وارده', icon: Icons.south_west, key: 'incoming'),
     (label: 'ایمیل سازمانی', icon: Icons.alternate_email, key: 'email_corporate'),
     (label: 'ایمیل شخصی', icon: Icons.person_outline, key: 'email_personal'),
   ];
@@ -352,11 +351,11 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                           showCounts: true,
                           counts: _counts,
                           accentFor: (i) => switch (i) {
+                            1 => OfficeColors.inner,
                             2 => OfficeColors.outgoing,
                             3 => OfficeColors.incoming,
-                            4 => OfficeColors.signing,
-                            5 => OfficeColors.dabirkhane,
-                            6 => OfficeColors.archive,
+                            4 => OfficeColors.email,
+                            5 => OfficeColors.emailPersonal,
                             _ => OfficeColors.seed,
                           },
                         ),
@@ -373,15 +372,18 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
               controller: _tabs,
               children: [
                 _dashboardTab(),
-                _listTab('inner_inbox', LetterKind.inner),
-                _listTab('outgoing_inbox', LetterKind.outgoing),
-                _listTab('incoming_inbox', LetterKind.incoming),
-                _listTab('signing', LetterKind.outgoing,
-                    emptyLabel: 'نامه‌ای برای امضا ندارید.'),
-                _listTab('dabirkhane', LetterKind.outgoing,
-                    emptyLabel: 'کارتابل دبیرخانه خالی است.'),
-                const OfficeArchivePage(),
-                const OfficeDraftsPage(),
+                const LetterMailboxPage(
+                  kind: LetterKind.inner,
+                  embedded: true,
+                ),
+                const LetterMailboxPage(
+                  kind: LetterKind.outgoing,
+                  embedded: true,
+                ),
+                const LetterMailboxPage(
+                  kind: LetterKind.incoming,
+                  embedded: true,
+                ),
                 const EmailPage(initialScope: EmailScope.corporate, embedded: true),
                 const EmailPage(initialScope: EmailScope.personal, embedded: true),
               ],
@@ -399,6 +401,77 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
               icon: const Icon(Icons.add),
               label: const Text('نامهٔ جدید', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
+    );
+  }
+
+  /// برد سه ماژول نامه؛ داخل هر کارت، چهار کارتابل واقعی همان ماژول
+  Widget _buildModuleBoard() {
+    return Column(
+      children: [
+        _ModuleCard(
+          title: 'نامهٔ داخلی',
+          subtitle: 'ارتباط درون‌سازمانی',
+          icon: Icons.edit_note,
+          color: OfficeColors.inner,
+          boxes: const [
+            LetterBox.inbox,
+            LetterBox.sent,
+            LetterBox.drafts,
+            LetterBox.archive,
+          ],
+          onOpenBox: (b) => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LetterMailboxPage(
+                kind: LetterKind.inner,
+                initialBox: b,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _ModuleCard(
+          title: 'نامهٔ صادره',
+          subtitle: 'مکاتبات برون‌سازمانی و امضا',
+          icon: Icons.north_east,
+          color: OfficeColors.outgoing,
+          boxes: const [
+            LetterBox.inbox,
+            LetterBox.sent,
+            LetterBox.signing,
+            LetterBox.dabirkhane,
+            LetterBox.archive,
+          ],
+          onOpenBox: (b) => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LetterMailboxPage(
+                kind: LetterKind.outgoing,
+                initialBox: b,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _ModuleCard(
+          title: 'نامهٔ وارده',
+          subtitle: 'ثبت و ارجاع نامه‌های رسیده',
+          icon: Icons.south_west,
+          color: OfficeColors.incoming,
+          boxes: const [
+            LetterBox.inbox,
+            LetterBox.sent,
+            LetterBox.drafts,
+            LetterBox.archive,
+          ],
+          onOpenBox: (b) => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LetterMailboxPage(
+                kind: LetterKind.incoming,
+                initialBox: b,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -515,77 +588,40 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
           ),
           const SizedBox(height: 16),
 
+          // --- ماژول‌های نامه: هر ماژول با کارتابل‌های واقعی خودش ---
+          const _SectionLabel(title: 'ماژول‌های نامه', icon: Icons.folder_copy_outlined),
+          OFadeSlideIn(index: 1, child: _buildModuleBoard()),
+          const SizedBox(height: 14),
+
           // --- دسترسی سریع ---
           const _SectionLabel(title: 'دسترسی سریع', icon: Icons.bolt),
           OFadeSlideIn(
-            index: 1,
+            index: 2,
             child: GridView.count(
               crossAxisCount: 4,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              childAspectRatio: .80,
+              childAspectRatio: .82,
               children: [
                 _QuickTile(
-                  label: 'داخلی',
+                  label: 'نامهٔ داخلی',
                   icon: Icons.edit_note,
                   color: OfficeColors.inner,
                   onTap: () => _newLetter(LetterKind.inner),
                 ),
                 _QuickTile(
-                  label: 'صادره',
+                  label: 'نامهٔ صادره',
                   icon: Icons.north_east,
                   color: OfficeColors.outgoing,
                   onTap: () => _newLetter(LetterKind.outgoing),
                 ),
                 _QuickTile(
-                  label: 'وارده',
+                  label: 'نامهٔ وارده',
                   icon: Icons.south_west,
                   color: OfficeColors.incoming,
                   onTap: () => _newLetter(LetterKind.incoming),
-                ),
-                _QuickTile(
-                  label: 'امضاها',
-                  icon: Icons.draw_outlined,
-                  color: OfficeColors.signing,
-                  onTap: () => _goTab(4),
-                ),
-                _QuickTile(
-                  label: 'کارتابل',
-                  icon: Icons.inbox_outlined,
-                  color: OfficeColors.seed,
-                  onTap: () => _goTab(1),
-                ),
-                _QuickTile(
-                  label: 'دبیرخانه',
-                  icon: Icons.account_balance_outlined,
-                  color: OfficeColors.dabirkhane,
-                  onTap: () => _goTab(5),
-                ),
-                _QuickTile(
-                  label: 'بایگانی',
-                  icon: Icons.account_tree_outlined,
-                  color: OfficeColors.archive,
-                  onTap: () => _goTab(6),
-                ),
-                _QuickTile(
-                  label: 'پیش‌نویس',
-                  icon: Icons.drafts_outlined,
-                  color: const Color(0xffb04fbf),
-                  onTap: () => _goTab(7),
-                ),
-                _QuickTile(
-                  label: 'ایمیل سازمانی',
-                  icon: Icons.alternate_email,
-                  color: OfficeColors.email,
-                  onTap: () => _goTab(8),
-                ),
-                _QuickTile(
-                  label: 'ایمیل شخصی',
-                  icon: Icons.mark_email_read_outlined,
-                  color: OfficeColors.emailPersonal,
-                  onTap: () => _goTab(9),
                 ),
                 _QuickTile(
                   label: 'صورتجلسه',
@@ -600,6 +636,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
               ],
             ),
           ),
+          const SizedBox(height: 14),
 
           // --- شمارنده‌ها ---
           const _SectionLabel(title: 'شمارنده‌ها', icon: Icons.insights_outlined),
@@ -692,167 +729,6 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
 
   // ============================================================
   //  کارتابل‌ها
-  // ============================================================
-
-  Widget _listTab(String key, LetterKind kind, {String? emptyLabel}) {
-    final items = _items[key] ?? const <LetterListItem>[];
-    final loading = _loading[key] == true;
-    final err = _error[key];
-    final accent = OfficeColors.forKind(kind);
-
-    if (err != null && items.isEmpty) {
-      return ErrorView(message: err, onRetry: () => _load(key, reset: true));
-    }
-    if (loading && items.isEmpty) return const OfficeShimmer();
-
-    final controller = _scroll.putIfAbsent(key, () {
-      final c = ScrollController();
-      c.addListener(() {
-        if (c.position.pixels >= c.position.maxScrollExtent - 220 &&
-            _hasMore[key] == true &&
-            _loading[key] != true) {
-          _load(key);
-        }
-      });
-      return c;
-    });
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: OfficeColors.line),
-                  ),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'جست‌وجو در ${kind.label}…',
-                      hintStyle: TextStyle(
-                        fontSize: 12.5,
-                        color: Colors.blueGrey.shade300,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search,
-                        size: 19,
-                        color: Colors.blueGrey.shade400,
-                      ),
-                      suffixIcon: (_search[key] ?? '').isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: () {
-                                setState(() => _search.remove(key));
-                                _load(key, reset: true);
-                              },
-                            ),
-                      isDense: true,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                    ),
-                    onSubmitted: (v) {
-                      setState(() => _search[key] = v.trim());
-                      _load(key, reset: true);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _SquareBtn(
-                icon: Icons.tune,
-                color: accent,
-                onTap: () => _filterSheet(key, kind),
-              ),
-            ],
-          ),
-        ),
-        // شمارندهٔ نتیجه
-        if (items.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 4, 18, 2),
-            child: Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '${Fa.digits(items.length)} نامه${_search[key]?.isNotEmpty == true ? ' مطابق جست‌وجو' : ''}',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blueGrey.shade500,
-                  ),
-                ),
-                const Spacer(),
-                if (_search[key]?.isNotEmpty == true)
-                  GestureDetector(
-                    onTap: () {
-                      setState(() => _search.remove(key));
-                      _load(key, reset: true);
-                    },
-                    child: Text(
-                      'حذف فیلتر',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: accent,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => _load(key, reset: true),
-            child: items.isEmpty
-                ? ListView(
-                    children: [
-                      SizedBox(height: MediaQuery.sizeOf(context).height * .16),
-                      EmptyView(
-                        message: emptyLabel ?? 'کارتابل خالی است.',
-                        icon: Icons.inbox_outlined,
-                      ),
-                    ],
-                  )
-                : ListView.builder(
-                    controller: controller,
-                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 96),
-                    itemCount: items.length + (loading ? 1 : 0),
-                    itemBuilder: (context, i) {
-                      if (i >= items.length) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      final item = items[i];
-                      return GlowLetterCard(
-                        item: item,
-                        kind: kind,
-                        index: i,
-                        onTap: () => _openDetail(item, key),
-                        onNeshan: () => _toggleNeshan(key, item),
-                      );
-                    },
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  //  شیت‌ها
   // ============================================================
 
   void _newLetterSheet() => showModalBottomSheet(
@@ -1392,4 +1268,131 @@ class _SheetAction extends StatelessWidget {
       ),
     ),
   );
+}
+
+// ============================================================
+//  کارت ماژول نامه در داشبورد — با کارتابل‌های واقعی هر ماژول
+// ============================================================
+
+class _ModuleCard extends StatelessWidget {
+  const _ModuleCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.boxes,
+    required this.onOpenBox,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final List<LetterBox> boxes;
+  final ValueChanged<LetterBox> onOpenBox;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: OfficeColors.line),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.07),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [color, Color.lerp(color, Colors.black, 0.22)!],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                  ),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: Colors.white, size: 21),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: OfficeColors.ink,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: OfficeColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final b in boxes)
+                Material(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(100),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(100),
+                    onTap: () => onOpenBox(b),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(color: color.withValues(alpha: 0.22)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(b.icon, size: 14, color: color),
+                          const SizedBox(width: 5),
+                          Text(
+                            b.label,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
