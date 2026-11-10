@@ -20,6 +20,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
+import '../models/treasury_models.dart';
 import '../models/shop_models.dart';
 
 /// پاسخ صفحه‌بندی‌شده: یا آرایه است یا { total, items } (وقتی skip/take بفرستیم)
@@ -631,4 +632,320 @@ class ShopRepository {
         ? OpsDashboard.fromJson(Map<String, dynamic>.from(d))
         : const OpsDashboard();
   }
+
+  // ------------------------------------------------------------
+  //  فاز ۵ — خزانه، چک، اقساط و مانده‌های اولیه
+  // ------------------------------------------------------------
+
+  // ---------- صندوق / بانک / کارتخوان / تنخواه ----------
+
+  /// `GET /api/trs/accounts?activeOnly&withBalances`
+  Future<List<TreasuryAccount>> treasuryAccounts({
+    bool activeOnly = false,
+    bool withBalances = true,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/accounts',
+      query: {'activeOnly': activeOnly, 'withBalances': withBalances},
+    );
+    return ShopPage.parse(r.data, TreasuryAccount.fromJson).items;
+  }
+
+  /// `POST /api/trs/accounts`
+  Future<TreasuryAccount> saveTreasuryAccount(TreasuryAccount a) async {
+    final r = await _api.post<dynamic>('/api/trs/accounts', a.toJson());
+    final d = r.data;
+    return d is Map
+        ? TreasuryAccount.fromJson(Map<String, dynamic>.from(d))
+        : a;
+  }
+
+  /// `DELETE /api/trs/accounts/{id}`
+  Future<void> deleteTreasuryAccount(int id) =>
+      _api.delete<dynamic>('/api/trs/accounts/$id');
+
+  /// `GET /api/acc/accounts/lookups?search` — حساب‌های معین قابل انتخاب
+  Future<List<AccLookup>> accAccountLookups({String? search}) async {
+    final r = await _api.get<dynamic>(
+      '/api/acc/accounts/lookups',
+      query: {if (search != null && search.isNotEmpty) 'search': search},
+    );
+    return ShopPage.parse(r.data, AccLookup.fromJson).items;
+  }
+
+  // ---------- اسناد دریافت / پرداخت / انتقال ----------
+
+  /// `GET /api/trs/vouchers?kind&status&partyId&trsAccountId&search&from&to&page&pageSize`
+  Future<ShopPage<TreasuryVoucher>> treasuryVouchers({
+    int? kind,
+    int? status,
+    int? partyId,
+    int? trsAccountId,
+    String? search,
+    DateTime? from,
+    DateTime? to,
+    int page = 1,
+    int pageSize = 15,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/vouchers',
+      query: {
+        if (kind != null) 'kind': kind,
+        if (status != null) 'status': status,
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (trsAccountId != null && trsAccountId > 0)
+          'trsAccountId': trsAccountId,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, TreasuryVoucher.fromJson);
+  }
+
+  /// `GET /api/trs/vouchers/new?kind` — سند خالی با شمارهٔ بعدی از سرور
+  Future<TreasuryVoucher> newVoucher({int kind = 0}) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/vouchers/new',
+      query: {'kind': kind},
+    );
+    return TreasuryVoucher.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `GET /api/trs/vouchers/settle/{invoiceId}` — سند تسویهٔ آمادهٔ فاکتور
+  Future<TreasuryVoucher> settleVoucher(int invoiceId) async {
+    final r = await _api.get<dynamic>('/api/trs/vouchers/settle/$invoiceId');
+    return TreasuryVoucher.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `GET /api/trs/vouchers/open-invoices?partyId&kind`
+  Future<List<SettlementInvoice>> openInvoices({
+    required int partyId,
+    int kind = 0,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/vouchers/open-invoices',
+      query: {'partyId': partyId, 'kind': kind},
+    );
+    return ShopPage.parse(r.data, SettlementInvoice.fromJson).items;
+  }
+
+  /// `GET /api/trs/vouchers/{id}`
+  Future<TreasuryVoucher?> treasuryVoucher(int id) async {
+    try {
+      final r = await _api.get<dynamic>('/api/trs/vouchers/$id');
+      final d = r.data;
+      return d is Map
+          ? TreasuryVoucher.fromJson(Map<String, dynamic>.from(d))
+          : null;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `POST /api/trs/vouchers`
+  Future<TreasuryVoucher> saveVoucher(TreasuryVoucher v) async {
+    final r = await _api.post<dynamic>('/api/trs/vouchers', v.toJson());
+    return TreasuryVoucher.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/trs/vouchers/{id}/confirm`
+  Future<TreasuryVoucher> confirmVoucher(int id) async {
+    final r = await _api.post<dynamic>('/api/trs/vouchers/$id/confirm', {});
+    return TreasuryVoucher.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/trs/vouchers/{id}/unconfirm`
+  Future<TreasuryVoucher> unconfirmVoucher(int id) async {
+    final r = await _api.post<dynamic>('/api/trs/vouchers/$id/unconfirm', {});
+    return TreasuryVoucher.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/trs/vouchers/{id}/cancel`
+  Future<TreasuryVoucher> cancelVoucher(int id) async {
+    final r = await _api.post<dynamic>('/api/trs/vouchers/$id/cancel', {});
+    return TreasuryVoucher.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `DELETE /api/trs/vouchers/{id}`
+  Future<void> deleteVoucher(int id) =>
+      _api.delete<dynamic>('/api/trs/vouchers/$id');
+
+  // ---------- چک‌های خزانه ----------
+
+  /// `GET /api/trs/cheques?kind&status&partyId&trsAccountId&search&from&to&onlyOpen&page&pageSize`
+  Future<ShopPage<TreasuryCheque>> treasuryCheques({
+    int? kind,
+    int? status,
+    int? partyId,
+    int? trsAccountId,
+    String? search,
+    DateTime? from,
+    DateTime? to,
+    bool onlyOpen = false,
+    int page = 1,
+    int pageSize = 15,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/cheques',
+      query: {
+        if (kind != null) 'kind': kind,
+        if (status != null) 'status': status,
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (trsAccountId != null && trsAccountId > 0)
+          'trsAccountId': trsAccountId,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        'onlyOpen': onlyOpen,
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, TreasuryCheque.fromJson);
+  }
+
+  /// `GET /api/trs/cheques/{id}`
+  Future<TreasuryCheque?> treasuryCheque(int id) async {
+    try {
+      final r = await _api.get<dynamic>('/api/trs/cheques/$id');
+      final d = r.data;
+      return d is Map
+          ? TreasuryCheque.fromJson(Map<String, dynamic>.from(d))
+          : null;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `POST /api/trs/cheques`
+  Future<TreasuryCheque> saveCheque(TreasuryCheque c) async {
+    final r = await _api.post<dynamic>('/api/trs/cheques', c.toJson());
+    return TreasuryCheque.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/trs/cheques/action` — واگذاری/وصول/برگشت/خرج/ابطال
+  Future<TreasuryCheque> runChequeAction({
+    required int chequeId,
+    required int status,
+    DateTime? date,
+    int? trsAccountId,
+    String? description,
+  }) async {
+    final r = await _api.post<dynamic>('/api/trs/cheques/action', {
+      'chequeId': chequeId,
+      'status': status,
+      'date': (date ?? DateTime.now()).toIso8601String(),
+      if (trsAccountId != null && trsAccountId > 0) 'trsAccountId': trsAccountId,
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+    });
+    return TreasuryCheque.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `DELETE /api/trs/cheques/{id}`
+  Future<void> deleteCheque(int id) =>
+      _api.delete<dynamic>('/api/trs/cheques/$id');
+
+  // ---------- گزارش‌های خزانه ----------
+
+  /// `GET /api/trs/reports/flow?trsAccountId&from&to`
+  Future<FlowResult> treasuryFlow({
+    required int trsAccountId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/reports/flow',
+      query: {
+        'trsAccountId': trsAccountId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    return FlowResult.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `GET /api/trs/reports/dashboard?from&to`
+  Future<TreasuryDashboard> treasuryDashboard({
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/trs/reports/dashboard',
+      query: {
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    return TreasuryDashboard.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  // ---------- مدیریت چک و اقساط فروشگاهی ----------
+
+  /// `GET /api/dashboard/shop-credit/summary`
+  Future<ShopCreditSummary> shopCreditSummary() async {
+    final r = await _api.get<dynamic>('/api/dashboard/shop-credit/summary');
+    return ShopCreditSummary.fromJson(
+      Map<String, dynamic>.from(r.data as Map),
+    );
+  }
+
+  /// `GET /api/dashboard/shop-credit/cheques?status&txnType&search`
+  Future<List<ShopCheque>> shopCheques({
+    int? status,
+    int? txnType,
+    String? search,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/dashboard/shop-credit/cheques',
+      query: {
+        if (status != null) 'status': status,
+        if (txnType != null) 'txnType': txnType,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, ShopCheque.fromJson).items;
+  }
+
+  /// `GET /api/dashboard/shop-credit/installments?isPaid&search`
+  Future<List<ShopInstallment>> shopInstallments({
+    bool? isPaid,
+    String? search,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/dashboard/shop-credit/installments',
+      query: {
+        if (isPaid != null) 'isPaid': isPaid,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, ShopInstallment.fromJson).items;
+  }
+
+  /// `POST /api/dashboard/cheques/{id}/clear`
+  Future<void> clearShopCheque(int id) =>
+      _api.post<dynamic>('/api/dashboard/cheques/$id/clear', {});
+
+  /// `POST /api/dashboard/cheques/{id}/bounce?reason=…`
+  Future<void> bounceShopCheque(int id, String reason) =>
+      _api.post<dynamic>('/api/dashboard/cheques/$id/bounce', null, {
+        'reason': reason,
+      });
+
+  /// `POST /api/dashboard/cheques/{id}/reset`
+  Future<void> resetShopCheque(int id) =>
+      _api.post<dynamic>('/api/dashboard/cheques/$id/reset', {});
+
+  /// `POST /api/dashboard/installments/{id}/pay`
+  Future<void> payInstallment(int id) =>
+      _api.post<dynamic>('/api/dashboard/installments/$id/pay', {});
+
+  /// `POST /api/dashboard/installments/{id}/unpay`
+  Future<void> unpayInstallment(int id) =>
+      _api.post<dynamic>('/api/dashboard/installments/$id/unpay', {});
 }

@@ -15,13 +15,18 @@ import '../../../core/auth/auth_controller.dart';
 import '../data/shop_perms.dart';
 import '../models/order_models.dart';
 import 'categories_page.dart';
+import 'opening_balance_page.dart';
 import 'expenses_page.dart';
 import 'goods_issues_page.dart';
 import 'parties_page.dart';
 import 'party_statements_page.dart';
 import 'order_report_page.dart';
 import 'products_page.dart';
+import 'shop_credit_page.dart';
 import 'repairs_page.dart';
+import 'trs_accounts_page.dart';
+import 'trs_cheques_page.dart';
+import 'trs_vouchers_page.dart';
 import 'sale_orders_page.dart';
 import 'shop_style.dart';
 import 'stock_page.dart';
@@ -151,6 +156,15 @@ class ShopHomePage extends StatelessWidget {
                         enabled: true,
                         onTap: () => _push(context, const StockPage()),
                       ),
+                    // وب: «بانک، صندوق و کارتخوان (POS)» در اطلاعات پایه
+                    if (perms.canSeeModule('TrsAccounts'))
+                      _Item(
+                        'بانک، صندوق و کارتخوان (POS)',
+                        'حساب‌های خزانه با مانده جاری و گردش',
+                        Icons.account_balance_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const TrsAccountsPage()),
+                      ),
                     const _Item(
                       'معرف‌ها',
                       'بازاریابان و پروندهٔ فروش',
@@ -247,24 +261,61 @@ class ShopHomePage extends StatelessWidget {
                         Icons.payments_rounded,
                         phase: 4,
                       ),
-                    _Item(
-                      'مدیریت اقساط و چک‌ها',
-                      'اقساط و چک‌های دریافتی/پرداختی',
-                      Icons.event_note_rounded,
-                      phase: 5,
-                    ),
-                    _Item(
-                      'افتتاح حساب و مانده‌های اولیه',
-                      'مانده اول دورهٔ اشخاص',
-                      Icons.play_circle_outline_rounded,
-                      phase: 5,
-                    ),
-                    _Item(
-                      'تسویه فاکتورها',
-                      'دریافت/پرداخت و تسویه',
-                      Icons.swap_horiz_rounded,
-                      phase: 5,
-                    ),
+                    if (perms.canSeeModule('Orders') ||
+                        perms.canSeeModule('TrsVouchers'))
+                      _Item(
+                        'مدیریت اقساط و چک‌ها',
+                        'وصول چک، برگشت چک و تسویه اقساط',
+                        Icons.event_note_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const ShopCreditPage()),
+                      )
+                    else
+                      const _Item(
+                        'مدیریت اقساط و چک‌ها',
+                        'اقساط و چک‌های دریافتی/پرداختی',
+                        Icons.event_note_rounded,
+                        phase: 5,
+                      ),
+                    if (perms.canSeeModule('Orders') ||
+                        perms.canSeeModule('TrsVouchers'))
+                      _Item(
+                        'افتتاح حساب و مانده‌های اولیه',
+                        'طلب/بدهی اولیه، چک‌های اول دوره، اقساط و موجودی',
+                        Icons.savings_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const OpeningBalancePage()),
+                      )
+                    else
+                      const _Item(
+                        'افتتاح حساب و مانده‌های اولیه',
+                        'مانده اول دورهٔ اشخاص',
+                        Icons.savings_rounded,
+                        phase: 5,
+                      ),
+                    if (perms.canSeeModule('TrsCheques'))
+                      _Item(
+                        'چک‌های خزانه',
+                        'صدور، واگذاری، وصول و برگشت چک',
+                        Icons.credit_card_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const TrsChequesPage()),
+                      ),
+                    if (perms.canSeeModule('TrsVouchers'))
+                      _Item(
+                        'تسویه فاکتورها',
+                        'اسناد دریافت، پرداخت و انتقال بین حساب‌ها',
+                        Icons.swap_horiz_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const TrsVouchersPage()),
+                      )
+                    else
+                      const _Item(
+                        'تسویه فاکتورها',
+                        'دریافت/پرداخت و تسویه',
+                        Icons.swap_horiz_rounded,
+                        phase: 5,
+                      ),
                   ],
                 ),
                 // ---------- ویزیت فروش ----------
