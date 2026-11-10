@@ -18,9 +18,13 @@ import 'package:shamsi_date/shamsi_date.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../misc/presentation/minutes_detail_page.dart';
 import '../../misc/presentation/minutes_list_page.dart';
 import '../../misc/presentation/misc_forms_page.dart';
 import '../../office_automation/data/email_repository.dart';
+import '../../office_automation/models/office_common.dart';
+import '../../office_automation/presentation/letter_detail_page.dart';
+import '../../work_orders/presentation/work_order_detail_page.dart';
 import '../../office_automation/data/office_repository.dart';
 import '../../office_automation/models/office_common.dart';
 import '../../work_orders/data/work_order_repository.dart';
@@ -289,43 +293,99 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// نگاشت اعلان به ماژول/صفحهٔ مقصد — با کلیک، همان بخش باز می‌شود.
+  /// نگاشت اعلان به رکورد مقصد — با کلیک، خودِ همان دستور کار / صورت‌جلسه /
+  /// نامه باز می‌شود؛ اگر شناسه در اعلان نبود، به فهرست همان ماژول می‌رود.
   void _openFromNotification(NotificationItem n) {
-    final hay = [
-      n.title,
-      n.body ?? '',
-      n.formName ?? '',
-      n.link ?? '',
-    ].join(' ').toLowerCase();
+    final id = n.entityId;
+    final kind = n.entityKind;
 
-    bool has(List<String> words) => words.any(hay.contains);
-
-    // ۱) صورتجلسه
-    if (has(['صورت‌جلسه', 'صورتجلسه', 'minute'])) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const MinutesListPage()),
-      );
+    // ۱) دستور کار
+    if (kind == 'wo') {
+      if (id != null && id > 0) {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkOrderDetailPage(id: id),
+          ),
+        );
+      } else {
+        widget.onOpenTab(1);
+      }
       return;
     }
-    // ۲) دستور کار
-    if (has(['دستور کار', 'دستورکار', 'workorder', 'work-order'])) {
-      widget.onOpenTab(1);
+
+    // ۲) صورت‌جلسه
+    if (kind == 'minutes') {
+      if (id != null && id > 0) {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => MinutesDetailPage(minutesId: id),
+          ),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const MinutesListPage()),
+        );
+      }
       return;
     }
-    // ۳) ایمیل
-    if (has(['ایمیل', 'پست الکترون', 'email', 'mail'])) {
+
+    // ۳) نامهٔ داخلی/صادره/وارده — erjaId یا letterId
+    if (kind == 'letter') {
+      widget.onOpenTab(2);
+      if (id != null && id > 0) {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => LetterDetailPage(
+              kind: _letterKindOf(n),
+              letterId: id,
+              erjaId: _erjaIdOf(n),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ۴) ایمیل
+    if (kind == 'email') {
       widget.onOpenTab(3);
       return;
     }
-    // ۴) فرم‌های متفرقه
-    if (has(['فرم', 'متفرقه', 'misc'])) {
+
+    // ۵) ناشناس: اگر شناسه داریم به فهرست صورت‌جلسه، وگرنه اتوماسیون
+    if (id != null && id > 0 && n.targetLink != null &&
+        n.targetLink!.contains('minute')) {
       Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const MiscFormsPage()),
+        MaterialPageRoute<void>(
+          builder: (_) => MinutesDetailPage(minutesId: id),
+        ),
       );
       return;
     }
-    // ۵) پیش‌فرض: اتوماسیون اداری (نامه/ارجاع/کارتابل)
     widget.onOpenTab(2);
+  }
+
+  /// نوع نامه از مسیر/متن اعلان استخراج می‌شود.
+  LetterKind _letterKindOf(NotificationItem n) {
+    final hay = [
+      n.targetLink,
+      n.formName,
+      n.title,
+      n.body,
+    ].map((e) => e ?? '').join(' ').toLowerCase();
+    if (hay.contains('outgoing') || hay.contains('صادره')) {
+      return LetterKind.outgoing;
+    }
+    if (hay.contains('incoming') || hay.contains('وارده')) {
+      return LetterKind.incoming;
+    }
+    return LetterKind.inner;
+  }
+
+  int? _erjaIdOf(NotificationItem n) {
+    final link = n.targetLink ?? '';
+    final m = RegExp(r'[?&](?:erjaId|ErjaId|erja)=(\d+)').firstMatch(link);
+    return m == null ? null : int.tryParse(m.group(1)!);
   }
 
   Future<void> _openNotifications() async {
