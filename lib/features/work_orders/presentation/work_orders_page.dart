@@ -341,12 +341,20 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
           WorkOrderPerformanceView(key: ValueKey('performance-$_version')),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _newOrder,
-        backgroundColor: WoColors.seed,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('دستور جدید'),
+      // دکمهٔ «دستور کار جدید» — همیشه در دسترس و بالاتر از نوار پایین
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 64),
+        child: FloatingActionButton.extended(
+          key: const Key('new-work-order'),
+          onPressed: _newOrder,
+          backgroundColor: WoColors.seed,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'دستور کار جدید',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
       ),
     );
   }
@@ -413,6 +421,40 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
     }
   }
 
+  /// باز کردن فرم ثبت دستور کار از داخل همین بخش
+  Future<void> _createNew() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const WorkOrderEditorPage()),
+    );
+    if (result == true) _load();
+  }
+
+  /// نوار بالای فهرست: دکمهٔ واضح «دستور کار جدید»
+  Widget _newOrderBar() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+    child: SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        key: const Key('new-work-order-bar'),
+        onPressed: _createNew,
+        icon: const Icon(Icons.add_task_rounded, size: 19),
+        label: const Text(
+          'دستور کار جدید',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+        ),
+        style: FilledButton.styleFrom(
+          backgroundColor: WoColors.seed,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    ),
+  );
+
   Future<void> _open(WorkOrder o) async {
     await Navigator.push<bool>(
       context,
@@ -460,6 +502,7 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
       children: [
         _searchRow(),
         _filterRow(),
+        _newOrderBar(),
         AnimatedSize(
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOut,
@@ -473,7 +516,27 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
               : _error != null
               ? ErrorView(message: _error!, onRetry: _load)
               : _data!.items.isEmpty
-              ? const EmptyView(message: 'دستور کاری برای نمایش نیست.')
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const EmptyView(message: 'دستور کاری برای نمایش نیست.'),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      child: FilledButton.icon(
+                        onPressed: () => _createNew(),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const Text('دستور کار جدید'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: WoColors.seed,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
               : RefreshIndicator(
                   color: WoColors.seed,
                   onRefresh: _load,
