@@ -79,7 +79,8 @@ void main() {
     expect(btn, findsOneWidget);
     expect(find.text('شناسایی خودکار مسیر چت'), findsOneWidget);
     expect(find.text('آدرس سرور پیام‌رسان'), findsOneWidget);
-    expect(find.text('https://94.183.59.57:4457'), findsWidgets);
+    // پیش‌فرض: همان سرور اصلی اپ (چت روی api/chat همان سرور است)
+    expect(find.text('/api/chat'), findsWidgets);
 
     // باید داخل کادر صفحه باشد (نه بریده/بیرون از دید)
     final screen = t.view.physicalSize.height / t.view.devicePixelRatio;

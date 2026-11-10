@@ -1,22 +1,22 @@
 // ============================================================
-//  ریپازیتوری پیام‌رسان — سه‌لایه با fallback
+//  ریپازیتوری پیام‌رسان
 //
-//    ۱) چت واقعی سرور (همان پیام‌رسان وب): مسیر با «کشف خودکار» پیدا
-//       می‌شود یا کاربر در تنظیمات پیام‌رسان وارد می‌کند.
-//    ۲) اگر کشف نشد → همان مسیرهای حدسی قبلی (/api/chat/...)
-//    ۳) اگر هیچ‌کدام → ایمیل سازمانی (تضمین‌شده چون در اپ کار می‌کند)
+//  مسیر اصلی = قرارداد واقعی سرور (از سورس TotallCollectionSoftware):
+//      REST  → {server}/api/chat/...     (ChatController.cs)
+//      Hub   → {server}/hubs/chat        (ChatHub.cs / SignalR)
 //
-//  نتیجه: پیام‌رسان هرگز «بی‌داده» نمی‌ماند و پیام خطا هم دقیق است.
+//  اگر کاربر در «تنظیمات اتصال» آدرس/مسیر دیگری داده باشد، همان اول
+//  امتحان می‌شود و بعد قرارداد اصلی. هیچ fallbackی به ایمیل وجود ندارد.
 // ============================================================
 
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/network/api_client.dart';
 import '../models/chat_models.dart';
 import 'chat_endpoints.dart';
+import 'chat_erp_api.dart';
 import 'chat_rest_api.dart';
 
 class ChatRepository {
@@ -34,137 +34,139 @@ class ChatRepository {
   String? _resolvedBase;
   bool _discoveryDone = false;
 
-  /// منبعی که در آخرین درخواست استفاده شد: chat | email | none
+  /// منبعی که در آخرین درخواست استفاده شد: erp | chat | none
   String lastSource = 'none';
+
+  /// شناسهٔ کاربر جاری (برای تشخیص «پیام من») — از توکن/پروفایل ست می‌شود.
+  int? myUserId;
 
   ChatEndpoints get endpoints => _endpoints;
   ApiClient get api => _api;
   String? get resolvedBase => _resolvedBase;
 
-  /// مسیر چت را پیدا (یا از تنظیمات بخوان)
+  /// کلاینت قرارداد واقعی؛ آدرس پایه‌اش با [resolve] تعیین می‌شود.
+  ChatErpApi get erp =>
+      ChatErpApi(_api, base: _erpBase ?? ChatEndpoints.erpBase);
+
+  String? _erpBase;
+
+  /// آدرس مسیرهای api/chat — یا کامل (سرور پیام‌رسان) یا نسبی روی سرور اصلی
+  Future<String> _resolveErpBase() async {
+    if (_erpBase != null) return _erpBase!;
+    final saved = await _endpoints.savedErpBase();
+    if (saved != null && saved.trim().isNotEmpty) {
+      _erpBase = saved.trim();
+      return _erpBase!;
+    }
+    // پیش‌فرض: همان سرور اصلی اپ (office.forough.ir) — مسیر نسبی
+    _erpBase = ChatEndpoints.erpBase;
+    return _erpBase!;
+  }
+
+  /// مسیر چت را تعیین می‌کند (از تنظیمات یا قرارداد اصلی)
   Future<String?> resolve() async {
     if (_resolvedBase != null) return _resolvedBase;
-    if (_discoveryDone) return null;
-    _discoveryDone = true;
-    final d = await _endpoints.discover();
-    _resolvedBase = d?.base;
-    if (_resolvedBase == null) {
-      // حتی اگر کاوش جواب نداد، همان سرور پیام‌رسان را امتحان می‌کنیم
-      // تا خطای واقعی (۴۰۱/۴۰۴/شبکه) به کاربر نشان داده شود.
-      final server = await _endpoints.savedServer();
-      _resolvedBase = ChatEndpoints.fullUrl(
-        server,
-        ChatEndpoints.defaultChatPath,
-      );
+    final erpBase = await _resolveErpBase();
+    if (!_discoveryDone) {
+      _discoveryDone = true;
+      // اگر مسیر دستی ذخیره شده، همان را نگه می‌داریم؛ وگرنه قرارداد اصلی.
+      final saved = await _endpoints.savedApiBase();
+      if (saved != null && saved.trim().isNotEmpty) {
+        _resolvedBase = saved.trim();
+        return _resolvedBase;
+      }
     }
+    _resolvedBase = erpBase;
     return _resolvedBase;
   }
 
-  /// آدرس سرور پیام‌رسان (برای نمایش در تنظیمات)
-  Future<String> serverUrl() => _endpoints.savedServer();
-
-  /// تنظیم دستی مسیر چت از سوی کاربر/مدیر
+  /// تنظیم دستی مسیر چت (از صفحهٔ تنظیمات)
   Future<void> setChatBase(String base) async {
     await _endpoints.saveApiBase(base);
     _resolvedBase = base.trim();
+    _erpBase = base.trim();
     _discoveryDone = true;
   }
 
-  /// بررسی سلامت مسیر فعلی — برای نمایش وضعیت در تنظیمات
+  /// تنظیم آدرس کامل سرور پیام‌رسان (مثلاً https://94.183.59.57:4456)
+  Future<void> setServer(String server) async {
+    await _endpoints.saveServer(server);
+    final url = ChatEndpoints.fullUrl(server, '/api/chat');
+    await _endpoints.saveApiBase(url);
+    _erpBase = url;
+    _resolvedBase = url;
+    _discoveryDone = true;
+  }
+
+  /// بررسی سلامت اتصال به چت (JSON واقعی، نه صفحهٔ HTML)
   Future<bool> ping() async {
     final base = await resolve();
     if (base == null) return false;
-    for (final p in ['$base/threads', base]) {
-      try {
-        final r = await _api.get<dynamic>(p, query: {'take': 1});
-        final d = r.data;
-        // فقط JSON واقعی قبول است؛ HTML یعنی صفحهٔ وب نه API
-        if (d is List || d is Map) return true;
-      } catch (_) {}
+    try {
+      await erp.conversations(take: 1);
+      return true;
+    } catch (_) {
+      return false;
     }
-    return false;
   }
 
   // ------------------------------------------------------------
   //  گفت‌وگوها
   // ------------------------------------------------------------
-  Future<List<ChatThread>> threads() async {
-    final base = await resolve();
-    if (base != null) {
-      final t = await _rest.threads(base);
-      if (t.isNotEmpty) {
-        lastSource = 'chat';
-        return t;
+  Future<List<ChatThread>> threads({String? search}) async {
+    await _resolveErpBase();
+    // ۱) قرارداد واقعی سرور
+    try {
+      final list = await erp.conversations(search: search);
+      lastSource = 'erp';
+      return list;
+    } catch (e) {
+      final first = e;
+      // ۲) مسیر دستی/کشف‌شدهٔ قبلی (سازگاری با نصب‌های قدیمی)
+      final base = await resolve();
+      if (base != null && base != _erpBase) {
+        final t = await _rest.threads(base);
+        if (t.isNotEmpty) {
+          lastSource = 'chat';
+          return t;
+        }
       }
+      lastSource = 'none';
+      throw Exception(
+        e is ApiException ? e.message : 'گفت‌وگوها از سرور پیام‌رسان دریافت نشد.',
+      );
     }
-    // هیچ fallbackی به ایمیل وجود ندارد — پیام‌رسان باید همان چت وب باشد
-    lastSource = 'none';
-    throw Exception(
-      'اتصال به سرور پیام‌رسان برقرار نشد. آدرس سرور و مسیر API چت را در '
-      '«تنظیمات اتصال» بررسی یا با دکمهٔ شناسایی خودکار پیدا کنید.',
-    );
   }
 
   Future<List<ChatMessage>> messages(
     int threadId, {
     int? myUserId,
-    int take = 100,
+    int take = 50,
     String? peerName,
   }) async {
-    final base = await resolve();
-    if (base != null) {
-      final m = await _rest.messages(base, threadId, myUserId: myUserId);
-      if (m.isNotEmpty) {
-        lastSource = 'chat';
-        return m;
-      }
-    }
+    await _resolveErpBase();
+    final uid = myUserId ?? this.myUserId;
     try {
-      final r = await _api.get<dynamic>(
-        '$base/$threadId/messages',
-        query: {'take': take},
+      final list = await erp.messages(threadId, pageSize: take, myUserId: uid);
+      lastSource = 'erp';
+      return list;
+    } catch (e) {
+      throw Exception(
+        e is ApiException ? e.message : 'تاریخچهٔ گفت‌وگو دریافت نشد.',
       );
-      if (r.data is List) {
-        final list = (r.data as List)
-            .whereType<Map>()
-            .map(
-              (e) => ChatMessage.fromJson(
-                Map<String, dynamic>.from(e),
-                myUserId: myUserId,
-              ),
-            )
-            .toList();
-        if (list.isNotEmpty) {
-          lastSource = 'chat';
-          return list;
-        }
-      }
-    } catch (_) {}
-
-    lastSource = 'none';
-    throw Exception('تاریخچهٔ گفت‌وگو از سرور پیام‌رسان دریافت نشد.');
+    }
   }
 
   // ------------------------------------------------------------
   //  ارسال
   // ------------------------------------------------------------
   Future<void> sendText(int threadId, String text, {String? to}) async {
-    final base = await resolve();
-    if (base != null) {
-      await _rest.sendText(base, threadId, text);
-      return;
-    }
+    await _resolveErpBase();
     try {
-      await _api.post<dynamic>('$base/$threadId/messages', {
-        'text': text,
-        'kind': 'text',
-      });
-      return;
-    } catch (_) {}
-    throw Exception(
-      'پیام ارسال نشد: مسیر API چت روی سرور پیام‌رسان پیدا نشد. '
-      'در «تنظیمات اتصال» مسیر را مشخص کنید.',
-    );
+      await erp.sendMessage(threadId, text: text);
+    } on ApiException catch (e) {
+      throw Exception(e.message);
+    }
   }
 
   Future<String?> sendVoice(
@@ -173,33 +175,87 @@ class ChatRepository {
     required int durationSec,
     String? to,
   }) async {
-    final base = await resolve();
-    if (base != null) {
-      await _rest.sendVoice(base, threadId, file, durationSec: durationSec);
+    await _resolveErpBase();
+    try {
+      await erp.sendVoice(threadId, file, durationSec: durationSec);
       return file.path;
+    } on ApiException catch (e) {
+      throw Exception(e.message);
     }
-    throw Exception(
-      'ویس ارسال نشد: مسیر API چت روی سرور پیدا نشد. در «تنظیمات اتصال» '
-      'مسیر را مشخص کنید.',
-    );
   }
 
-  Future<List<ChatThread>> contacts() async {
-    final base = await resolve();
-    if (base != null) {
-      final c = await _rest.contacts(base);
-      if (c.isNotEmpty) return c;
+  /// ارسال فایل/تصویر
+  Future<void> sendFile(int threadId, File file) async {
+    await _resolveErpBase();
+    try {
+      final up = await erp.uploadAttachment(threadId, file);
+      await erp.sendMessage(
+        threadId,
+        messageType: up.messageType,
+        fileUrl: up.fileUrl,
+        fileName: up.fileName,
+        fileSizeBytes: up.fileSizeBytes,
+        fileContentType: up.fileContentType,
+      );
+    } on ApiException catch (e) {
+      throw Exception(e.message);
     }
-    return const <ChatThread>[];
+  }
+
+  Future<void> markRead(int threadId, {int? lastReadMessageId}) async {
+    await _resolveErpBase();
+    try {
+      await erp.markRead(threadId, lastReadMessageId: lastReadMessageId);
+    } catch (_) {
+      // خواندن اجباری نیست؛ نباید صفحه را خراب کند
+    }
+  }
+
+  // ------------------------------------------------------------
+  //  مخاطبین و شروع گفت‌وگو
+  // ------------------------------------------------------------
+  Future<List<ChatUser>> users({String? search}) async {
+    await _resolveErpBase();
+    try {
+      return await erp.users(search: search);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<ChatThread>> contacts({String? search}) async {
+    final list = await users(search: search);
+    return list
+        .map(
+          (u) => ChatThread(
+            id: u.existingConversationId ?? uidPlaceholder(u.id),
+            title: u.name,
+            userId: u.id,
+            peerUserId: u.id,
+            online: u.isOnline,
+            type: 1,
+          ),
+        )
+        .toList();
+  }
+
+  /// گفت‌وگوی خصوصی با کاربر را می‌سازد/برمی‌گرداند
+  Future<ChatThread?> startChat(int targetUserId) async {
+    await _resolveErpBase();
+    try {
+      final conv = await erp.createDirect(targetUserId);
+      lastSource = 'erp';
+      return conv;
+    } on ApiException catch (e) {
+      throw Exception(e.message);
+    }
   }
 
   Future<int> startThread(int userId) async {
-    final base = await resolve();
-    if (base != null) {
-      final id = await _rest.startThread(base, userId);
-      if (id > 0) return id;
-    }
-    return userId;
+    final conv = await startChat(userId);
+    return conv?.id ?? 0;
   }
 
+  /// برای مخاطبینی که گفت‌وگو ندارند، شناسهٔ منفی موقت تا با شناسهٔ گفت‌وگو قاطی نشود
+  int uidPlaceholder(int userId) => -userId;
 }

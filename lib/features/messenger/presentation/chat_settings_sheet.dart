@@ -22,10 +22,11 @@ class ChatSettingsSheet extends StatefulWidget {
 }
 
 class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
-  late final TextEditingController _ctrl =
-      TextEditingController(text: widget.repo.resolvedBase ?? '');
-  final _hub = TextEditingController();
-  final _server = TextEditingController(text: ChatEndpoints.defaultServer);
+  late final TextEditingController _ctrl = TextEditingController(
+    text: widget.repo.resolvedBase ?? ChatEndpoints.erpBase,
+  );
+  final _hub = TextEditingController(text: ChatEndpoints.erpHub);
+  final _server = TextEditingController();
   bool _busy = false;
   String? _msg;
   bool _ok = false;
@@ -39,7 +40,14 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
       if (mounted && v != null) _hub.text = v;
     });
     widget.repo.endpoints.savedServer().then((v) {
-      if (mounted) setState(() => _server.text = v);
+      // پیش‌فرض = همان سرور اصلی اپ (اتوماسیون) که ChatController روی آن است
+      if (mounted) {
+        setState(() {
+          _server.text = v == ChatEndpoints.defaultServer
+              ? widget.repo.api.baseUrl
+              : v;
+        });
+      }
     });
   }
 
@@ -195,9 +203,9 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'مسیر API چتِ همان پیام‌رسان وب را وارد کنید. اگر نمی‌دانید، '
-            'در مرورگر یکی از پیام‌ها را باز کنید و آدرس درخواست را از '
-            'DevTools (تب Network) بردارید.',
+            'چت سازمانی روی مسیر api/chat سرو می‌شود (کنترلر Chat و '
+            'Hub روی /hubs/chat). اگر سرور چت جدا از اتوماسیون است، '
+            'آدرس سرور را عوض کنید.',
             style: TextStyle(
               fontSize: 11.5,
               height: 1.9,
@@ -247,7 +255,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
             textDirection: TextDirection.ltr,
             decoration: const InputDecoration(
               labelText: 'مسیر API چت',
-              hintText: '/api/chatmessage',
+              hintText: '/api/chat',
               isDense: true,
             ),
           ),
@@ -256,8 +264,8 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
             controller: _hub,
             textDirection: TextDirection.ltr,
             decoration: const InputDecoration(
-              labelText: 'مسیر Hub (اختیاری — SignalR)',
-              hintText: '/chatHub',
+              labelText: 'مسیر Hub (SignalR)',
+              hintText: '/hubs/chat',
               isDense: true,
             ),
           ),
@@ -265,7 +273,12 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
           Wrap(
             spacing: 6,
             children: [
-              for (final p in ChatEndpoints.apiCandidates.take(6))
+              for (final p in const [
+                '/api/chat',
+                '/chat/api/chat',
+                '/api/chatmessage',
+                '/api/messages',
+              ])
                 ActionChip(
                   label: Text(p, style: const TextStyle(fontSize: 10.5)),
                   onPressed: () => setState(() => _ctrl.text = p),

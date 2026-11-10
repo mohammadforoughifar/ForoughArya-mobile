@@ -48,7 +48,7 @@ class _VoiceBubbleState extends State<VoiceBubble> {
       final f = File(local);
       if (await f.exists()) return _file = f;
     }
-    final url = widget.message.audioUrl;
+    final url = widget.message.audioUrl ?? widget.message.fileUrl;
     if (url == null || url.isEmpty) return null;
     final dir = await getTemporaryDirectory();
     final name = url.split('/').last.split('?').first;

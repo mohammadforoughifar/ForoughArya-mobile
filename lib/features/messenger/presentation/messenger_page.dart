@@ -287,13 +287,16 @@ class _MessengerPageState extends State<MessengerPage> {
     );
     if (picked == null) return;
     try {
-      final id = await _repo.startThread(picked.userId ?? picked.id);
+      // گفت‌وگوی خصوصی با کاربر را سرور می‌سازد/برمی‌گرداند (idempotent)
+      final conv = await _repo.startChat(picked.peerUserId ?? picked.userId ?? 0);
       if (!mounted) return;
-      final thread = ChatThread(
-        id: id > 0 ? id : picked.id,
-        title: picked.title,
-        userId: picked.userId,
-      );
+      final thread = conv ??
+          ChatThread(
+            id: picked.id,
+            title: picked.title,
+            userId: picked.userId,
+            peerUserId: picked.peerUserId ?? picked.userId,
+          );
       await _open(thread);
     } catch (e) {
       if (!mounted) return;

@@ -83,6 +83,10 @@ class _ChatPageState extends State<ChatPage> {
         _loading = false;
       });
       _toBottom();
+      // علامت «خوانده شد» روی سرور (برای شمارندهٔ گفت‌وگو)
+      if (list.isNotEmpty) {
+        unawaited(_repo.markRead(widget.thread.id, lastReadMessageId: list.last.id));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {

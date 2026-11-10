@@ -29,6 +29,19 @@ class ChatEndpoints {
   static const defaultServer = 'https://94.183.59.57:4457';
   static const defaultChatPath = '/chat';
 
+  /// مسیر قرارداد واقعی چت (از سورس سرور: Route("api/chat"))
+  static const erpBase = '/api/chat';
+
+  /// مسیر Hub واقعی (Program.cs: app.MapHub<ChatHub>("/hubs/chat"))
+  static const erpHub = '/hubs/chat';
+
+  static const _kErpBase = 'chat_erp_base';
+
+  Future<String?> savedErpBase() => _storage.read(key: _kErpBase);
+
+  Future<void> saveErpBase(String value) =>
+      _storage.write(key: _kErpBase, value: value.trim());
+
   Future<String> savedServer() async {
     final v = await _storage.read(key: _kServer);
     if (v != null && v.trim().isNotEmpty) return v.trim();

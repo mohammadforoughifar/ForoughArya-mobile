@@ -131,7 +131,13 @@ class _Adapter implements HttpClientAdapter {
     } else if (options.path.contains('api/email/sent')) {
       body = {'totalCount': 0, 'items': []};
     } else {
-      body = {};
+      return ResponseBody.fromString(
+        jsonEncode({'message': 'مجوز پیام‌رسان را ندارید.'}),
+        403,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
     }
     return ResponseBody.fromString(
       jsonEncode(body),
@@ -149,7 +155,7 @@ class _Adapter implements HttpClientAdapter {
 void main() {
   ft.TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('بدون مسیر چت، هیچ داده‌ای از ایمیل نمی‌آید و خطای شفاف می‌دهد', () async {
+  test('خطای سرور چت شفاف به کاربر می‌رسد و منبع none می‌ماند', () async {
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = _Adapter();
     final repo = ChatRepository(api, storage: _FixedStorage());
@@ -179,17 +185,80 @@ void main() {
     expect(adapters.paths.any((p) => p.contains('api/email')), false);
   });
 
-  test('مسیر دستی چت اولویت دارد و آخرین منبع chat می‌شود', () async {
-    final adapters = _RoutingAdapter();
+  test('قرارداد واقعی سرور (api/chat/conversations) خوانده می‌شود', () async {
+    final adapters = _ErpAdapter();
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = adapters;
     final repo = ChatRepository(api, storage: _FixedStorage());
-    await repo.setChatBase('/api/chatmessage');
     final threads = await repo.threads();
-    expect(repo.lastSource, 'chat');
+    expect(repo.lastSource, 'erp');
     expect(threads.length, 2);
-    expect(threads.first.title, 'گفت‌وگوی تست');
+    // نام نمایشی در چت خصوصی از directPeerName گرفته می‌شود
+    expect(threads.first.title, 'علی رضایی');
+    expect(threads.first.unread, 3);
   });
+}
+
+/// آداپتور قرارداد واقعی سرور (ChatController.cs)
+class _ErpAdapter implements HttpClientAdapter {
+  final List<String> paths = [];
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    paths.add(options.path);
+    Object body = {};
+    if (options.path.endsWith('/api/chat/conversations')) {
+      body = [
+        {
+          'id': 5,
+          'title': 'گفت‌وگوی خصوصی',
+          'type': 1,
+          'unreadCount': 3,
+          'directPeerUserId': 7,
+          'directPeerName': 'علی رضایی',
+          'lastMessageSnippet': 'سلام',
+          'lastMessageAt': '2026-11-10T08:00:00Z',
+          'isPinned': true,
+        },
+        {
+          'id': 6,
+          'title': 'گروه فنی',
+          'type': 2,
+          'unreadCount': 0,
+          'lastMessageSnippet': 'جلسه فردا',
+          'lastMessageAt': '2026-11-09T08:00:00Z',
+        },
+      ];
+    } else if (options.path.contains('/messages')) {
+      body = {
+        'total': 1,
+        'items': [
+          {
+            'id': 21,
+            'conversationId': 5,
+            'senderUserId': 7,
+            'senderName': 'علی رضایی',
+            'text': 'سلام',
+            'messageType': 1,
+            'createdAt': '2026-11-10T08:00:00Z',
+          },
+        ],
+      };
+    }
+    return ResponseBody.fromString(
+      jsonEncode(body),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
 
 /// آداپتوری که فقط مسیر چت را جواب می‌دهد (شبیه پیام‌رسان وب)
