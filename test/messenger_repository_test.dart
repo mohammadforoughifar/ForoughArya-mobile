@@ -7,7 +7,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart' as ft;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:forough_mobile/core/network/api_client.dart';
 import 'package:forough_mobile/features/messenger/data/chat_repository.dart';
@@ -47,6 +49,43 @@ class _Storage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async => _m.remove(key);
+}
+
+/// حافظهٔ جعلی: بدون کشف خودکار (تست روی fallback ایمیل تمرکز دارد)
+class _FixedStorage extends FlutterSecureStorage {
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async => key == 'chat_api_base' ? '/__none__' : null;
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {}
+
+  @override
+  Future<void> delete({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {}
 }
 
 class _Adapter implements HttpClientAdapter {
@@ -108,10 +147,12 @@ class _Adapter implements HttpClientAdapter {
 }
 
 void main() {
+  ft.TestWidgetsFlutterBinding.ensureInitialized();
+
   test('هر فرستندهٔ ایمیل یک گفت‌وگو می‌شود و آخرین پیام انتخاب می‌شود', () async {
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = _Adapter();
-    final repo = ChatRepository(api);
+    final repo = ChatRepository(api, storage: _FixedStorage());
 
     final threads = await repo.threads();
     expect(threads.length, 2);
@@ -130,7 +171,7 @@ void main() {
   test('پیام‌های یک گفت‌وگو فقط برای همان شخص فیلتر می‌شوند', () async {
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = _Adapter();
-    final repo = ChatRepository(api);
+    final repo = ChatRepository(api, storage: _FixedStorage());
 
     final msgs = await repo.messages(11, peerName: 'علی رضایی');
     expect(msgs.length, 2);
@@ -138,12 +179,60 @@ void main() {
     expect(msgs.first.text, 'سلام، گزارش را فرستادم');
   });
 
-  test('مسیرهای فرضی /api/chat صدا زده نمی‌شوند', () async {
+  test('وقتی مسیر چت کشف نشود، fallback روی ایمیل سازمانی است', () async {
     final adapters = _Adapter();
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = adapters;
-    await ChatRepository(api).threads();
-    expect(adapters.paths.any((p) => p.contains('/api/chat')), false);
+    final repo = ChatRepository(api, storage: _FixedStorage());
+    await repo.threads();
+    expect(repo.lastSource, 'email');
     expect(adapters.paths.any((p) => p.contains('api/email/inbox')), true);
   });
+
+  test('مسیر دستی چت اولویت دارد و آخرین منبع chat می‌شود', () async {
+    final adapters = _RoutingAdapter();
+    final api = ApiClient(_Storage());
+    api.dio.httpClientAdapter = adapters;
+    final repo = ChatRepository(api, storage: _FixedStorage());
+    await repo.setChatBase('/api/chatmessage');
+    final threads = await repo.threads();
+    expect(repo.lastSource, 'chat');
+    expect(threads.length, 2);
+    expect(threads.first.title, 'گفت‌وگوی تست');
+  });
+}
+
+/// آداپتوری که فقط مسیر چت را جواب می‌دهد (شبیه پیام‌رسان وب)
+class _RoutingAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    Object body = {};
+    if (options.path.contains('/api/chatmessage/threads')) {
+      body = {
+        'items': [
+          {
+            'id': 1,
+            'title': 'گفت‌وگوی تست',
+            'unreadCount': 2,
+            'lastMessage': 'سلام',
+          },
+          {'id': 2, 'title': 'گفت‌وگوی دوم', 'unreadCount': 0},
+        ],
+      };
+    }
+    return ResponseBody.fromString(
+      jsonEncode(body),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

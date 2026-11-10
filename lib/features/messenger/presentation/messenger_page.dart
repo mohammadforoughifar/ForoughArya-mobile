@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
@@ -13,6 +14,7 @@ import '../../../core/utils/fa.dart';
 import '../data/chat_repository.dart';
 import '../models/chat_models.dart';
 import 'chat_page.dart';
+import 'chat_settings_sheet.dart';
 import 'messenger_style.dart';
 
 class MessengerPage extends StatefulWidget {
@@ -23,7 +25,10 @@ class MessengerPage extends StatefulWidget {
 }
 
 class _MessengerPageState extends State<MessengerPage> {
-  late final ChatRepository _repo = ChatRepository(context.read<ApiClient>());
+  late final ChatRepository _repo = ChatRepository(
+    context.read<ApiClient>(),
+    storage: const FlutterSecureStorage(),
+  );
   List<ChatThread>? _threads;
   String? _error;
   String _q = '';
@@ -116,6 +121,22 @@ class _MessengerPageState extends State<MessengerPage> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'تنظیمات اتصال',
+            onPressed: () async {
+              await showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => ChatSettingsSheet(repo: _repo),
+              );
+              _load();
+            },
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: MessengerColors.inkSoft,
+            ),
+          ),
           IconButton(
             tooltip: 'گفت‌وگوی تازه',
             onPressed: () => _newChat(),
