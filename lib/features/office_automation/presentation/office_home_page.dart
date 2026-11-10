@@ -124,22 +124,40 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
       _stats = s;
       _statsLoading = false;
     });
-    // آمار تفکیکی برای کارت هر ماژول — خطاها بی‌صدا نادیده گرفته می‌شوند
-    Future<void> one(
-      Future<InboxStats> Function() f,
-      void Function(ModuleMailboxCounts) assign,
-    ) async {
+    // آمار تفکیکی برای کارت هر ماژول:
+    //   ۱) /stats هر کارتابل (اگر کلیدها را برگرداند)
+    //   ۲) شمارش واقعی از خودِ endpoint هر کارتابل — منبع اصلی اعداد
+    //   ۳) اگر هر دو خالی بود، طول لیستِ همان کارتابل
+    Future<void> load(LetterKind kind, void Function(ModuleMailboxCounts) set) async {
+      var merged = const ModuleMailboxCounts();
       try {
-        final st = await f();
-        if (!mounted) return;
-        setState(() => assign(ModuleMailboxCounts.fromStats(st)));
+        final st = await switch (kind) {
+          LetterKind.inner => _repo.innerStats(),
+          LetterKind.outgoing => _repo.outgoingStats(),
+          LetterKind.incoming => _repo.incomingStats(),
+        };
+        merged = ModuleMailboxCounts.fromStats(st);
       } catch (_) {}
+      try {
+        final real = await _repo.mailboxCounts(kind);
+        merged = ModuleMailboxCounts(
+          inbox: real.inbox > 0 ? real.inbox : merged.inbox,
+          sent: real.sent > 0 ? real.sent : merged.sent,
+          drafts: real.drafts > 0 ? real.drafts : merged.drafts,
+          archive: real.archive > 0 ? real.archive : merged.archive,
+          signing: real.signing > 0 ? real.signing : merged.signing,
+          dabirkhane: real.dabirkhane > 0 ? real.dabirkhane : merged.dabirkhane,
+          unread: merged.unread,
+        );
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() => set(merged));
     }
 
     await Future.wait([
-      one(_repo.innerStats, (v) => _innerCounts = v),
-      one(_repo.outgoingStats, (v) => _outgoingCounts = v),
-      one(_repo.incomingStats, (v) => _incomingCounts = v),
+      load(LetterKind.inner, (v) => _innerCounts = v),
+      load(LetterKind.outgoing, (v) => _outgoingCounts = v),
+      load(LetterKind.incoming, (v) => _incomingCounts = v),
       _loadEmailToday(),
     ]);
   }
@@ -1343,8 +1361,8 @@ class _ModuleCard extends StatelessWidget {
   final ModuleMailboxCounts counts;
   final ValueChanged<LetterBox> onOpenBox;
 
-  /// عدد واقعی هر کارتابل (اگر سرور مقدار نداده باشد، null → بج نمایش داده نمی‌شود)
-  int? _countOf(LetterBox b) => switch (b) {
+  /// عدد واقعی هر کارتابل — همیشه نمایش داده می‌شود (صفر هم یک عدد واقعی است)
+  int _countOf(LetterBox b) => switch (b) {
     LetterBox.inbox => counts.inbox,
     LetterBox.sent => counts.sent,
     LetterBox.drafts => counts.drafts,
@@ -1446,29 +1464,27 @@ class _ModuleCard extends StatelessWidget {
                               color: color,
                             ),
                           ),
-                          if (_countOf(b) != null) ...[
-                            const SizedBox(width: 5),
-                            Container(
-                              constraints: const BoxConstraints(minWidth: 18),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color,
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Text(
-                                Fa.digits(_countOf(b)!),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                ),
+                          const SizedBox(width: 5),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 18),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Text(
+                              Fa.digits(_countOf(b)),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
                               ),
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ),

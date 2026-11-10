@@ -46,6 +46,68 @@ class OfficeAutomationRepository {
   }
 
   // ------------------------------------------------------------
+  //  آمار دقیق هر کارتابل — با خواندن صفحهٔ اول خودِ لیست
+  //  (سرور همیشه totalCount را برمی‌گرداند؛ اگر نداد طول همان صفحه)
+  // ------------------------------------------------------------
+
+  Future<int> _count(Future<int> Function() f) async {
+    try {
+      return await f();
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<int> _pagedCount(Future<Paged<dynamic>> Function() f) async {
+    final p = await f();
+    return p.totalCount > 0 ? p.totalCount : p.items.length;
+  }
+
+  /// شمارش واقعی هر کارتابل یک ماژول — از خودِ endpoint همان کارتابل.
+  /// (آمار /stats سرور همهٔ کلیدها را برنمی‌گرداند؛ همین باعث صفر شدن
+  /// عدد دریافتی/ارسالی روی کارت داشبورد شده بود.)
+  Future<ModuleMailboxCounts> mailboxCounts(LetterKind kind) async {
+    final inbox = _count(
+      () => _pagedCount(() => switch (kind) {
+        LetterKind.inner => innerInbox(pageSize: 50),
+        LetterKind.outgoing => outgoingInbox(pageSize: 50),
+        LetterKind.incoming => incomingInbox(pageSize: 50),
+      }),
+    );
+    final sent = _count(
+      () => _pagedCount(() => switch (kind) {
+        LetterKind.inner => innerSent(pageSize: 50),
+        LetterKind.outgoing => outgoingSent(pageSize: 50),
+        LetterKind.incoming => incomingSent(pageSize: 50),
+      }),
+    );
+    final draftsCount = _count(
+      () => _pagedCount(() => drafts(kind)),
+    );
+    final archive = _count(
+      () => _pagedCount(() => switch (kind) {
+        LetterKind.inner => innerArchive(pageSize: 50),
+        LetterKind.outgoing => outgoingArchive(pageSize: 50),
+        LetterKind.incoming => incomingArchive(pageSize: 50),
+      }),
+    );
+    final signing = kind == LetterKind.outgoing
+        ? await _count(() => _pagedCount(() => signingInbox(pageSize: 50)))
+        : 0;
+    final dabir = kind == LetterKind.outgoing
+        ? await _count(() => _pagedCount(() => dabirkhane(pageSize: 50)))
+        : 0;
+    return ModuleMailboxCounts(
+      inbox: await inbox,
+      sent: await sent,
+      drafts: await draftsCount,
+      archive: await archive,
+      signing: signing,
+      dabirkhane: dabir,
+    );
+  }
+
+  // ------------------------------------------------------------
   //  آمار — GET /stats روی هر سه کارتابل
   // ------------------------------------------------------------
 

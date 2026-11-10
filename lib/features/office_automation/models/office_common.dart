@@ -425,6 +425,26 @@ class ModuleMailboxCounts {
 
   final int inbox, sent, drafts, archive, signing, dabirkhane, unread;
 
+  /// شمارنده‌ای که مقدارش از سمت «آمار» نیامده قابل تشخیص نیست،
+  /// پس نبودِ هر خانه یعنی صفر.
+  ModuleMailboxCounts copyWith({
+    int? inbox,
+    int? sent,
+    int? drafts,
+    int? archive,
+    int? signing,
+    int? dabirkhane,
+    int? unread,
+  }) => ModuleMailboxCounts(
+    inbox: inbox ?? this.inbox,
+    sent: sent ?? this.sent,
+    drafts: drafts ?? this.drafts,
+    archive: archive ?? this.archive,
+    signing: signing ?? this.signing,
+    dabirkhane: dabirkhane ?? this.dabirkhane,
+    unread: unread ?? this.unread,
+  );
+
   bool get isEmpty =>
       inbox == 0 &&
       sent == 0 &&

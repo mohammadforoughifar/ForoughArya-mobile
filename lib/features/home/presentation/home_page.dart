@@ -22,6 +22,7 @@ import '../../misc/presentation/minutes_list_page.dart';
 import '../../misc/presentation/misc_forms_page.dart';
 import '../../office_automation/data/email_repository.dart';
 import '../../office_automation/data/office_repository.dart';
+import '../../office_automation/models/office_common.dart';
 import '../../work_orders/data/work_order_repository.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
@@ -165,31 +166,22 @@ class _HomePageState extends State<HomePage> {
     final start = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
     // نامه‌ها — سه کارتابل داخلی/صادره/وارده
-    if (keys.any((k) => k.startsWith('off-') || k == 'wo-open')) {
+    if (keys.any((k) => k.startsWith('off-'))) {
       final repo = OfficeAutomationRepository(api);
       int inbox = 0, sent = 0, unread = 0, pish = 0, dab = 0, sign = 0;
+      for (final kind in LetterKind.values) {
+        try {
+          final c = await repo.mailboxCounts(kind);
+          inbox += c.inbox;
+          sent += c.sent;
+          pish += c.drafts;
+          sign += c.signing;
+          dab += c.dabirkhane;
+        } catch (_) {}
+      }
       try {
-        final inner = await repo.innerStats();
-        inbox += inner.inbox;
-        sent += inner.sent;
-        unread += inner.unread;
-        pish += inner.pishnevis;
-      } catch (_) {}
-      try {
-        final outg = await repo.outgoingStats();
-        inbox += outg.inbox;
-        sent += outg.sent;
-        unread += outg.unread;
-        pish += outg.pishnevis;
-        dab += outg.dabirkhane;
-        sign += outg.signingPending;
-      } catch (_) {}
-      try {
-        final inc = await repo.incomingStats();
-        inbox += inc.inbox;
-        sent += inc.sent;
-        unread += inc.unread;
-        pish += inc.pishnevis;
+        final st = await repo.innerStats();
+        unread += st.unread;
       } catch (_) {}
       if (keys.contains('off-letters-count')) {
         out['off-letters-count'] = WidgetData(
