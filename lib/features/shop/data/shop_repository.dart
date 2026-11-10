@@ -21,6 +21,7 @@ import '../../../core/network/api_client.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
 import '../models/treasury_models.dart';
+import '../models/visit_models.dart';
 import '../models/shop_models.dart';
 
 /// پاسخ صفحه‌بندی‌شده: یا آرایه است یا { total, items } (وقتی skip/take بفرستیم)
@@ -948,4 +949,251 @@ class ShopRepository {
   /// `POST /api/dashboard/installments/{id}/unpay`
   Future<void> unpayInstallment(int id) =>
       _api.post<dynamic>('/api/dashboard/installments/$id/unpay', {});
+
+  // ------------------------------------------------------------
+  //  فاز ۶ — فروش و ویزیتوری (سفارش میدانی) و معرف‌ها
+  // ------------------------------------------------------------
+
+  /// `GET /api/sales-visit/me` — توان‌های کاربر در ماژول ویزیتوری
+  Future<VisActor> visMe() async {
+    final r = await _api.get<dynamic>('/api/sales-visit/me');
+    return VisActor.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `GET /api/sales-visit?status&partyId&from&to&search`
+  Future<List<VisOrder>> visOrders({
+    int? status,
+    int? partyId,
+    DateTime? from,
+    DateTime? to,
+    String? search,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/sales-visit',
+      query: {
+        if (status != null) 'status': status,
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, VisOrder.fromJson).items;
+  }
+
+  /// `GET /api/sales-visit/approvals` — صف تأیید مدیر با هشدار کسری
+  Future<List<VisApprovalItem>> visApprovals() async {
+    final r = await _api.get<dynamic>('/api/sales-visit/approvals');
+    return ShopPage.parse(r.data, VisApprovalItem.fromJson).items;
+  }
+
+  /// `GET /api/sales-visit/finance-queue` — صف مالی
+  Future<List<VisOrder>> visFinanceQueue() async {
+    final r = await _api.get<dynamic>('/api/sales-visit/finance-queue');
+    return ShopPage.parse(r.data, VisOrder.fromJson).items;
+  }
+
+  /// `GET /api/sales-visit/stats`
+  Future<VisStats> visStats() async {
+    final r = await _api.get<dynamic>('/api/sales-visit/stats');
+    return VisStats.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `GET /api/sales-visit/{id}`
+  Future<VisOrder?> visOrder(int id) async {
+    try {
+      final r = await _api.get<dynamic>('/api/sales-visit/$id');
+      final d = r.data;
+      return d is Map ? VisOrder.fromJson(Map<String, dynamic>.from(d)) : null;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /api/sales-visit/customers?search`
+  Future<List<VisCustomer>> visCustomers({String? search}) async {
+    final r = await _api.get<dynamic>(
+      '/api/sales-visit/customers',
+      query: {
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, VisCustomer.fromJson).items;
+  }
+
+  /// `POST /api/sales-visit/customers` — ثبت سریع مشتری توسط ویزیتور
+  Future<VisCustomer?> visCreateCustomer({
+    required String name,
+    String? phone,
+    String? mobile,
+    String? address,
+  }) async {
+    final r = await _api.post<dynamic>('/api/sales-visit/customers', {
+      'name': name.trim(),
+      'phone': phone,
+      'mobile': mobile,
+      'address': address,
+    });
+    final d = r.data;
+    return d is Map ? VisCustomer.fromJson(Map<String, dynamic>.from(d)) : null;
+  }
+
+  /// `GET /api/sales-visit/products?warehouseId&search`
+  Future<List<VisProduct>> visProducts({
+    int? warehouseId,
+    String? search,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/sales-visit/products',
+      query: {
+        if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, VisProduct.fromJson).items;
+  }
+
+  /// `GET /api/sales-visit/warehouses`
+  Future<List<VisWarehouse>> visWarehouses() async {
+    final r = await _api.get<dynamic>('/api/sales-visit/warehouses');
+    return ShopPage.parse(r.data, VisWarehouse.fromJson).items;
+  }
+
+  /// `POST /api/sales-visit` — ثبت/ویرایش پیش‌نویس (با گزینهٔ ارسال فوری)
+  Future<VisOrder> visSave(Map<String, dynamic> cmd) async {
+    final r = await _api.post<dynamic>('/api/sales-visit', cmd);
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/submit`
+  Future<VisOrder> visSubmit(int id) async {
+    final r = await _api.post<dynamic>('/api/sales-visit/$id/submit', {});
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/approve` — تصمیم مدیر + تاریخ نهایی تحویل
+  Future<VisOrder> visApprove(
+    int id, {
+    String? comment,
+    DateTime? finalDeliveryDate,
+  }) async {
+    final r = await _api.post<dynamic>('/api/sales-visit/$id/approve', {
+      'comment': comment,
+      'finalDeliveryDate': finalDeliveryDate?.toIso8601String(),
+    });
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/return`
+  Future<VisOrder> visReturn(int id, String comment) async {
+    final r = await _api.post<dynamic>('/api/sales-visit/$id/return', {
+      'comment': comment,
+    });
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/reject`
+  Future<VisOrder> visReject(int id, String comment) async {
+    final r = await _api.post<dynamic>('/api/sales-visit/$id/reject', {
+      'comment': comment,
+    });
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/cancel`
+  Future<VisOrder> visCancel(int id, {String? comment}) async {
+    final r = await _api.post<dynamic>('/api/sales-visit/$id/cancel', {
+      'comment': comment,
+    });
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/finance-approve` — ثبت فروش فروشگاه از سفارش
+  Future<VisOrder> visFinanceApprove(
+    int id,
+    Map<String, dynamic> cmd,
+  ) async {
+    final r = await _api.post<dynamic>(
+      '/api/sales-visit/$id/finance-approve',
+      cmd,
+    );
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/sales-visit/{id}/sync-invoice`
+  Future<VisOrder> visSyncInvoice(int id) async {
+    final r = await _api.post<dynamic>(
+      '/api/sales-visit/$id/sync-invoice',
+      {},
+    );
+    return VisOrder.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  // ---------- معرف‌ها ----------
+
+  /// `GET /api/referrers?activeOnly&search`
+  Future<List<ShopReferrer>> referrerList({
+    bool activeOnly = false,
+    String? search,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/referrers',
+      query: {
+        'activeOnly': activeOnly,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, ShopReferrer.fromJson).items;
+  }
+
+  /// `POST /api/referrers`
+  Future<ShopReferrer> saveReferrer(ShopReferrer r0) async {
+    final r = await _api.post<dynamic>('/api/referrers', r0.toJson());
+    return ShopReferrer.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `DELETE /api/referrers/{id}`
+  Future<void> deleteReferrer(int id) =>
+      _api.delete<dynamic>('/api/referrers/$id');
+
+  /// `GET /api/referrers/wallets?search&sortBy&desc`
+  Future<List<ShopReferrer>> referrerWallets({
+    String? search,
+    String sortBy = 'balance',
+    bool desc = false,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/referrers/wallets',
+      query: {
+        'sortBy': sortBy,
+        'desc': desc,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, ShopReferrer.fromJson).items;
+  }
+
+  /// `GET /api/referrers/payments?referrerId`
+  Future<List<ReferrerPayment>> referrerPayments({int? referrerId}) async {
+    final r = await _api.get<dynamic>(
+      '/api/referrers/payments',
+      query: {
+        if (referrerId != null && referrerId > 0) 'referrerId': referrerId,
+      },
+    );
+    return ShopPage.parse(r.data, ReferrerPayment.fromJson).items;
+  }
+
+  /// `POST /api/referrers/payments`
+  Future<ReferrerPayment> addReferrerPayment(ReferrerPayment p) async {
+    final r = await _api.post<dynamic>('/api/referrers/payments', p.toJson());
+    return ReferrerPayment.fromJson(
+      Map<String, dynamic>.from(r.data as Map),
+    );
+  }
+
+  /// `DELETE /api/referrers/payments/{id}`
+  Future<void> deleteReferrerPayment(int id) =>
+      _api.delete<dynamic>('/api/referrers/payments/$id');
 }

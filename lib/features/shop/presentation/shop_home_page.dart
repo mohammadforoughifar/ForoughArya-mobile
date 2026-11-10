@@ -28,7 +28,15 @@ import 'trs_accounts_page.dart';
 import 'trs_cheques_page.dart';
 import 'trs_vouchers_page.dart';
 import 'sale_orders_page.dart';
+import 'referrer_wallets_page.dart';
+import 'referrers_page.dart';
+import 'shop_guide_page.dart';
 import 'shop_style.dart';
+import 'vis_approvals_page.dart';
+import 'vis_finance_queue_page.dart';
+import 'vis_requests_page.dart';
+import 'visit_form_page.dart';
+import 'visits_page.dart';
 import 'stock_page.dart';
 import 'units_page.dart';
 import 'warehouses_page.dart';
@@ -165,18 +173,25 @@ class ShopHomePage extends StatelessWidget {
                         enabled: true,
                         onTap: () => _push(context, const TrsAccountsPage()),
                       ),
-                    const _Item(
-                      'معرف‌ها',
-                      'بازاریابان و پروندهٔ فروش',
-                      Icons.badge_rounded,
-                      phase: 6,
-                    ),
-                    const _Item(
-                      'بانک، صندوق و کارتخوان (POS)',
-                      'حساب‌های خزانه',
-                      Icons.account_balance_rounded,
-                      phase: 5,
-                    ),
+                    // وب: گیت CanSee("Referrers")
+                    if (perms.canSeeModule('Referrers'))
+                      _Item(
+                        'معرف‌ها',
+                        'بازاریاب‌ها و درصد پورسانت فروش کالا و خدمات',
+                        Icons.badge_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const ReferrersPage()),
+                      ),
+                    // وب: «کیف پول معرف‌ها» زیر گیت CanSee("ReferrerWallets")
+                    if (perms.canSeeModule('ReferrerWallets'))
+                      _Item(
+                        'کیف پول معرف‌ها',
+                        'مانده پورسانت، پرداخت‌ها و اسناد پرداخت هر معرف',
+                        Icons.account_balance_wallet_rounded,
+                        enabled: true,
+                        onTap: () =>
+                            _push(context, const ReferrerWalletsPage()),
+                      ),
                   ],
                 ),
                 // ---------- عملیات ----------
@@ -318,58 +333,75 @@ class ShopHomePage extends StatelessWidget {
                       ),
                   ],
                 ),
-                // ---------- ویزیت فروش ----------
-                _group(
-                  context,
-                  'فروش و ویزیتوری',
-                  Icons.directions_walk_rounded,
-                  const [
-                    _Item(
-                      'سفارش‌های من',
-                      'سفارش‌های ثبت‌شدهٔ ویزیتور',
-                      Icons.assignment_rounded,
-                      phase: 6,
-                    ),
-                    _Item(
-                      'ثبت سفارش جدید',
-                      'ثبت سفارش میدانی',
-                      Icons.add_box_rounded,
-                      phase: 6,
-                    ),
-                    _Item(
-                      'تأیید سفارش‌ها',
-                      'بررسی و تأیید مدیر فروش',
-                      Icons.verified_rounded,
-                      phase: 6,
-                    ),
-                    _Item(
-                      'همهٔ درخواست‌ها',
-                      'فهرست کامل درخواست‌ها',
-                      Icons.collections_rounded,
-                      phase: 6,
-                    ),
-                    _Item(
-                      'صف مالی سفارش‌ها',
-                      'تأیید مالی سفارش‌ها',
-                      Icons.receipt_rounded,
-                      phase: 6,
-                    ),
-                  ],
-                ),
+                // ---------- فروش و ویزیتوری (گیت: CanSee("SalesVisit")) ----------
+                if (perms.canSeeModule('SalesVisit'))
+                  _group(
+                    context,
+                    'فروش و ویزیتوری',
+                    Icons.directions_walk_rounded,
+                    [
+                      _Item(
+                        'سفارش‌های من',
+                        'سفارش‌های ثبت‌شدهٔ ویزیتور',
+                        Icons.assignment_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const VisitsPage()),
+                      ),
+                      // وب: «ثبت سفارش جدید» فقط با SalesVisit.Create
+                      if (perms.has('SalesVisit.Create'))
+                        _Item(
+                          'ثبت سفارش جدید',
+                          'ثبت سفارش میدانی',
+                          Icons.add_box_rounded,
+                          enabled: true,
+                          onTap: () => _push(context, const VisitFormPage()),
+                        ),
+                      // وب: «تأیید سفارش‌ها» و «همهٔ درخواست‌ها» با SalesVisit.Approve
+                      if (perms.has('SalesVisit.Approve')) ...[
+                        _Item(
+                          'تأیید سفارش‌ها',
+                          'بررسی و تأیید مدیر فروش',
+                          Icons.verified_rounded,
+                          enabled: true,
+                          onTap: () =>
+                              _push(context, const VisApprovalsPage()),
+                        ),
+                        _Item(
+                          'همهٔ درخواست‌ها',
+                          'فهرست کامل درخواست‌ها',
+                          Icons.collections_rounded,
+                          enabled: true,
+                          onTap: () => _push(context, const VisRequestsPage()),
+                        ),
+                      ],
+                      // وب: «صف مالی سفارش‌ها» با SalesVisit.FinanceView
+                      if (perms.has('SalesVisit.FinanceView'))
+                        _Item(
+                          'صف مالی سفارش‌ها',
+                          'تأیید شیوه تسویه و ثبت فروش فروشگاه',
+                          Icons.receipt_rounded,
+                          enabled: true,
+                          onTap: () =>
+                              _push(context, const VisFinanceQueuePage()),
+                        ),
+                    ],
+                  ),
                 // ---------- راهنما ----------
-                _group(
-                  context,
-                  'راهنما',
-                  Icons.help_outline_rounded,
-                  const [
-                    _Item(
-                      'راهنمای سامانه',
-                      'آموزش گام‌به‌گام سامانه فروشگاهی',
-                      Icons.menu_book_rounded,
-                      phase: 6,
-                    ),
-                  ],
-                ),
+                if (perms.canSeeModule('ShopGuide'))
+                  _group(
+                    context,
+                    'راهنما',
+                    Icons.help_outline_rounded,
+                    [
+                      _Item(
+                        'راهنمای سامانه',
+                        'آموزش گام‌به‌گام سامانه فروشگاهی',
+                        Icons.menu_book_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const ShopGuidePage()),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
