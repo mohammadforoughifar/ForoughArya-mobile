@@ -14,6 +14,7 @@ import 'package:shamsi_date/shamsi_date.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
@@ -912,11 +913,10 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   }
 
   Future<DateTime?> _pickJalali(BuildContext context, DateTime initial) =>
-      showDatePicker(
-        context: context,
-        initialDate: initial,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
+      showJalaliDatePicker(
+        context,
+        initial: initial,
+        title: 'انتخاب تاریخ (شمسی)',
       );
 }
 

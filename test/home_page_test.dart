@@ -58,25 +58,10 @@ class _FakeAdapter implements HttpClientAdapter {
           {'id': 1007, 'name': 'بن‌سازه', 'code': '1007', 'isActive': false},
         ],
       };
-    } else if (p.contains('/api/notifications/unread-count')) {
-      unreadCalls++;
-      body = {'count': 7};
-    } else if (p.contains('/api/notifications')) {
-      body = [
-        {
-          'id': 1,
-          'title': 'ارجاع نامهٔ ۱۴۰۴/۲۱۸۷ به شما',
-          'body': 'نامه به کارتابل شما ارجاع شد.',
-          'fromName': 'مدیریت بازرگانی',
-          'formName': 'کارتابل نامه داخلی',
-          'link': '/',
-          'isRead': false,
-          'createdAt': '2026-11-09T08:00:00',
-        },
-      ];
     } else if (p.contains('/api/my-dashboards/widget-data/')) {
+      // باید قبل از بررسی عمومیِ /api/my-dashboards بیاید
       widgetCalls++;
-      final key = p.split('/').last;
+      final key = p.split('/').last.split('?').first;
       body = {
         'key': key,
         'kind': 0,
@@ -94,6 +79,24 @@ class _FakeAdapter implements HttpClientAdapter {
           {'name': 's', 'labels': ['1'], 'values': [1, 2, 3, 4, 5, 6, 7]},
         ],
       };
+    } else if (p.contains('/api/notifications/unread-count')) {
+      unreadCalls++;
+      body = {'count': 7};
+    } else if (p.contains('/api/notifications')) {
+      body = [
+        {
+          'id': 1,
+          'title': 'ارجاع نامهٔ ۱۴۰۴/۲۱۸۷ به شما',
+          'body': 'نامه به کارتابل شما ارجاع شد.',
+          'fromName': 'مدیریت بازرگانی',
+          'formName': 'کارتابل نامه داخلی',
+          'link': '/',
+          'isRead': false,
+          'createdAt': '2026-11-09T08:00:00',
+        },
+      ];
+    } else if (p.contains('/stats') || p.contains('/counts')) {
+      body = {'inbox': 4, 'sent': 3, 'unread': 2, 'open': 5};
     } else {
       body = {};
     }

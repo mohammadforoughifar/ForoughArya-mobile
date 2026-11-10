@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
@@ -906,9 +907,11 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
   }
 
   Future<DateTime?> _pickDate(DateTime initial) async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: initial,
+    // تقویم شمسی
+    final d = await showJalaliDatePicker(
+      context,
+      initial: initial,
+      title: 'انتخاب تاریخ (شمسی)',
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );

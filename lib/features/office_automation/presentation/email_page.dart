@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/email_draft_store.dart';
 import '../data/email_repository.dart';
@@ -436,16 +437,16 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _pickDateRange(String key) async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 1),
-      initialDateRange: _dateRange,
+    // تقویم شمسی (هیچ‌جا تقویم میلادی نمایش داده نمی‌شود)
+    final picked = await showJalaliDateRangePicker(
+      context,
+      title: 'بازهٔ تاریخ (شمسی)',
+      initialStart: _dateRange?.start,
+      initialEnd: _dateRange?.end,
     );
     if (picked == null || !mounted) return;
     setState(() {
-      _dateRange = picked;
+      _dateRange = DateTimeRange(start: picked.start, end: picked.end);
       _items.remove(key);
     });
     _load(key, reset: true);
@@ -741,6 +742,26 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 onTap: () => _pickDateRange(key),
               ),
               if (_dateRange != null) ...[
+                const SizedBox(width: 5),
+                // بازهٔ انتخابی به تاریخ شمسی نمایش داده می‌شود
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    jalaliRangeLabel(_dateRange!.start, _dateRange!.end),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: accent,
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 5),
                 _SquareBtn(
                   icon: Icons.close,

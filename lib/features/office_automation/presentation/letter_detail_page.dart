@@ -15,6 +15,7 @@ import 'dart:io';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/office_repository.dart';
 import '../models/email_models.dart';
@@ -2119,10 +2120,13 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                 const _FieldLabel('مهلت پاسخ'),
                 InkWell(
                   onTap: () async {
-                    final d = await showDatePicker(
-                      context: context,
-                      initialDate: _deadline ?? DateTime.now(),
-                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                    final d = await showJalaliDatePicker(
+                      context,
+                      initial: _deadline ?? DateTime.now(),
+                      title: 'مهلت پاسخ (شمسی)',
+                      firstDate: DateTime.now().subtract(
+                        const Duration(days: 1),
+                      ),
                       lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
                     if (d != null) setState(() => _deadline = d);

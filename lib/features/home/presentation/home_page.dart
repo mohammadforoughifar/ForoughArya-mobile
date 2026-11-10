@@ -20,6 +20,9 @@ import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../misc/presentation/minutes_list_page.dart';
 import '../../misc/presentation/misc_forms_page.dart';
+import '../../office_automation/data/email_repository.dart';
+import '../../office_automation/data/office_repository.dart';
+import '../../work_orders/data/work_order_repository.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
 import 'company_picker_sheet.dart';
@@ -45,6 +48,9 @@ class _HomePageState extends State<HomePage> {
   List<HomeKpi> _kpis = const [];
   int _unread = 0;
   bool _loading = true;
+
+  /// دادهٔ ویجت‌ها رسیده (یا شکست خورده) — برای نمایش «…» یا «—»
+  bool _widgetsSettled = false;
   String? _error;
 
   final PageController _pc = PageController(viewportFraction: 0.9);
@@ -71,6 +77,7 @@ class _HomePageState extends State<HomePage> {
     final api = context.read<ApiClient>();
     setState(() {
       _loading = true;
+      _widgetsSettled = false;
       _error = null;
     });
     try {
@@ -90,9 +97,9 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _companies = companies;
         _unread = unread;
-        _widgetData = widgets;
         _loading = false;
       });
+      await _loadWidgets(widgets);
     } on Exception catch (e) {
       if (!mounted) return;
       setState(() {
@@ -100,6 +107,161 @@ class _HomePageState extends State<HomePage> {
         _error = e.toString();
       });
     }
+  }
+
+  /// شرکت فعال را روی هدر شبکه ست می‌کند تا دادهٔ ویجت‌ها درست واکشی شود.
+  Future<void> _ensureCompany() async {
+    final api = context.read<ApiClient>();
+    var id = _companies.activeCompanyId;
+    if (id == null || id <= 0) {
+      try {
+        id = await api.ensureCompanyId();
+      } catch (_) {
+        id = null;
+      }
+      if (id != null) {
+        _companies = CompanyContext(
+          companies: _companies.companies,
+          activeCompanyId: id,
+        );
+      }
+    }
+    if (id != null) {
+      try {
+        await api.setCompanyId(id);
+      } catch (_) {
+        // ست‌شدن هدر شرکت نباید کل صفحه را خراب کند
+      }
+    }
+  }
+
+  Future<void> _loadWidgets(Map<String, WidgetData> initial) async {
+    setState(() => _widgetData = initial);
+    await _ensureCompany();
+    final keys = _kpis.map((k) => k.widgetKey).toList();
+    var have = _widgetData;
+    if (keys.any((k) => !have.containsKey(k))) {
+      final again = await _repo.fetchWidgets(keys);
+      if (!mounted) return;
+      if (again.isNotEmpty) setState(() => _widgetData = again);
+      have = again;
+    }
+    final missing = keys.where((k) => !have.containsKey(k)).toList();
+    // ویجت‌های داشبورد سرور در دسترس نیستند → مستقیم از خود ماژول‌ها می‌خوانیم
+    final fallback = missing.isEmpty
+        ? const <String, WidgetData>{}
+        : await _fallbackMetrics(missing);
+    if (!mounted) return;
+    setState(() {
+      _widgetData = {..._widgetData, ...fallback};
+      _widgetsSettled = true;
+    });
+  }
+
+  /// دادهٔ عددی واقعی از endpointهای خود ماژول‌ها (وقتی dashboard-api جواب نمی‌دهد).
+  Future<Map<String, WidgetData>> _fallbackMetrics(List<String> keys) async {
+    final api = context.read<ApiClient>();
+    final out = <String, WidgetData>{};
+    final start = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+    // نامه‌ها — سه کارتابل داخلی/صادره/وارده
+    if (keys.any((k) => k.startsWith('off-') || k == 'wo-open')) {
+      final repo = OfficeAutomationRepository(api);
+      int inbox = 0, sent = 0, unread = 0, pish = 0, dab = 0, sign = 0;
+      try {
+        final inner = await repo.innerStats();
+        inbox += inner.inbox;
+        sent += inner.sent;
+        unread += inner.unread;
+        pish += inner.pishnevis;
+      } catch (_) {}
+      try {
+        final outg = await repo.outgoingStats();
+        inbox += outg.inbox;
+        sent += outg.sent;
+        unread += outg.unread;
+        pish += outg.pishnevis;
+        dab += outg.dabirkhane;
+        sign += outg.signingPending;
+      } catch (_) {}
+      try {
+        final inc = await repo.incomingStats();
+        inbox += inc.inbox;
+        sent += inc.sent;
+        unread += inc.unread;
+        pish += inc.pishnevis;
+      } catch (_) {}
+      if (keys.contains('off-letters-count')) {
+        out['off-letters-count'] = WidgetData(
+          key: 'off-letters-count',
+          title: 'نامه‌ها',
+          value: (inbox + sent).toDouble(),
+          unit: 'نامه',
+          rows: [
+            ['وارده', Fa.digits(inbox)],
+            ['صادره', Fa.digits(sent)],
+            ['ارجاع نخوانده', Fa.digits(unread)],
+          ],
+        );
+      }
+      if (keys.contains('off-erja-unread')) {
+        out['off-erja-unread'] = WidgetData(
+          key: 'off-erja-unread',
+          title: 'ارجاع‌های من',
+          value: unread.toDouble(),
+          unit: 'ارجاع نخوانده',
+          rows: [
+            ['پیش‌نویس', Fa.digits(pish)],
+            ['در انتظار امضا', Fa.digits(sign)],
+            ['دبیرخانه', Fa.digits(dab)],
+          ],
+        );
+      }
+    }
+
+    // دستور کارها
+    if (keys.contains('wo-open')) {
+      try {
+        final c = await WorkOrderRepository(api).counts();
+        int pick(List<String> names) => names
+            .map((n) => (c[n] as num?)?.toInt())
+            .whereType<int>()
+            .fold<int>(0, (a, b) => a + b);
+        final open = pick([
+          'open', 'Open', 'openCount', 'inProgress', 'inprogress', 'pending',
+        ]);
+        final overdue = pick(['overdue', 'Overdue', 'late', 'delayed']);
+        final done = pick(['done', 'Done', 'closed', 'completed', 'doneCount']);
+        out['wo-open'] = WidgetData(
+          key: 'wo-open',
+          title: 'دستور کار',
+          value: open.toDouble(),
+          unit: 'دستور کار باز',
+          rows: [
+            ['معوق', Fa.digits(overdue)],
+            ['انجام‌شده', Fa.digits(done)],
+          ],
+        );
+      } catch (_) {}
+    }
+
+    // ایمیل امروز (سازمانی)
+    if (keys.contains('email-today')) {
+      try {
+        final r = await EmailRepository(api).inbox(
+          pageSize: 100,
+          dateFrom: start,
+          dateTo: DateTime.now(),
+        );
+        out['email-today'] = WidgetData(
+          key: 'email-today',
+          title: 'ایمیل امروز',
+          value: r.totalCount.toDouble(),
+          unit: 'ایمیل',
+        );
+      } catch (_) {}
+    }
+    return out;
   }
 
   Future<void> _pickCompany(CompanyOption c) async {
@@ -118,7 +280,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _reloadWidgets() async {
     final widgets = await _repo.fetchWidgets(_kpis.map((k) => k.widgetKey));
     if (!mounted) return;
-    setState(() => _widgetData = widgets);
+    await _loadWidgets(widgets);
   }
 
   void _openCompanies() {
@@ -212,7 +374,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                   child: _CompanyPill(
                     context_: _companies,
-                    loading: _loading,
+                    loading: _loading || !_widgetsSettled,
                     onTap: _openCompanies,
                   ),
                 ),
@@ -299,6 +461,7 @@ class _HomePageState extends State<HomePage> {
             child: _KpiCard(
               kpi: _kpis[i],
               data: _widgetData[_kpis[i].widgetKey],
+              loading: _loading || !_widgetsSettled,
             ),
             builder: (_, child) => Transform.scale(
               scale: scale,
@@ -756,14 +919,22 @@ class _SectionHeader extends StatelessWidget {
 // ============================================================
 
 class _KpiCard extends StatelessWidget {
-  const _KpiCard({required this.kpi, this.data});
+  const _KpiCard({required this.kpi, this.data, this.loading = false});
 
   final HomeKpi kpi;
   final WidgetData? data;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final value = data?.value ?? kpi.value;
+    // اگر سرور مقداری نداده باشد، «—» نمایش می‌دهیم نه صفرِ گمراه‌کننده.
+    // مقدار اعشاری‌دار تا یک رقم اعشار (بدون وابستگی به en_US locale) نمایش داده می‌شود.
+    final String? valueText = data?.value == null
+        ? (loading ? '…' : '—')
+        : (value == value.roundToDouble()
+              ? Fa.number(value, decimals: 0)
+              : Fa.number(value, decimals: 1));
     final delta = data == null
         ? kpi.deltaPercent
         : (data!.deltaUp == null ? null : (data!.deltaUp! ? 1.0 : -1.0));
@@ -874,16 +1045,27 @@ class _KpiCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        HCountUp(
-                          value: value,
-                          style: const TextStyle(
-                            fontSize: 32,
-                            height: 1,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -1.3,
-                            color: HomeColors.ink,
+                        if (valueText == null)
+                          HCountUp(
+                            value: value,
+                            style: const TextStyle(
+                              fontSize: 32,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1.3,
+                              color: HomeColors.ink,
+                            ),
+                          )
+                        else
+                          Text(
+                            valueText,
+                            style: const TextStyle(
+                              fontSize: 30,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: HomeColors.inkSoft,
+                            ),
                           ),
-                        ),
                         const SizedBox(width: 7),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 3),
@@ -899,7 +1081,30 @@ class _KpiCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
-                    _Delta(delta: delta, text: deltaText),
+                    if (data == null && !loading)
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 12,
+                            color: HomeColors.inkSoft,
+                          ),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'دادهٔ این ویجت از سرور دریافت نشد',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: HomeColors.inkSoft,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      _Delta(delta: delta, text: deltaText),
                     const SizedBox(height: 2),
                     HSparkline(
                       values: spark.isEmpty
@@ -1011,7 +1216,8 @@ class _KpiRows extends StatelessWidget {
               ),
           ]
         : [
-            for (final r in fallback) (r.label, r.value, r.hint),
+            // داده‌ای از سرور نرسیده → عدد ساختگی/صفر نمایش نمی‌دهیم
+            for (final r in fallback) (r.label, '—', r.hint),
           ];
 
     return Column(

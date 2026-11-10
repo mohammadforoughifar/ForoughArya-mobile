@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
@@ -107,9 +108,11 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   }
 
   Future<void> _pickDue() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _due,
+    // تقویم شمسی — تاریخ‌ها همه‌جا شمسی هستند
+    final date = await showJalaliDatePicker(
+      context,
+      initial: _due,
+      title: 'مهلت انجام (شمسی)',
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
