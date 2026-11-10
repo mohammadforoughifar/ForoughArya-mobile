@@ -11,7 +11,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -399,6 +404,119 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  // ---------------- پیوست ----------------
+
+  /// انتخاب نوع پیوست و ارسال
+  Future<void> _pickAttachment() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (c) => Container(
+        margin: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: MessengerColors.surface,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _AttachTile(
+              icon: Icons.insert_drive_file_rounded,
+              label: 'فایل (PDF، Word، Excel و…)',
+              onTap: () => Navigator.pop(c, 'file'),
+            ),
+            _AttachTile(
+              icon: Icons.photo_library_rounded,
+              label: 'تصویر از گالری',
+              onTap: () => Navigator.pop(c, 'image'),
+            ),
+            _AttachTile(
+              icon: Icons.photo_camera_rounded,
+              label: 'عکس با دوربین',
+              onTap: () => Navigator.pop(c, 'camera'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+
+    File? file;
+    try {
+      if (choice == 'file') {
+        final picked = await FilePicker.pickFiles();
+        final path = picked.isEmpty ? null : picked.first.path;
+        if (path != null) file = File(path);
+      } else {
+        final picker = ImagePicker();
+        final x = await picker.pickImage(
+          source: choice == 'camera'
+              ? ImageSource.camera
+              : ImageSource.gallery,
+          imageQuality: 88,
+          maxWidth: 2200,
+        );
+        if (x != null) file = File(x.path);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('انتخاب فایل انجام نشد: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (file == null || !mounted) return;
+
+    // نمایش فوری در فهرست (در حال ارسال)
+    final size = await file.length();
+    if (size > 50 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حجم فایل بیشتر از ۵۰ مگابایت است.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final temp = ChatMessage(
+      id: -DateTime.now().millisecondsSinceEpoch,
+      kind: choice == 'file' ? ChatKind.file : ChatKind.image,
+      mine: true,
+      at: DateTime.now(),
+      attachmentName: file.uri.pathSegments.last,
+      localPath: file.path,
+      status: ChatStatus.sending,
+    );
+    setState(() => _items = [..._items, temp]);
+    _toBottom();
+
+    try {
+      await _repo.sendFile(widget.thread.id, file);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _items = _items
+            .map(
+              (m) =>
+                  m.id == temp.id ? m.copyWith(status: ChatStatus.failed) : m,
+            )
+            .toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فایل ارسال نشد: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Widget _buildComposer() {
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
@@ -411,6 +529,26 @@ class _ChatPageState extends State<ChatPage> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            // پیوست: فایل / گالری / دوربین
+            GestureDetector(
+              onTap: _pickAttachment,
+              child: Container(
+                width: 44,
+                height: 44,
+                margin: const EdgeInsetsDirectional.only(end: 4),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: MessengerColors.bg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: MessengerColors.line),
+                ),
+                child: const Icon(
+                  Icons.attach_file_rounded,
+                  size: 20,
+                  color: MessengerColors.inkSoft,
+                ),
+              ),
+            ),
             // میکروفن: نگه‌داشتن = ضبط
             GestureDetector(
               onLongPressStart: (_) => _startRecording(),
@@ -615,6 +753,10 @@ class _Bubble extends StatelessWidget {
               ),
             if (message.kind == ChatKind.voice)
               VoiceBubble(message: message)
+            else if (message.kind == ChatKind.image)
+              _ImageAttachment(message: message)
+            else if (message.kind == ChatKind.file)
+              _FileAttachment(message: message)
             else
               Text(
                 message.text ?? '',
@@ -748,5 +890,180 @@ class _PulseDotState extends State<_PulseDot>
       height: 10,
       decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
     ),
+  );
+}
+
+/// ردیف انتخاب نوع پیوست در شیت پایین
+class _AttachTile extends StatelessWidget {
+  const _AttachTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    onTap: onTap,
+    leading: Container(
+      width: 38,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: MessengerColors.brand.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, size: 19, color: MessengerColors.brand),
+    ),
+    title: Text(
+      label,
+      style: const TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w700,
+        color: MessengerColors.ink,
+      ),
+    ),
+  );
+}
+
+/// تصویر پیام: پیش‌نمایش + باز شدن تمام‌صفحه
+class _ImageAttachment extends StatelessWidget {
+  const _ImageAttachment({required this.message});
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = message.fileUrl ?? message.localPath;
+    if (url == null) return const SizedBox.shrink();
+    final image = url.startsWith('http')
+        ? Image.network(
+            url,
+            width: 210,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _broken('تصویر دریافت نشد'),
+          )
+        : Image.file(
+            File(url),
+            width: 210,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _broken('تصویر باز نشد'),
+          );
+    return GestureDetector(
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (c) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: const EdgeInsets.all(8),
+          child: InteractiveViewer(
+            child: url.startsWith('http')
+                ? Image.network(url, fit: BoxFit.contain)
+                : Image.file(File(url), fit: BoxFit.contain),
+          ),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: image,
+      ),
+    );
+  }
+
+  Widget _broken(String text) => Container(
+    padding: const EdgeInsets.all(12),
+    color: MessengerColors.bg,
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 11, color: MessengerColors.inkFaint),
+    ),
+  );
+}
+
+/// فایل پیام: نام + حجم + دانلود/باز کردن
+class _FileAttachment extends StatelessWidget {
+  const _FileAttachment({required this.message});
+  final ChatMessage message;
+
+  String _sizeLabel() {
+    // اگر سرور حجم داده باشد در متن نیست؛ همان نام کافی است
+    return message.attachmentName ?? 'فایل';
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 38,
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: MessengerColors.brand.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: const Icon(
+          Icons.description_rounded,
+          size: 19,
+          color: MessengerColors.brand,
+        ),
+      ),
+      const SizedBox(width: 9),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _sizeLabel(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: MessengerColors.ink,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              message.fileUrl == null ? 'در حال ارسال…' : 'برای باز کردن بزنید',
+              style: const TextStyle(
+                fontSize: 9.5,
+                color: MessengerColors.inkFaint,
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (message.fileUrl != null)
+        IconButton(
+          onPressed: () async {
+            final url = message.fileUrl!;
+            try {
+              final dir = await getTemporaryDirectory();
+              final name = message.attachmentName ?? 'file';
+              final target = File('${dir.path}/$name');
+              final api = context.read<ApiClient>();
+              final res = await api.dio.get<List<int>>(
+                url,
+                options: Options(responseType: ResponseType.bytes),
+              );
+              await target.writeAsBytes(res.data ?? const []);
+              await OpenFilex.open(target.path);
+            } catch (e) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('باز کردن فایل ممکن نشد: $e'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+          icon: const Icon(
+            Icons.download_rounded,
+            size: 19,
+            color: MessengerColors.brand,
+          ),
+        ),
+    ],
   );
 }
