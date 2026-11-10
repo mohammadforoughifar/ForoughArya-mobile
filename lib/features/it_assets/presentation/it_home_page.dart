@@ -14,7 +14,9 @@ import 'package:provider/provider.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../data/it_perms.dart';
 import 'hardware_dashboard_page.dart';
+import 'ipam_page.dart';
 import 'it_requests_page.dart';
+import 'server_management_page.dart';
 import 'system_info_list_page.dart';
 import 'system_manual_page.dart';
 import 'system_users_page.dart';
@@ -142,6 +144,26 @@ class ItHomePage extends StatelessWidget {
                 color: const Color(0xffb45309),
                 onTap: () => _push(context, const SystemUsersPage()),
               ),
+              if (perms.canSeeServers)
+                _card(
+                  context,
+                  title: 'مدیریت سرورها',
+                  subtitle:
+                      'شناسنامه، سلامت سخت‌افزار و دریافت Inventory امن از HPE iLO / Redfish',
+                  icon: Icons.dns_rounded,
+                  color: const Color(0xff2547a8),
+                  onTap: () => _push(context, const ServerManagementPage()),
+                ),
+              if (perms.canSeeIpam)
+                _card(
+                  context,
+                  title: 'مدیریت آی‌پی',
+                  subtitle:
+                      'نقشهٔ رنج‌های شبکه، شناسنامهٔ هر آی‌پی و کشف خودکار دستگاه‌های متصل',
+                  icon: Icons.hub_rounded,
+                  color: const Color(0xff0f766e),
+                  onTap: () => _push(context, const IpamPage()),
+                ),
             ],
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -163,8 +185,6 @@ class ItHomePage extends StatelessWidget {
   /// متن راهنمای گروه — تا فازهای بعدی که صفحات را اضافه می‌کنند.
   static String _pendingNote(ItPerms perms) {
     final parts = <String>[];
-    if (perms.canSeeServers) parts.add('سرورها');
-    if (perms.canSeeIpam) parts.add('مدیریت آی‌پی');
     if (perms.canSeeCctvCameras) parts.add('دوربین‌های مداربسته');
     if (perms.canSeeCctvNvrs) parts.add('دستگاه‌های NVR');
     if (perms.canSeeItVault) parts.add('گاوصندوق رمزها');
