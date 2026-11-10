@@ -21,6 +21,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../network/api_client.dart';
+import 'notification_launcher.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:workmanager/workmanager.dart';
@@ -65,8 +66,24 @@ class PushService {
     );
     await _plugin.initialize(
       settings: const InitializationSettings(android: android, iOS: ios),
-      onDidReceiveNotificationResponse: (_) {},
+      // کاربر روی نوتیفیکیشن زد → خودِ همان سند باز می‌شود
+      onDidReceiveNotificationResponse: (resp) {
+        NotificationLauncher.instance.handlePayload(resp.payload);
+      },
+      // کاربر از حالت بستهٔ اپ روی نوتیفیکیشن زده است
+      onDidReceiveBackgroundNotificationResponse: _backgroundTap,
     );
+
+    // اگر اپ با زدن روی اعلان باز شده باشد (cold start)
+    try {
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp == true) {
+        final payload = launch?.notificationResponse?.payload;
+        if (payload != null && payload.isNotEmpty) {
+          NotificationLauncher.instance.handlePayload(payload);
+        }
+      }
+    } catch (_) {}
 
     // کانال با اهمیت بالا تا در حالت سایلنت/روی صفحه هم نمایش داده شود.
     final androidPlugin = _plugin
@@ -157,7 +174,7 @@ class PushService {
             m['fromName'].toString(),
           if ((m['body'] ?? '').toString().isNotEmpty) m['body'].toString(),
         ].join(' — '),
-        payload: m['link']?.toString(),
+        payload: jsonEncode(m),
       );
     }
     _lastSeenId = maxId;
@@ -279,6 +296,15 @@ class ApiResponseLike {
 }
 
 /// پل بین ApiClient واقعی و سطح حداقلی بالا
+/// کاربر در حالت بسته بودن اپ روی اعلان زده — payload به صف می‌رود و
+/// به‌محض باز شدن اپ و آماده شدن ناوبر، همان سند باز می‌شود.
+@pragma('vm:entry-point')
+void _backgroundTap(NotificationResponse resp) {
+  final payload = resp.payload;
+  if (payload == null || payload.isEmpty) return;
+  NotificationLauncher.instance.handlePayload(payload);
+}
+
 class ApiClientPushAdapter implements ApiClientLike {
   ApiClientPushAdapter(this._api);
   final ApiClient _api;
@@ -363,7 +389,7 @@ void backgroundCallbackDispatcher() {
               priority: Priority.high,
             ),
           ),
-          payload: m['link']?.toString(),
+          payload: jsonEncode(m),
         );
       }
       if (maxId > seen) {

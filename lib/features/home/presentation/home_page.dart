@@ -20,13 +20,13 @@ import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../misc/presentation/minutes_detail_page.dart';
 import '../../misc/presentation/minutes_list_page.dart';
+import '../data/notification_target.dart';
 import '../../misc/presentation/misc_forms_page.dart';
 import '../../office_automation/data/email_repository.dart';
 import '../../office_automation/models/office_common.dart';
 import '../../office_automation/presentation/letter_detail_page.dart';
 import '../../work_orders/presentation/work_order_detail_page.dart';
 import '../../office_automation/data/office_repository.dart';
-import '../../office_automation/models/office_common.dart';
 import '../../work_orders/data/work_order_repository.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
@@ -293,99 +293,106 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// نگاشت اعلان به رکورد مقصد — با کلیک، خودِ همان دستور کار / صورت‌جلسه /
-  /// نامه باز می‌شود؛ اگر شناسه در اعلان نبود، به فهرست همان ماژول می‌رود.
-  void _openFromNotification(NotificationItem n) {
-    final id = n.entityId;
-    final kind = n.entityKind;
+  /// کلیک روی اعلان → پیدا کردن «همان رکورد» و باز کردن مستقیم آن.
+  /// (نه رفتن به صفحهٔ اصلی ماژول)
+  Future<void> _openFromNotification(NotificationItem n) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // نشانگر کوتاه تا کاربر بداند در حال باز شدن است
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Text('در حال باز کردن مورد مرتبط…'),
+          ],
+        ),
+        duration: Duration(seconds: 8),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
 
-    // ۱) دستور کار
-    if (kind == 'wo') {
-      if (id != null && id > 0) {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => WorkOrderDetailPage(id: id),
-          ),
-        );
-      } else {
-        widget.onOpenTab(1);
+    NotificationTarget target;
+    try {
+      target = await NotificationResolver(
+        context.read<ApiClient>(),
+      ).resolve(n);
+    } catch (e) {
+      target = NotificationTarget(kind: 'none', reason: e.toString());
+    }
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+
+    if (target.isResolved) {
+      switch (target.kind) {
+        case 'wo':
+          await _openExactTarget(target, n);
+          return;
+        case 'minutes':
+          await _openExactTarget(target, n);
+          return;
+        case 'letter':
+          await _openExactTarget(target, n);
+          return;
+        case 'email':
+          widget.onOpenTab(3);
+          return;
+        default:
+          break;
       }
-      return;
     }
 
-    // ۲) صورت‌جلسه
-    if (kind == 'minutes') {
-      if (id != null && id > 0) {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => MinutesDetailPage(minutesId: id),
-          ),
-        );
-      } else {
-        Navigator.of(context).push(
+    // پیدا نشد: فقط در این حالت به ماژول مربوطه می‌رویم
+    switch (target.kind) {
+      case 'wo':
+        widget.onOpenTab(1);
+        return;
+      case 'minutes':
+        await Navigator.of(context).push(
           MaterialPageRoute<void>(builder: (_) => const MinutesListPage()),
         );
-      }
-      return;
+        return;
+      default:
+        widget.onOpenTab(2);
     }
+  }
 
-    // ۳) نامهٔ داخلی/صادره/وارده — erjaId یا letterId
-    if (kind == 'letter') {
-      widget.onOpenTab(2);
-      if (id != null && id > 0) {
-        Navigator.of(context).push(
+  /// باز کردن صفحهٔ جزئیات دقیقاً همان سند.
+  Future<void> _openExactTarget(
+    NotificationTarget target,
+    NotificationItem n,
+  ) async {
+    switch (target.kind) {
+      case 'wo':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkOrderDetailPage(id: target.id!),
+          ),
+        );
+        return;
+      case 'minutes':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => MinutesDetailPage(minutesId: target.id!),
+          ),
+        );
+        return;
+      case 'letter':
+        await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => LetterDetailPage(
-              kind: _letterKindOf(n),
-              letterId: id,
-              erjaId: _erjaIdOf(n),
+              kind: target.letterKind ?? LetterKind.inner,
+              letterId: target.id!,
+              erjaId: target.erjaId ?? n.entityId,
             ),
           ),
         );
-      }
-      return;
+        return;
     }
-
-    // ۴) ایمیل
-    if (kind == 'email') {
-      widget.onOpenTab(3);
-      return;
-    }
-
-    // ۵) ناشناس: اگر شناسه داریم به فهرست صورت‌جلسه، وگرنه اتوماسیون
-    if (id != null && id > 0 && n.targetLink != null &&
-        n.targetLink!.contains('minute')) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => MinutesDetailPage(minutesId: id),
-        ),
-      );
-      return;
-    }
-    widget.onOpenTab(2);
-  }
-
-  /// نوع نامه از مسیر/متن اعلان استخراج می‌شود.
-  LetterKind _letterKindOf(NotificationItem n) {
-    final hay = [
-      n.targetLink,
-      n.formName,
-      n.title,
-      n.body,
-    ].map((e) => e ?? '').join(' ').toLowerCase();
-    if (hay.contains('outgoing') || hay.contains('صادره')) {
-      return LetterKind.outgoing;
-    }
-    if (hay.contains('incoming') || hay.contains('وارده')) {
-      return LetterKind.incoming;
-    }
-    return LetterKind.inner;
-  }
-
-  int? _erjaIdOf(NotificationItem n) {
-    final link = n.targetLink ?? '';
-    final m = RegExp(r'[?&](?:erjaId|ErjaId|erja)=(\d+)').firstMatch(link);
-    return m == null ? null : int.tryParse(m.group(1)!);
   }
 
   Future<void> _openNotifications() async {

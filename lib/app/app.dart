@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../core/auth/auth_controller.dart';
 import '../core/network/api_client.dart';
+import '../core/notifications/notification_launcher.dart';
 import '../core/notifications/push_service.dart';
 import '../features/auth/login_page.dart';
 import 'home_shell.dart';
@@ -16,6 +17,8 @@ class ForoughApp extends StatelessWidget {
     const seed = Color(0xff2547a8);
     return MaterialApp(
       title: 'فروغ آریا',
+      // برای باز کردن سند از روی اعلانِ گوشی (بیرون از درخت ویجت‌ها)
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
@@ -71,12 +74,16 @@ class ForoughApp extends StatelessWidget {
           }
           if (!auth.isLoggedIn) {
             PushService.instance.stop();
+            NotificationLauncher.instance.detach();
             return const LoginPage();
           }
           // نوتیفیکیشن واقعی گوشی — تا وقتی کاربر لاگین است فعال می‌ماند
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            final api = context.read<ApiClient>();
+            // مقصد کلیک روی اعلان‌ها را وصل کن (صفِ کلیک‌های زودرس هم باز می‌شود)
+            NotificationLauncher.instance.attach(api);
             PushService.instance.start(
-              ApiClientPushAdapter(context.read<ApiClient>()),
+              ApiClientPushAdapter(api),
               const FlutterSecureStorage(),
             );
           });
