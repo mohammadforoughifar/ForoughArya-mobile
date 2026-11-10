@@ -1396,84 +1396,19 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('ویرایش'),
             ),
-          PopupMenuButton<String>(
-            tooltip: 'تبدیل و عملیات بیشتر',
-            onSelected: (v) {
-              switch (v) {
-                case 'inner':
-                  _convertToInnerLetter();
-                case 'outgoing':
-                  _convertToOutgoingLetter();
-                case 'email':
-                  _openDispatch();
-                case 'delete':
-                  _deleteMinutes();
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'inner',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.mail_outline_rounded),
-                  title: Text('تبدیل به نامهٔ داخلی'),
+          // حذف صورتجلسه — فقط ایجادکننده و فقط بدون امضا
+          if (canEdit && _canDelete(d))
+            OutlinedButton.icon(
+              onPressed: _deleteMinutes,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: MiscColors.danger,
+                side: BorderSide(
+                  color: MiscColors.danger.withValues(alpha: 0.5),
                 ),
               ),
-              const PopupMenuItem(
-                value: 'outgoing',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.outbox_outlined),
-                  title: Text('تبدیل به نامهٔ صادره'),
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'email',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.send_rounded),
-                  title: Text('ارسال کل صورتجلسه (ایمیل/نامه/دستور کار)'),
-                ),
-              ),
-              if (canEdit && _canDelete(d))
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      Icons.delete_outline_rounded,
-                      color: MiscColors.danger,
-                    ),
-                    title: Text(
-                      'حذف صورتجلسه',
-                      style: TextStyle(color: MiscColors.danger),
-                    ),
-                  ),
-                ),
-            ],
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                border: Border.all(color: MiscColors.line),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.more_horiz_rounded, size: 18),
-                  SizedBox(width: 4),
-                  Text(
-                    'نامه / ایمیل / بیشتر',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 16),
+              label: const Text('حذف صورتجلسه'),
             ),
-          ),
         ],
       ),
     );
