@@ -15,6 +15,9 @@ import '../../../core/auth/auth_controller.dart';
 import '../data/it_perms.dart';
 import 'hardware_dashboard_page.dart';
 import 'it_requests_page.dart';
+import 'system_info_list_page.dart';
+import 'system_manual_page.dart';
+import 'system_users_page.dart';
 import '../../shop/presentation/shop_style.dart';
 
 class ItHomePage extends StatelessWidget {
@@ -102,6 +105,44 @@ class ItHomePage extends StatelessWidget {
                 color: const Color(0xff0284c7),
                 onTap: () => _push(context, const ItRequestsPage()),
               ),
+            if (perms.canSeeSystemUsers) ...[
+              _card(
+                context,
+                title: 'سیستم‌های ثبت‌شده',
+                subtitle:
+                    'فهرست تجهیزات رایانه‌ای، وضعیت ایجنت و تغییرات سخت‌افزاری',
+                icon: Icons.devices_other_rounded,
+                color: const Color(0xff7c3aed),
+                onTap: () => _push(context, const SystemInfoListPage()),
+              ),
+              _card(
+                context,
+                title: 'شناسنامه سیستم',
+                subtitle:
+                    'مشخصات فنی قطعات، تخصیص به کاربر و بررسی تغییرات',
+                icon: Icons.memory_rounded,
+                color: const Color(0xff0f766e),
+                onTap: () => _push(context, const SystemInfoListPage()),
+              ),
+              _card(
+                context,
+                title: 'ثبت دستی سیستم',
+                subtitle:
+                    'ثبت شناسنامهٔ سیستم‌هایی که هنوز توسط ایجنت شناسایی نشده‌اند',
+                icon: Icons.desktop_windows_rounded,
+                color: const Color(0xff0e7490),
+                onTap: () => _push(context, const SystemManualPage()),
+              ),
+              _card(
+                context,
+                title: 'کاربران سیستم',
+                subtitle:
+                    'کاربران تجهیزات، شماره پرسنلی، شرکت و واحد سازمانی هر کاربر',
+                icon: Icons.people_alt_rounded,
+                color: const Color(0xffb45309),
+                onTap: () => _push(context, const SystemUsersPage()),
+              ),
+            ],
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
@@ -122,7 +163,6 @@ class ItHomePage extends StatelessWidget {
   /// متن راهنمای گروه — تا فازهای بعدی که صفحات را اضافه می‌کنند.
   static String _pendingNote(ItPerms perms) {
     final parts = <String>[];
-    if (perms.canSeeSystemUsers) parts.add('سیستم‌ها و شناسنامه');
     if (perms.canSeeServers) parts.add('سرورها');
     if (perms.canSeeIpam) parts.add('مدیریت آی‌پی');
     if (perms.canSeeCctvCameras) parts.add('دوربین‌های مداربسته');
