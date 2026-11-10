@@ -202,10 +202,10 @@ class _MessengerPageState extends State<MessengerPage> {
           if (items.isEmpty) {
             return _Empty(
               icon: Icons.forum_outlined,
-              title: 'گفت‌وگویی نیست',
-              text: 'صندوق ایمیل سازمانی خالی است. با دکمهٔ پایین یک گفت‌وگوی '
-                  'تازه با همکاران شروع کنید (پیام‌ها از ایمیل سازمانی '
-                  'خوانده و ارسال می‌شوند).',
+              title: 'چتی از سرور نیامد',
+              text: 'این صفحه همان پیام‌رسان وب است (نه ایمیل). اگر گفت‌وگویی '
+                  'دیده نمی‌شود یعنی مسیر API چت پیدا نشده است. از آیکون '
+                  'تنظیمات بالا → «شناسایی خودکار مسیر چت» استفاده کنید.',
               action: TextButton.icon(
                 onPressed: () => _newChat(),
                 icon: const Icon(Icons.add_rounded, size: 17),

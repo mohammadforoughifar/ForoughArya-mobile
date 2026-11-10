@@ -15,23 +15,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/network/api_client.dart';
-import '../../office_automation/data/email_repository.dart';
-import '../../office_automation/models/email_models.dart';
 import '../models/chat_models.dart';
 import 'chat_endpoints.dart';
 import 'chat_rest_api.dart';
 
 class ChatRepository {
   ChatRepository(this._api, {FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage(),
-      _email = EmailRepository(_api) {
+    : _storage = storage ?? const FlutterSecureStorage() {
     _endpoints = ChatEndpoints(_api, _storage);
     _rest = ChatRestApi(_api, _endpoints);
   }
 
   final ApiClient _api;
   final FlutterSecureStorage _storage;
-  final EmailRepository _email;
   late final ChatEndpoints _endpoints;
   late final ChatRestApi _rest;
 
@@ -105,43 +101,12 @@ class ChatRepository {
       }
     } catch (_) {}
 
-    // fallback: صندوق ایمیل سازمانی
-    lastSource = 'email';
-    final result = await _email.inbox(pageSize: 60);
-    final bySender = <String, ChatThread>{};
-    for (final m in result.items) {
-      final name = _peerName(m);
-      if (name.isEmpty) continue;
-      final prev = bySender[name];
-      final at = m.date;
-      if (prev == null) {
-        bySender[name] = ChatThread(
-          id: m.id,
-          title: name,
-          lastMessage: m.subject,
-          lastAt: at,
-          unread: m.isRead ? 0 : 1,
-        );
-      } else {
-        final newer = at != null && (prev.lastAt == null || at.isAfter(prev.lastAt!));
-        bySender[name] = ChatThread(
-          id: newer ? m.id : prev.id,
-          title: name,
-          lastMessage: newer ? m.subject : prev.lastMessage,
-          lastAt: newer ? at : prev.lastAt,
-          unread: prev.unread + (m.isRead ? 0 : 1),
-        );
-      }
-    }
-    final list = bySender.values.toList()
-      ..sort((a, b) {
-        final x = a.lastAt, y = b.lastAt;
-        if (x == null && y == null) return 0;
-        if (x == null) return 1;
-        if (y == null) return -1;
-        return y.compareTo(x);
-      });
-    return list;
+    // هیچ fallbackی به ایمیل وجود ندارد — پیام‌رسان باید همان چت وب باشد
+    lastSource = 'none';
+    throw Exception(
+      'اتصال به سرور پیام‌رسان برقرار نشد. مسیر API چت را در «تنظیمات اتصال» '
+      'وارد یا با دکمهٔ شناسایی خودکار پیدا کنید.',
+    );
   }
 
   Future<List<ChatMessage>> messages(
@@ -180,53 +145,8 @@ class ChatRepository {
       }
     } catch (_) {}
 
-    lastSource = 'email';
-    final out = <ChatMessage>[];
-    try {
-      final inbox = await _email.inbox(pageSize: 60);
-      for (final m in inbox.items) {
-        if (peerName != null && peerName.isNotEmpty && _peerName(m) != peerName) {
-          continue;
-        }
-        out.add(
-          ChatMessage(
-            id: m.id,
-            kind: ChatKind.text,
-            text: m.subject,
-            mine: false,
-            at: m.date,
-            senderName: _peerName(m),
-          ),
-        );
-      }
-    } catch (_) {}
-    try {
-      final sent = await _email.sent(pageSize: 40);
-      for (final m in sent.items) {
-        if (peerName != null &&
-            peerName.isNotEmpty &&
-            !m.fromOrTo.contains(peerName)) {
-          continue;
-        }
-        out.add(
-          ChatMessage(
-            id: -m.id,
-            kind: ChatKind.text,
-            text: m.subject,
-            mine: true,
-            at: m.date,
-          ),
-        );
-      }
-    } catch (_) {}
-    out.sort((a, b) {
-      final x = a.at, y = b.at;
-      if (x == null && y == null) return 0;
-      if (x == null) return -1;
-      if (y == null) return 1;
-      return x.compareTo(y);
-    });
-    return out;
+    lastSource = 'none';
+    throw Exception('تاریخچهٔ گفت‌وگو از سرور پیام‌رسان دریافت نشد.');
   }
 
   // ------------------------------------------------------------
@@ -245,15 +165,9 @@ class ChatRepository {
       });
       return;
     } catch (_) {}
-    // آخرین راه: ایمیل سازمانی
-    final accountId = await _accountId();
-    final target = (to ?? '').trim();
-    if (target.isEmpty) throw Exception('گیرندهٔ گفت‌وگو مشخص نیست.');
-    await _email.send(
-      emailAccountId: accountId,
-      to: target,
-      subject: text.length > 60 ? '${text.substring(0, 60)}…' : text,
-      body: text,
+    throw Exception(
+      'پیام ارسال نشد: مسیر API چت روی سرور پیدا نشد. در «تنظیمات اتصال» '
+      'مسیر را مشخص کنید.',
     );
   }
 
@@ -268,24 +182,10 @@ class ChatRepository {
       await _rest.sendVoice(base, threadId, file, durationSec: durationSec);
       return file.path;
     }
-    final accountId = await _accountId();
-    final target = (to ?? '').trim();
-    if (target.isEmpty) throw Exception('گیرندهٔ گفت‌وگو مشخص نیست.');
-    final bytes = await file.readAsBytes();
-    await _email.send(
-      emailAccountId: accountId,
-      to: target,
-      subject: 'پیام صوتی ${durationSec} ثانیه',
-      body: 'پیام صوتی — مدت ${durationSec} ثانیه',
-      attachments: [
-        (
-          name: file.uri.pathSegments.last,
-          bytes: bytes,
-          mimeType: 'audio/mp4',
-        ),
-      ],
+    throw Exception(
+      'ویس ارسال نشد: مسیر API چت روی سرور پیدا نشد. در «تنظیمات اتصال» '
+      'مسیر را مشخص کنید.',
     );
-    return file.path;
   }
 
   Future<List<ChatThread>> contacts() async {
@@ -294,25 +194,7 @@ class ChatRepository {
       final c = await _rest.contacts(base);
       if (c.isNotEmpty) return c;
     }
-    final names = <String>{};
-    try {
-      final inbox = await _email.inbox(pageSize: 100);
-      for (final m in inbox.items) {
-        final n = _peerName(m);
-        if (n.isNotEmpty) names.add(n);
-      }
-    } catch (_) {}
-    try {
-      final sent = await _email.sent(pageSize: 60);
-      for (final m in sent.items) {
-        if (m.fromOrTo.trim().isNotEmpty) names.add(m.fromOrTo.trim());
-      }
-    } catch (_) {}
-    final list = names
-        .map((n) => ChatThread(id: n.hashCode.abs() % 100000, title: n))
-        .toList()
-      ..sort((a, b) => a.title.compareTo(b.title));
-    return list;
+    return const <ChatThread>[];
   }
 
   Future<int> startThread(int userId) async {
@@ -324,26 +206,4 @@ class ChatRepository {
     return userId;
   }
 
-  Future<int> _accountId() async {
-    final accounts = await _email.accounts();
-    final active = accounts.where((a) => a.isActive).toList();
-    final list = active.isNotEmpty ? active : accounts;
-    if (list.isEmpty) {
-      throw Exception(
-        'هیچ حساب ایمیل سازمانی تنظیم نشده است. در ماژول ایمیل حساب را اضافه کنید.',
-      );
-    }
-    return list.first.id;
-  }
-
-  String _peerName(EmailMessage m) {
-    final from = m.fromOrTo.trim();
-    if (from.isEmpty) return '';
-    final angle = RegExp(r'^(.*)<(.+)>$').firstMatch(from);
-    if (angle != null) {
-      final name = angle.group(1)!.trim().replaceAll('"', '');
-      return name.isNotEmpty ? name : angle.group(2)!.trim();
-    }
-    return from;
-  }
 }

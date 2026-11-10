@@ -74,7 +74,11 @@ class ChatEndpoints {
       _storage.write(key: _kKind, value: value.trim());
 
   /// نتیجهٔ کشف: مسیری که واقعاً جواب داده + نمونهٔ پاسخ
+  /// گزارش آخرین تلاش‌ها (برای صفحهٔ تنظیمات)
+  final List<ProbeResult> probes = [];
+
   Future<Discovery?> discover({bool force = false}) async {
+    probes.clear();
     if (!force) {
       final base = await savedApiBase();
       if (base != null && base.isNotEmpty) {
@@ -96,6 +100,7 @@ class ChatEndpoints {
         final path = '$base$suffix';
         try {
           final r = await _api.get<dynamic>(path, query: {'take': 5});
+          probes.add(ProbeResult(path, status: r.statusCode));
           final d = r.data;
           final ok = d is List ||
               (d is Map &&
@@ -106,22 +111,28 @@ class ChatEndpoints {
                               d['conversations']) is
                           List));
           if (ok) {
+            probes.last = ProbeResult(path, status: r.statusCode, ok: true);
             await saveApiBase(base);
             await saveKind('rest');
             return Discovery(base: base, kind: 'rest', probePath: path);
           }
-        } catch (_) {
-          // این مسیر نیست؛ بعدی
+        } catch (e) {
+          final st = e is ApiException ? e.statusCode : null;
+          probes.add(ProbeResult(path, status: st, note: st == null ? 'شبکه' : null));
         }
       }
       // بعضی کنترلرها «GET /api/chatmessage/users/{id}» می‌خواهند
       for (final suffix in const ['/all', '/getall', '/my-chats', '/chats']) {
         try {
-          await _api.get<dynamic>('$base$suffix');
+          final r = await _api.get<dynamic>('$base$suffix');
+          probes.add(ProbeResult('$base$suffix', status: r.statusCode, ok: true));
           await saveApiBase(base);
           await saveKind('rest');
           return Discovery(base: base, kind: 'rest', probePath: '$base$suffix');
-        } catch (_) {}
+        } catch (e) {
+          final st = e is ApiException ? e.statusCode : null;
+          probes.add(ProbeResult('$base$suffix', status: st, note: st == null ? 'شبکه' : null));
+        }
       }
     }
     return null;
@@ -182,6 +193,18 @@ class ChatEndpoints {
     }
     return null;
   }
+}
+
+/// یک تلاش برای پیدا کردن مسیر — برای نمایش در «گزارش شناسایی»
+class ProbeResult {
+  ProbeResult(this.path, {this.status, this.ok = false, this.note});
+  final String path;
+  final int? status;
+  final bool ok;
+  final String? note;
+
+  String get label =>
+      '$path → ${ok ? "✅ ${status ?? 200}" : (status != null ? "❌ $status" : "❌ ${note ?? "بدون پاسخ"}")}';
 }
 
 class Discovery {

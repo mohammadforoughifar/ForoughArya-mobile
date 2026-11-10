@@ -25,6 +25,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
   bool _busy = false;
   String? _msg;
   bool _ok = false;
+  List<ProbeResult> _probes = const [];
 
   @override
   void initState() {
@@ -56,6 +57,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
       return;
     }
     await widget.repo.setChatBase(base);
+    await widget.repo.endpoints.discover(force: true);
     if (_hub.text.trim().isNotEmpty) {
       await widget.repo.endpoints.saveHubPath(
         ChatEndpoints.normalizeBase(_hub.text, ''),
@@ -70,6 +72,30 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
           ? 'اتصال برقرار شد ✅  درخواست به $base جواب داد.'
           : 'این مسیر جواب نداد. مسیر دیگری را امتحان کنید '
                 '(مثلاً /api/chat یا /api/messages).';
+    });
+  }
+
+  Future<void> _autoDetect() async {
+    setState(() {
+      _busy = true;
+      _msg = null;
+      _probes = const [];
+    });
+    final found = await widget.repo.endpoints.discover(force: true);
+    final probes = List<ProbeResult>.from(widget.repo.endpoints.probes);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _probes = probes;
+      _ok = found != null;
+      if (found != null) {
+        _ctrl.text = found.base;
+        _msg = 'مسیر پیدا شد: ${found.probePath ?? found.base}\n'
+            'از این به بعد پیام‌رسان از همین مسیر داده می‌خواند.';
+      } else {
+        _msg = 'هیچ مسیر چتی روی این سرور پیدا نشد. گزارش بالا را بفرستید '
+            'تا مسیر دقیق اضافه شود، یا مسیر را دستی وارد کنید.';
+      }
     });
   }
 
@@ -147,6 +173,66 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
                 ),
             ],
           ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _busy ? null : _autoDetect,
+              icon: const Icon(Icons.travel_explore_rounded, size: 18),
+              label: const Text('شناسایی خودکار مسیر چت'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: MessengerColors.brand,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                side: BorderSide(
+                  color: MessengerColors.brand.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+          ),
+          if (_probes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: MessengerColors.bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: MessengerColors.line),
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  const Text(
+                    'گزارش شناسایی (روی همین سرور):',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: MessengerColors.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  for (final p in _probes.take(30))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Text(
+                        p.label,
+                        textDirection: TextDirection.ltr,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: p.ok
+                              ? const Color(0xff15803d)
+                              : MessengerColors.inkFaint,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           if (_msg != null) ...[
             const SizedBox(height: 12),
             Container(

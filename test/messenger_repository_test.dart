@@ -149,44 +149,34 @@ class _Adapter implements HttpClientAdapter {
 void main() {
   ft.TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('هر فرستندهٔ ایمیل یک گفت‌وگو می‌شود و آخرین پیام انتخاب می‌شود', () async {
+  test('بدون مسیر چت، هیچ داده‌ای از ایمیل نمی‌آید و خطای شفاف می‌دهد', () async {
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = _Adapter();
     final repo = ChatRepository(api, storage: _FixedStorage());
 
-    final threads = await repo.threads();
-    expect(threads.length, 2);
-
-    final ali = threads.firstWhere((t) => t.title == 'علی رضایی');
-    expect(ali.lastMessage, 'پیام دوم');
-    expect(ali.unread, 2);
-
-    final maryam = threads.firstWhere((t) => t.title == 'مریم کاظمی');
-    expect(maryam.unread, 0);
-
-    // جدیدترین گفت‌وگو اول فهرست است
-    expect(threads.first.title, 'علی رضایی');
+    await expectLater(repo.threads(), throwsA(isA<Exception>()));
+    expect(repo.lastSource, 'none');
   });
 
-  test('پیام‌های یک گفت‌وگو فقط برای همان شخص فیلتر می‌شوند', () async {
+  test('تاریخچه هم فقط از چت می‌آید نه ایمیل', () async {
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = _Adapter();
     final repo = ChatRepository(api, storage: _FixedStorage());
-
-    final msgs = await repo.messages(11, peerName: 'علی رضایی');
-    expect(msgs.length, 2);
-    expect(msgs.every((m) => !m.mine), true);
-    expect(msgs.first.text, 'سلام، گزارش را فرستادم');
+    await expectLater(
+      repo.messages(11, peerName: 'علی رضایی'),
+      throwsA(isA<Exception>()),
+    );
   });
 
-  test('وقتی مسیر چت کشف نشود، fallback روی ایمیل سازمانی است', () async {
+  test('هیچ درخواستی به api/email زده نمی‌شود', () async {
     final adapters = _Adapter();
     final api = ApiClient(_Storage());
     api.dio.httpClientAdapter = adapters;
     final repo = ChatRepository(api, storage: _FixedStorage());
-    await repo.threads();
-    expect(repo.lastSource, 'email');
-    expect(adapters.paths.any((p) => p.contains('api/email/inbox')), true);
+    try {
+      await repo.threads();
+    } catch (_) {}
+    expect(adapters.paths.any((p) => p.contains('api/email')), false);
   });
 
   test('مسیر دستی چت اولویت دارد و آخرین منبع chat می‌شود', () async {
