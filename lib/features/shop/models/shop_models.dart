@@ -175,6 +175,272 @@ class PartyStatementSummary {
       );
 }
 
+/// یک ردیف از لیست‌های انتخاب (`LookupItem`) — انبار/کالا/… 
+class ShopLookup {
+  const ShopLookup({required this.id, required this.name, this.subtitle});
+  final int id;
+  final String name;
+  final String? subtitle;
+
+  factory ShopLookup.fromJson(Map<String, dynamic> j) => ShopLookup(
+    id: _int(j['id']),
+    name: (j['name'] ?? '').toString(),
+    subtitle: _str(j['subtitle'] ?? j['info']),
+  );
+}
+
+/// کالا / خدمت — آینهٔ DTO «Product» (CatalogDtos.cs)
+class Product {
+  Product({
+    this.id = 0,
+    this.code = '',
+    this.name = '',
+    this.unit = 'عدد',
+    this.category,
+    this.barcode,
+    this.taxCode,
+    this.salePrice = 0,
+    this.purchasePrice = 0,
+    this.reorderPoint = 0,
+    this.maxStock = 0,
+    this.description,
+    this.isActive = true,
+    this.isService = false,
+    this.warehouseId,
+    this.warehouseName,
+    this.createdAt,
+    this.totalStock = 0,
+    this.avgCost = 0,
+  });
+
+  final int id;
+  final String code;
+  final String name;
+  final String unit;
+  final String? category;
+  final String? barcode;
+  final String? taxCode;
+  final double salePrice;
+  final double purchasePrice;
+  final double reorderPoint;
+  final double maxStock;
+  final String? description;
+  final bool isActive;
+  final bool isService;
+  final int? warehouseId;
+  final String? warehouseName;
+  final DateTime? createdAt;
+  final double totalStock;
+  final double avgCost;
+
+  /// همان قاعدهٔ سرور: ReorderPoint > 0 && TotalStock <= ReorderPoint
+  bool get belowReorder => reorderPoint > 0 && totalStock <= reorderPoint;
+
+  factory Product.fromJson(Map<String, dynamic> j) => Product(
+    id: _int(j['id']),
+    code: (j['code'] ?? '').toString(),
+    name: (j['name'] ?? '').toString(),
+    unit: (j['unit'] ?? 'عدد').toString(),
+    category: _str(j['category']),
+    barcode: _str(j['barcode']),
+    taxCode: _str(j['taxCode']),
+    salePrice: _dbl(j['salePrice']),
+    purchasePrice: _dbl(j['purchasePrice']),
+    reorderPoint: _dbl(j['reorderPoint']),
+    maxStock: _dbl(j['maxStock']),
+    description: _str(j['description']),
+    isActive: j['isActive'] != false,
+    isService: j['isService'] == true,
+    warehouseId: _intOrNull(j['warehouseId']),
+    warehouseName: _str(j['warehouseName']),
+    createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+    totalStock: _dbl(j['totalStock']),
+    avgCost: _dbl(j['avgCost']),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'code': code.trim(),
+    'name': name.trim(),
+    'unit': unit.trim().isEmpty ? 'عدد' : unit.trim(),
+    'category': _nullIfEmpty(category),
+    'barcode': _nullIfEmpty(barcode),
+    'taxCode': _nullIfEmpty(taxCode),
+    'salePrice': salePrice,
+    'purchasePrice': purchasePrice,
+    'reorderPoint': reorderPoint,
+    'maxStock': maxStock,
+    'description': _nullIfEmpty(description),
+    'isActive': isActive,
+    'isService': isService,
+    'warehouseId': warehouseId,
+  };
+}
+
+/// گروه کالا — آینهٔ «ProductCategory»
+class ProductCategory {
+  ProductCategory({
+    this.id = 0,
+    this.name = '',
+    this.parentId,
+    this.description,
+    this.isActive = true,
+    this.createdAt,
+    this.productCount = 0,
+    this.depth = 0,
+  });
+
+  final int id;
+  final String name;
+  final int? parentId;
+  final String? description;
+  final bool isActive;
+  final DateTime? createdAt;
+  final int productCount;
+  final int depth;
+
+  factory ProductCategory.fromJson(Map<String, dynamic> j) => ProductCategory(
+    id: _int(j['id']),
+    name: (j['name'] ?? '').toString(),
+    parentId: _intOrNull(j['parentId']),
+    description: _str(j['description']),
+    isActive: j['isActive'] != false,
+    createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+    productCount: _int(j['productCount']),
+    depth: _int(j['depth']),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name.trim(),
+    'parentId': parentId,
+    'description': _nullIfEmpty(description),
+    'isActive': isActive,
+  };
+}
+
+/// واحد شمارش — آینهٔ «MeasureUnit»
+class MeasureUnit {
+  MeasureUnit({
+    this.id = 0,
+    this.name = '',
+    this.isActive = true,
+    this.createdAt,
+    this.productCount = 0,
+  });
+
+  final int id;
+  final String name;
+  final bool isActive;
+  final DateTime? createdAt;
+  final int productCount;
+
+  factory MeasureUnit.fromJson(Map<String, dynamic> j) => MeasureUnit(
+    id: _int(j['id']),
+    name: (j['name'] ?? '').toString(),
+    isActive: j['isActive'] != false,
+    createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+    productCount: _int(j['productCount']),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name.trim(),
+    'isActive': isActive,
+  };
+}
+
+/// انبار — آینهٔ «Warehouse»
+class Warehouse {
+  Warehouse({
+    this.id = 0,
+    this.name = '',
+    this.address,
+    this.phone,
+    this.note,
+    this.isActive = true,
+    this.itemCount = 0,
+  });
+
+  final int id;
+  final String name;
+  final String? address;
+  final String? phone;
+  final String? note;
+  final bool isActive;
+  final int itemCount;
+
+  factory Warehouse.fromJson(Map<String, dynamic> j) => Warehouse(
+    id: _int(j['id']),
+    name: (j['name'] ?? '').toString(),
+    address: _str(j['address']),
+    phone: _str(j['phone']),
+    note: _str(j['note']),
+    isActive: j['isActive'] != false,
+    itemCount: _int(j['itemCount']),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name.trim(),
+    'address': _nullIfEmpty(address),
+    'phone': _nullIfEmpty(phone),
+    'note': _nullIfEmpty(note),
+    'isActive': isActive,
+  };
+}
+
+/// یک ردیف موجودی انبار — آینهٔ «StockItem»
+class StockItem {
+  const StockItem({
+    required this.warehouseId,
+    required this.productId,
+    required this.productName,
+    required this.productCode,
+    required this.unit,
+    required this.quantity,
+    required this.avgCost,
+    required this.lastSalePrice,
+    required this.reorderPoint,
+    required this.maxStock,
+    this.warehouseName,
+    this.category,
+  });
+
+  final int warehouseId;
+  final String? warehouseName;
+  final int productId;
+  final String productName;
+  final String productCode;
+  final String unit;
+  final double quantity;
+  final double avgCost;
+  final double lastSalePrice;
+  final double reorderPoint;
+  final double maxStock;
+  final String? category;
+
+  bool get belowReorder => reorderPoint > 0 && quantity <= reorderPoint;
+
+  /// همان محاسبهٔ ستون «ارزش کل موجودی» در وب: تعداد × میانگین خرید
+  double get totalValue => quantity * avgCost;
+
+  factory StockItem.fromJson(Map<String, dynamic> j) => StockItem(
+    warehouseId: _int(j['warehouseId']),
+    warehouseName: _str(j['warehouseName']),
+    productId: _int(j['productId']),
+    productName: (j['productName'] ?? '').toString(),
+    productCode: (j['productCode'] ?? '').toString(),
+    unit: (j['unit'] ?? '').toString(),
+    quantity: _dbl(j['quantity']),
+    avgCost: _dbl(j['avgCost']),
+    lastSalePrice: _dbl(j['lastSalePrice']),
+    reorderPoint: _dbl(j['reorderPoint']),
+    maxStock: _dbl(j['maxStock']),
+    category: _str(j['category']),
+  );
+}
+
 // ---------------- کمکی ----------------
 
 int _int(dynamic v) => (v as num?)?.toInt() ?? 0;

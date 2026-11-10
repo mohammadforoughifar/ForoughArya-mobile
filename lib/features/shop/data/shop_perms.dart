@@ -23,6 +23,16 @@ class ShopPerms {
     return s.permissions.any((p) => p.toLowerCase().startsWith(prefix));
   }
 
+  /// `CanSee("Module")` وب: هر مجوزی از آن ماژول کافی است
+  /// (در وب `ModuleAccess.CanSee` همین معنا را دارد)
+  bool canSeeModule(String module) =>
+      hasModule(module) || has('$module.Read');
+
+  // ---------------- اطلاعات پایه (فاز ۲) ----------------
+  bool get canSeeProducts => canSeeModule('Products');
+  bool get canSeeWarehouses => canSeeModule('Warehouses');
+  bool get canSeeStock => canSeeModule('Stock');
+
   // ---------------- طرف حساب‌ها ----------------
   bool get canSeeCustomers => has('Parties.Read') || hasModule('Customers');
   bool get canSeeSuppliers => has('Parties.Read') || hasModule('Suppliers');

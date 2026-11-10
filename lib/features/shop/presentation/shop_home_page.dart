@@ -13,9 +13,14 @@ import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../data/shop_perms.dart';
+import 'categories_page.dart';
 import 'parties_page.dart';
 import 'party_statements_page.dart';
+import 'products_page.dart';
 import 'shop_style.dart';
+import 'stock_page.dart';
+import 'units_page.dart';
+import 'warehouses_page.dart';
 
 class ShopHomePage extends StatelessWidget {
   const ShopHomePage({super.key});
@@ -80,30 +85,43 @@ class ShopHomePage extends StatelessWidget {
                         enabled: true,
                         onTap: () => _push(context, const PartiesPage()),
                       ),
-                    const _Item(
+                    _Item(
                       'کالاها',
-                      'کالا، گروه، واحد و بارکد',
+                      'تعریف کالا، قیمت و نقطه سفارش',
                       Icons.inventory_2_rounded,
-                      phase: 2,
+                      enabled: true,
+                      onTap: () => _push(context, const ProductsPage()),
                     ),
-                    const _Item(
+                    _Item(
                       'گروه‌های کالا',
-                      'دسته‌بندی کالاها',
+                      'تعریف و مدیریت دسته‌بندی کالاها',
                       Icons.sell_rounded,
-                      phase: 2,
+                      enabled: true,
+                      onTap: () => _push(context, const ProductCategoriesPage()),
                     ),
-                    const _Item(
+                    _Item(
                       'واحدهای شمارش',
-                      'عدد، کیلوگرم، متر و…',
+                      'تعریف واحدهای اندازه‌گیری کالا',
                       Icons.straighten_rounded,
-                      phase: 2,
+                      enabled: true,
+                      onTap: () => _push(context, const UnitsPage()),
                     ),
-                    const _Item(
+                    _Item(
                       'انبارها',
-                      'انبارها و موجودی',
+                      'تعریف انبارها و مراکز نگهداری کالا',
                       Icons.warehouse_rounded,
-                      phase: 2,
+                      enabled: true,
+                      onTap: () => _push(context, const WarehousesPage()),
                     ),
+                    // مثل وب: «موجودی انبار» زیرمجموعهٔ اطلاعات پایه است
+                    if (perms.canSeeModule('Stock'))
+                      _Item(
+                        'موجودی انبار',
+                        'موجودی لحظه‌ای و تعدیل انبارگردانی',
+                        Icons.inventory_rounded,
+                        enabled: true,
+                        onTap: () => _push(context, const StockPage()),
+                      ),
                     const _Item(
                       'معرف‌ها',
                       'بازاریابان و پروندهٔ فروش',

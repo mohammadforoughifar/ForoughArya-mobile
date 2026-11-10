@@ -13,6 +13,10 @@
 //  هیچ دور زدنی ندارد و فقط خطای ۴۰۳ سرور را فارسی نشان می‌دهد.
 // ============================================================
 
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 import '../models/shop_models.dart';
 
@@ -164,4 +168,167 @@ class ShopRepository {
       return const [];
     }
   }
+
+  // ------------------------------------------------------------
+  //  فاز ۲ — اطلاعات پایه: کالا، گروه، واحد، انبار + موجودی
+  // ------------------------------------------------------------
+
+  /// `GET /api/products?search&below&page&pageSize`
+  Future<ShopPage<Product>> products({
+    String? search,
+    bool below = false,
+    int page = 1,
+    int pageSize = 12,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/products',
+      query: {
+        'search': (search ?? '').trim(),
+        'below': below,
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, Product.fromJson);
+  }
+
+  /// `GET /api/products/lookups` — فقط کد و نام، برای انتخابگرها
+  Future<List<ShopLookup>> productLookups() async {
+    final r = await _api.get<dynamic>('/api/products/lookups');
+    return ShopPage.parse(r.data, ShopLookup.fromJson).items;
+  }
+
+  Future<Product> saveProduct(Product p) async {
+    final r = await _api.post<dynamic>('/api/products', p.toJson());
+    final d = r.data;
+    return d is Map ? Product.fromJson(Map<String, dynamic>.from(d)) : p;
+  }
+
+  Future<void> deleteProduct(int id) => _api.delete<dynamic>('/api/products/$id');
+
+  /// `GET /api/products/import/template` — فایل اکسل نمونه
+  Future<Uint8List> productTemplate() =>
+      _api.getBytes('/api/products/import/template');
+
+  /// `POST /api/products/import?warehouseId=…` با فایل xlsx
+  Future<Map<String, dynamic>> importProducts(
+    Uint8List bytes,
+    String fileName, {
+    required int warehouseId,
+  }) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    final r = await _api.postForm<dynamic>(
+      '/api/products/import?warehouseId=$warehouseId',
+      form,
+    );
+    final d = r.data;
+    return d is Map ? Map<String, dynamic>.from(d) : const {};
+  }
+
+  /// `GET /api/categories?activeOnly`
+  Future<List<ProductCategory>> categories({bool activeOnly = false}) async {
+    final r = await _api.get<dynamic>(
+      '/api/categories',
+      query: {'activeOnly': activeOnly},
+    );
+    return ShopPage.parse(r.data, ProductCategory.fromJson).items;
+  }
+
+  Future<ProductCategory> saveCategory(ProductCategory c) async {
+    final r = await _api.post<dynamic>('/api/categories', c.toJson());
+    final d = r.data;
+    return d is Map ? ProductCategory.fromJson(Map<String, dynamic>.from(d)) : c;
+  }
+
+  Future<void> deleteCategory(int id) =>
+      _api.delete<dynamic>('/api/categories/$id');
+
+  /// `GET /api/units?activeOnly&search`
+  Future<ShopPage<MeasureUnit>> units({
+    bool activeOnly = false,
+    String? search,
+    int skip = 0,
+    int take = 200,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/units',
+      query: {
+        'activeOnly': activeOnly,
+        'skip': skip,
+        'take': take,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return ShopPage.parse(r.data, MeasureUnit.fromJson);
+  }
+
+  Future<MeasureUnit> saveUnit(MeasureUnit u) async {
+    final r = await _api.post<dynamic>('/api/units', u.toJson());
+    final d = r.data;
+    return d is Map ? MeasureUnit.fromJson(Map<String, dynamic>.from(d)) : u;
+  }
+
+  Future<void> deleteUnit(int id) => _api.delete<dynamic>('/api/units/$id');
+
+  /// `GET /api/warehouses?skip&take`
+  Future<ShopPage<Warehouse>> warehouses({
+    int skip = 0,
+    int take = 200,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/warehouses',
+      query: {'skip': skip, 'take': take},
+    );
+    return ShopPage.parse(r.data, Warehouse.fromJson);
+  }
+
+  Future<Warehouse> saveWarehouse(Warehouse w) async {
+    final r = await _api.post<dynamic>('/api/warehouses', w.toJson());
+    final d = r.data;
+    return d is Map ? Warehouse.fromJson(Map<String, dynamic>.from(d)) : w;
+  }
+
+  Future<void> deleteWarehouse(int id) =>
+      _api.delete<dynamic>('/api/warehouses/$id');
+
+  /// `GET /api/stock?warehouseId&search&below&page&pageSize`
+  Future<ShopPage<StockItem>> stock({
+    int? warehouseId,
+    String? search,
+    bool below = false,
+    int page = 1,
+    int pageSize = 15,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/stock',
+      query: {
+        if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+        'search': (search ?? '').trim(),
+        'below': below,
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+    return ShopPage.parse(r.data, StockItem.fromJson);
+  }
+
+  /// `POST /api/stock/adjust` — تعدیل انبارگردانی
+  Future<void> adjustStock({
+    required int warehouseId,
+    required int productId,
+    required double quantity,
+    DateTime? date,
+    String? description,
+  }) => _api.post<dynamic>('/api/stock/adjust', {
+    'warehouseId': warehouseId,
+    'productId': productId,
+    'quantity': quantity,
+    'date': (date ?? DateTime.now()).toIso8601String(),
+    'description': _nullIfEmptyStr(description),
+  });
+
+  static String? _nullIfEmptyStr(String? v) =>
+      (v == null || v.trim().isEmpty) ? null : v.trim();
 }
