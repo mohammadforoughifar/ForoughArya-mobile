@@ -117,6 +117,21 @@ class ApiClient {
     await restoreCompanyId();
   }
 
+  /// مسیر نسبی را با دامنهٔ baseUrl ترکیب می‌کند.
+  ///
+  /// چرا لازم است: اگر baseUrl اسکیم «https» داشته باشد و مسیر با «/»
+  /// شروع شود، استاندارد URI آن را مسیر-مطلق می‌فهمد و دامنه دور زده
+  /// می‌شود («https://office.ir» + «/api/x» → «https://office.irapi/x»).
+  /// همین باگ باعث می‌شد پیام‌رسان به «ارتباط با سرور برقرار نشد» بخورد.
+  String resolveUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    final base = dio.options.baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final rel = path.replaceAll(RegExp(r'^/+'), '');
+    return '$base/$rel';
+  }
+
+  static String normalizePath(String path) => path;
+
   Future<Response<T>> request<T>(
     String method,
     String path, {
@@ -126,7 +141,7 @@ class ApiClient {
   }) async {
     try {
       return await dio.request<T>(
-        path,
+        resolveUrl(path),
         data: data,
         queryParameters: query,
         options: (options ?? Options()).copyWith(method: method),

@@ -23,15 +23,19 @@ class ChatEndpoints {
 
   /// نام‌های رایجِ کنترلر چت در بک‌اندهای .NET
   static const apiCandidates = <String>[
+    // نام‌های رایج کنترلر چت در همین بک‌اند (کنار letters/email/workorders)
     '/api/chatmessage',
     '/api/chatmessages',
+    '/api/chatmessagescontroller',
     '/api/chat',
+    '/api/internalchat',
+    '/api/instantmessage',
+    '/api/message',
     '/api/messages',
     '/api/messenger',
-    '/api/chat/messages',
-    '/api/internalchat',
-    '/api/im',
     '/api/conversations',
+    '/api/chat/messages',
+    '/api/im',
   ];
 
   /// مسیرهای رایج Hub
@@ -48,9 +52,13 @@ class ChatEndpoints {
   static const listSuffixes = <String>[
     '/threads',
     '/conversations',
+    '/chatlist',
+    '/my',
     '/list',
     '/chats',
     '/inbox',
+    '/users',
+    '/contacts',
     '',
   ];
 
@@ -82,14 +90,21 @@ class ChatEndpoints {
       return Discovery(base: fromSwagger, kind: 'rest');
     }
 
-    // ۲) حدس‌های رایج
+    // ۲) حدس‌های رایج روی همان Base URL زندهٔ اپ
     for (final base in apiCandidates) {
       for (final suffix in listSuffixes) {
         final path = '$base$suffix';
         try {
           final r = await _api.get<dynamic>(path, query: {'take': 5});
           final d = r.data;
-          final ok = d is List || (d is Map && (d['items'] ?? d['Items']) is List);
+          final ok = d is List ||
+              (d is Map &&
+                  ((d['items'] ??
+                              d['Items'] ??
+                              d['data'] ??
+                              d['threads'] ??
+                              d['conversations']) is
+                          List));
           if (ok) {
             await saveApiBase(base);
             await saveKind('rest');
@@ -98,6 +113,15 @@ class ChatEndpoints {
         } catch (_) {
           // این مسیر نیست؛ بعدی
         }
+      }
+      // بعضی کنترلرها «GET /api/chatmessage/users/{id}» می‌خواهند
+      for (final suffix in const ['/all', '/getall', '/my-chats', '/chats']) {
+        try {
+          await _api.get<dynamic>('$base$suffix');
+          await saveApiBase(base);
+          await saveKind('rest');
+          return Discovery(base: base, kind: 'rest', probePath: '$base$suffix');
+        } catch (_) {}
       }
     }
     return null;
@@ -110,15 +134,27 @@ class ChatEndpoints {
         final r = await _api.get<dynamic>(doc);
         final paths = (r.data is Map) ? (r.data['paths'] as Map?) : null;
         if (paths == null) continue;
-        for (final key in paths.keys) {
-          final p = key.toString().toLowerCase();
-          if (p.contains('chat') || p.contains('message') || p.contains('conversation')) {
-            // /api/chatmessage/{id} → /api/chatmessage
-            final segs = key.toString().split('/');
-            final base = segs.takeWhile((s) => !s.contains('{')).join('/');
-            if (base.isNotEmpty && base.split('/').length >= 2) return base;
+        // اولویت: مسیری که خودش «فهرست گفت‌وگو» است
+        final keys = paths.keys.map((k) => k.toString()).toList();
+        String? fallback;
+        for (final key in keys) {
+          final low = key.toLowerCase();
+          final related = low.contains('chat') ||
+              low.contains('message') ||
+              low.contains('conversation') ||
+              low.contains('talk');
+          if (!related) continue;
+          final base = key.split('{').first;
+          final trimmed = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+          if (trimmed.split('/').length < 2) continue;
+          if (low.contains('thread') ||
+              low.contains('conversation') ||
+              low.contains('chatlist')) {
+            return trimmed;
           }
+          fallback ??= trimmed;
         }
+        if (fallback != null) return fallback;
       } catch (_) {}
     }
     return null;
@@ -142,7 +178,7 @@ class ChatEndpoints {
   Future<String?> hubUrl() async {
     final p = await savedHubPath();
     if (p != null && p.isNotEmpty) {
-      return '${_api.baseUrl.replaceAll(RegExp(r"https?://"), "wss://")}$p';
+      return _api.resolveUrl(p).replaceFirst(RegExp(r'^http'), 'ws');
     }
     return null;
   }

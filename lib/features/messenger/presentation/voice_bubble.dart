@@ -55,7 +55,7 @@ class _VoiceBubbleState extends State<VoiceBubble> {
     final target = File('${dir.path}/$name');
     if (await target.exists()) return _file = target;
     final api = context.read<ApiClient>();
-    final full = url.startsWith('http') ? url : '${api.baseUrl}/$url';
+    final full = api.resolveUrl(url);
     await api.dio.download(full, target.path);
     return _file = target;
   }

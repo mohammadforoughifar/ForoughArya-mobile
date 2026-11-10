@@ -58,10 +58,9 @@ class ChatHub {
   /// تلاش برای اتصال به hub؛ اگر آدرس کار نکند null برمی‌گردد.
   Future<bool> connect(String hubPath, {String? token}) async {
     await disconnect();
-    final httpBase = _baseUrl.endsWith('/')
-        ? _baseUrl.substring(0, _baseUrl.length - 1)
-        : _baseUrl;
-    final hubHttp = '$httpBase$hubPath';
+    final httpBase = _baseUrl.replaceAll(RegExp(r'/+$'), '');
+    final rel = hubPath.replaceAll(RegExp(r'^/+'), '');
+    final hubHttp = '$httpBase/$rel';
 
     Uri? wsUri;
     try {
