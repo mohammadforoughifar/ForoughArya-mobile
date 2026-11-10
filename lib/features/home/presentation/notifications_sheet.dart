@@ -12,9 +12,16 @@ import '../models/home_models.dart';
 import 'home_style.dart';
 
 class NotificationsSheet extends StatefulWidget {
-  const NotificationsSheet({super.key, required this.repository});
+  const NotificationsSheet({
+    super.key,
+    required this.repository,
+    this.onOpen,
+  });
 
   final HomeRepository repository;
+
+  /// با زدن روی اعلان، همان ماژول/صفحهٔ مربوطه باز می‌شود.
+  final void Function(NotificationItem item)? onOpen;
 
   @override
   State<NotificationsSheet> createState() => _NotificationsSheetState();
@@ -175,7 +182,13 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
                         offsetY: 14,
                         child: _NotificationCard(
                           item: items[i],
-                          onTap: () => _markRead(items[i]),
+                          onTap: () async {
+                            await _markRead(items[i]);
+                            if (!context.mounted) return;
+                            // بستن شیت، سپس رفتن به صفحهٔ مربوطه
+                            Navigator.of(context).pop();
+                            widget.onOpen?.call(items[i]);
+                          },
                         ),
                       ),
                     ),

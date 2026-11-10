@@ -297,17 +297,224 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// نگاشت اعلان به ماژول/صفحهٔ مقصد — با کلیک، همان بخش باز می‌شود.
+  void _openFromNotification(NotificationItem n) {
+    final hay = [
+      n.title,
+      n.body ?? '',
+      n.formName ?? '',
+      n.link ?? '',
+    ].join(' ').toLowerCase();
+
+    bool has(List<String> words) => words.any(hay.contains);
+
+    // ۱) صورتجلسه
+    if (has(['صورت‌جلسه', 'صورتجلسه', 'minute'])) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const MinutesListPage()),
+      );
+      return;
+    }
+    // ۲) دستور کار
+    if (has(['دستور کار', 'دستورکار', 'workorder', 'work-order'])) {
+      widget.onOpenTab(1);
+      return;
+    }
+    // ۳) ایمیل
+    if (has(['ایمیل', 'پست الکترون', 'email', 'mail'])) {
+      widget.onOpenTab(3);
+      return;
+    }
+    // ۴) فرم‌های متفرقه
+    if (has(['فرم', 'متفرقه', 'misc'])) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const MiscFormsPage()),
+      );
+      return;
+    }
+    // ۵) پیش‌فرض: اتوماسیون اداری (نامه/ارجاع/کارتابل)
+    widget.onOpenTab(2);
+  }
+
   Future<void> _openNotifications() async {
     HapticFeedback.lightImpact();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => NotificationsSheet(repository: _repo),
+      builder: (_) => NotificationsSheet(
+        repository: _repo,
+        onOpen: _openFromNotification,
+      ),
     );
     // شمارندهٔ زنگوله بعد از بستن شیت به‌روز شود.
     final n = await _repo.fetchUnreadCount();
     if (mounted) setState(() => _unread = n);
+  }
+
+  /// چرخ‌دندهٔ هدر — منوی کوتاه خروج و تغییر رمز عبور.
+  Future<void> _openSettings() async {
+    HapticFeedback.lightImpact();
+    final auth = context.read<AuthController>();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (c) => SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: HomeColors.surface,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: const Icon(
+                  Icons.password_rounded,
+                  color: HomeColors.seed,
+                ),
+                title: const Text(
+                  'تغییر رمز عبور',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                onTap: () => Navigator.pop(c, 'password'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: HomeColors.danger,
+                ),
+                title: const Text(
+                  'خروج از حساب',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                onTap: () => Navigator.pop(c, 'logout'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'logout') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('خروج از حساب'),
+          content: const Text('از حساب کاربری خارج می‌شوید؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('انصراف'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('خروج'),
+            ),
+          ],
+        ),
+      );
+      if (ok == true) await auth.logout();
+      return;
+    }
+    if (action == 'password') await _changePassword();
+  }
+
+  Future<void> _changePassword() async {
+    final current = TextEditingController();
+    final replacement = TextEditingController();
+    final again = TextEditingController();
+    final form = GlobalKey<FormState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('تغییر رمز عبور'),
+        content: Form(
+          key: form,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: current,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'رمز فعلی'),
+                validator: (v) =>
+                    (v ?? '').isEmpty ? 'رمز فعلی را وارد کنید.' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: replacement,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'رمز جدید'),
+                validator: (v) => (v ?? '').length < 6
+                    ? 'رمز جدید حداقل ۶ کاراکتر باشد.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: again,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'تکرار رمز جدید',
+                ),
+                validator: (v) =>
+                    v != replacement.text ? 'تکرار رمز یکسان نیست.' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('انصراف'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) Navigator.pop(c, true);
+            },
+            child: const Text('ذخیره'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      try {
+        await context.read<AuthController>().changePassword(
+          current.text,
+          replacement.text,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('رمز عبور تغییر کرد.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('تغییر رمز انجام نشد: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+    current.dispose();
+    replacement.dispose();
+    again.dispose();
   }
 
   void _openModule(ModuleTile m) {
@@ -339,10 +546,96 @@ class _HomePageState extends State<HomePage> {
       ).push(MaterialPageRoute<void>(builder: (_) => const MiscFormsPage()));
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('ماژول «${m.name}» به‌زودی به نسخهٔ موبایل اضافه می‌شود.'),
-        behavior: SnackBarBehavior.floating,
+    // تا وقتی صفحهٔ اختصاصی این ماژول در موبایل نیست، «برگهٔ ماژول»
+    // باز می‌شود تا کلیک بی‌اثر نماند.
+    HapticFeedback.selectionClick();
+    _openModuleSheet(m);
+  }
+
+  Future<void> _openModuleSheet(ModuleTile m) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (c) => SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          decoration: BoxDecoration(
+            color: HomeColors.surface,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: m.color.withValues(alpha: 0.13),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(m.icon, color: m.color, size: 21),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.name,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: HomeColors.ink,
+                          ),
+                        ),
+                        Text(
+                          m.subtitle,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: HomeColors.inkSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'نسخهٔ وب این ماژول در دسترس است؛ نسخهٔ موبایل آن به‌زودی '
+                'تکمیل می‌شود. تا آن زمان از داشبورد و ماژول‌های فعال '
+                '(اتوماسیون، دستور کار، صورتجلسه، ایمیل) استفاده کنید.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.9,
+                  color: HomeColors.inkSoft,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(c),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: m.color,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('بستن'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -366,6 +659,7 @@ class _HomePageState extends State<HomePage> {
               name: name,
               unread: _unread,
               onBell: _openNotifications,
+              onSettings: _openSettings,
             ),
             SliverToBoxAdapter(
               child: HFadeSlideIn(
@@ -580,11 +874,15 @@ class _Header extends StatelessWidget {
     required this.name,
     required this.unread,
     required this.onBell,
+    required this.onSettings,
   });
 
   final String name;
   final int unread;
   final VoidCallback onBell;
+
+  /// چرخ‌دندهٔ تنظیمات — خروج و تغییر رمز عبور
+  final VoidCallback onSettings;
 
   String get _todayFa {
     final j = Jalali.now();
@@ -652,10 +950,20 @@ class _Header extends StatelessWidget {
                       ),
                     ),
                   ),
-                  HFadeSlideIn(
-                    index: 1,
-                    offsetY: 14,
-                    child: _BellButton(unread: unread, onTap: onBell),
+                  Column(
+                    children: [
+                      HFadeSlideIn(
+                        index: 1,
+                        offsetY: 14,
+                        child: _BellButton(unread: unread, onTap: onBell),
+                      ),
+                      const SizedBox(height: 8),
+                      HFadeSlideIn(
+                        index: 2,
+                        offsetY: 14,
+                        child: _SettingsButton(onTap: onSettings),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -672,6 +980,34 @@ class _Header extends StatelessWidget {
     decoration: BoxDecoration(
       shape: BoxShape.circle,
       color: Colors.white.withValues(alpha: alpha),
+    ),
+  );
+}
+
+/// چرخ‌دندهٔ تنظیمات هدر — خروج و تغییر رمز عبور
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => HPressable(
+    onTap: onTap,
+    scale: 0.9,
+    child: Container(
+      width: 38,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: const Icon(
+        Icons.settings_rounded,
+        size: 19,
+        color: Colors.white,
+      ),
     ),
   );
 }

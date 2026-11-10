@@ -326,8 +326,8 @@ void main() {
 
       // ماژول‌های قابل دسترس در تب
       expect(find.text('دستور کار'), findsWidgets);
-      expect(find.text('اتوماسیون اداری'), findsWidgets);
-      expect(find.text('پست الکترونیک'), findsWidgets);
+      expect(find.text('اتوماسیون'), findsWidgets);
+      expect(find.text('پست الکترونیکی'), findsWidgets);
 
       // endpoint‌های واقعی صدا زده شدند
       expect(r.adapter.companyCalls, 1);
@@ -419,7 +419,7 @@ void main() {
       );
       await _settle(tester);
 
-      await tester.tap(find.text('اتوماسیون اداری').last);
+      await tester.tap(find.text('اتوماسیون').last);
       await _settle(tester);
       expect(opened, 2);
     });
@@ -489,8 +489,8 @@ void main() {
       // چهار تب با «خانه» در ابتدا
       expect(find.text('خانه'), findsOneWidget);
       expect(find.text('دستور کار'), findsWidgets);
-      expect(find.text('اتوماسیون اداری'), findsWidgets);
-      expect(find.text('پست الکترونیک'), findsWidgets);
+      expect(find.text('اتوماسیون'), findsWidgets);
+      expect(find.text('صورتجلسه'), findsWidgets);
 
       // صفحهٔ اصلی بالا آمده است
       expect(find.text('گزارش روزانه'), findsOneWidget);
