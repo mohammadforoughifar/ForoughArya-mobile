@@ -337,6 +337,16 @@ class ArchiveNode {
   final String title;
   final int parentId;
   final bool isFolder;
+
+  /// تعداد نامه‌های داخل پوشه (اگر سرور بدهد)
+  int get letterCount => _letterCount;
+  int get _letterCount {
+    var n = children.where((c) => !c.isFolder).length;
+    for (final c in children.where((c) => c.isFolder)) {
+      n += c.letterCount;
+    }
+    return n;
+  }
   final int? erjaId;
   final int? letterId;
   final String? letterNumber;

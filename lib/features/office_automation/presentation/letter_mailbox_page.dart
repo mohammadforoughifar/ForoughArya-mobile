@@ -18,6 +18,7 @@ import '../../../core/widgets/common.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
 import '../models/office_common.dart';
+
 import 'letter_detail_page.dart';
 import 'letter_editor_page.dart';
 import 'office_style.dart';
@@ -87,6 +88,17 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
   bool _hasMore = false;
   bool _unreadOnly = false;
 
+  // --- انتخاب چندگانه (برای بایگانی گروهی) ---
+  bool _selectionMode = false;
+  final Set<int> _selectedErja = <int>{};   // نامه‌های کارتابلی (با erjaId)
+  final Set<int> _selectedLetter = <int>{};  // نامه‌های ارسالی/بایگانی (letterId)
+
+  // --- درخت پوشه‌های بایگانی ---
+  List<ArchiveNode> _folders = const [];
+  bool _foldersOpen = false;
+
+  bool get _canSelect => _box != LetterBox.drafts && _items.isNotEmpty;
+
   static List<LetterBox> _boxesFor(LetterKind kind) => switch (kind) {
     LetterKind.inner => const [
       LetterBox.inbox,
@@ -119,6 +131,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _reload();
       _loadCounts();
+      if (widget.initialBox == LetterBox.archive) _loadFolders();
     });
   }
 
@@ -220,6 +233,186 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
     }
   }
 
+  /// درخت پوشه‌های بایگانی همین ماژول
+  Future<void> _loadFolders() async {
+    try {
+      final r = await context.read<OfficeAutomationRepository>().archiveTree(
+        widget.kind,
+      );
+      final data = r.data;
+      final raw = data is List
+          ? data
+          : (asMap(data)['items'] ?? asMap(data)['tree']);
+      final list = raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => ArchiveNode.fromJson(asMap(e)))
+              .toList()
+          : <ArchiveNode>[];
+      if (mounted) setState(() => _folders = list);
+    } catch (_) {
+      if (mounted) setState(() => _folders = const []);
+    }
+  }
+
+  void _toggleSelect(LetterListItem it) {
+    setState(() {
+      final erja = it.erjaId;
+      if (erja != null && erja > 0) {
+        if (!_selectedErja.remove(erja)) _selectedErja.add(erja);
+      } else {
+        if (!_selectedLetter.remove(it.letterId)) {
+          _selectedLetter.add(it.letterId);
+        }
+      }
+      if (_selectedErja.isEmpty && _selectedLetter.isEmpty) {
+        _selectionMode = false;
+      }
+    });
+  }
+
+  bool _isSelected(LetterListItem it) {
+    final erja = it.erjaId;
+    if (erja != null && erja > 0) return _selectedErja.contains(erja);
+    return _selectedLetter.contains(it.letterId);
+  }
+
+  void _startSelection() => setState(() => _selectionMode = true);
+
+  void _clearSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedErja.clear();
+      _selectedLetter.clear();
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      for (final it in _items) {
+        final erja = it.erjaId;
+        if (erja != null && erja > 0) {
+          _selectedErja.add(erja);
+        } else {
+          _selectedLetter.add(it.letterId);
+        }
+      }
+    });
+  }
+
+  /// بایگانی گروهی: انتخاب پوشه → ارسال همهٔ موارد انتخاب‌شده
+  Future<void> _archiveSelected() async {
+    if (_selectedErja.isEmpty && _selectedLetter.isEmpty) return;
+    if (_folders.isEmpty) await _loadFolders();
+    if (!mounted) return;
+    final folder = await _pickFolder();
+    if (folder == null || !mounted) return;
+    try {
+      await context.read<OfficeAutomationRepository>().archiveLetters(
+        widget.kind,
+        folderId: folder.id,
+        erjaIds: _selectedErja.toList(),
+        letterIds: _selectedLetter.toList(),
+      );
+      if (!mounted) return;
+      final count = _selectedErja.length + _selectedLetter.length;
+      showMessage(
+        context,
+        '${Fa.digits(count)} نامه در پوشهٔ «${folder.title}» بایگانی شد.',
+      );
+      _clearSelection();
+      await _reload();
+      await _loadFolders();
+      await _loadCounts();
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+    }
+  }
+
+  Future<ArchiveNode?> _pickFolder() {
+    final flat = <({ArchiveNode node, int depth})>[];
+    void walk(List<ArchiveNode> nodes, int depth) {
+      for (final n in nodes) {
+        flat.add((node: n, depth: depth));
+        if (n.children.isNotEmpty) walk(n.children, depth + 1);
+      }
+    }
+
+    walk(_folders, 0);
+
+    return showModalBottomSheet<ArchiveNode>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'انتخاب پوشهٔ بایگانی',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                if (flat.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 18),
+                    child: Text(
+                      'پوشه‌ای وجود ندارد. ابتدا در «بایگانی» یک پوشه بسازید.',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final f in flat)
+                          ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.only(
+                              right: 8.0 + f.depth * 16,
+                              left: 8,
+                            ),
+                            leading: Icon(
+                              f.depth == 0
+                                  ? Icons.folder_rounded
+                                  : Icons.subdirectory_arrow_left_rounded,
+                              size: 19,
+                              color: _accent,
+                            ),
+                            title: Text(
+                              f.node.title,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            onTap: () => Navigator.pop(ctx, f.node),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// شمارندهٔ کارتابل‌ها — مشابه وب
   Future<void> _loadCounts() async {
     final result = <LetterBox, int?>{};
@@ -249,6 +442,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
       _total = 0;
     });
     _tabs?.animateTo(_boxes.indexOf(b));
+    if (b == LetterBox.archive) _loadFolders();
     _reload();
   }
 
@@ -329,6 +523,8 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
           if (widget.embedded) const SizedBox(height: 8),
           _buildTabs(),
           _buildSearchRow(),
+          if (_box == LetterBox.archive) _buildFolderPanel(),
+          if (_selectionMode) _buildSelectionBar(),
           Expanded(child: _buildBody()),
         ],
       ),
@@ -441,6 +637,37 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
             ),
           ),
           const SizedBox(width: 8),
+          if (_canSelect && !_selectionMode)
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _startSelection,
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: OfficeColors.line),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.checklist_rounded, size: 17),
+                      SizedBox(width: 5),
+                      Text(
+                        'انتخاب',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(width: 6),
           if (_box != LetterBox.drafts && _box != LetterBox.sent)
             Material(
               color: _unreadOnly
@@ -486,6 +713,189 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
         ],
       ),
     );
+  }
+
+  /// نوار عملیات انتخاب چندگانه
+  Widget _buildSelectionBar() {
+    final count = _selectedErja.length + _selectedLetter.length;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle_rounded, size: 17, color: _accent),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '${Fa.digits(count)} نامه انتخاب شده',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: _accent,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _selectAll,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: const Text('همه', style: TextStyle(fontSize: 11.5)),
+          ),
+          FilledButton.icon(
+            onPressed: count == 0 ? null : _archiveSelected,
+            style: FilledButton.styleFrom(
+              backgroundColor: _accent,
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            icon: const Icon(Icons.inventory_2_outlined, size: 15),
+            label: const Text(
+              'بایگانی',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+            ),
+          ),
+          IconButton(
+            onPressed: _clearSelection,
+            visualDensity: VisualDensity.compact,
+            tooltip: 'انصراف',
+            icon: const Icon(Icons.close_rounded, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// پنل درخت پوشه‌های بایگانی در کارتابل «بایگانی»
+  Widget _buildFolderPanel() {
+    if (_folders.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: OfficeColors.line),
+        ),
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+            splashColor: _accent.withValues(alpha: 0.06),
+          ),
+          child: ExpansionTile(
+            key: ValueKey('folders_${widget.kind.name}_${_folders.length}'),
+            initiallyExpanded: _foldersOpen,
+            onExpansionChanged: (v) => _foldersOpen = v,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            leading: Icon(
+              Icons.account_tree_rounded,
+              size: 19,
+              color: _accent,
+            ),
+            title: Text(
+              'پوشه‌های بایگانی (${Fa.digits(_buildFolderRows(_folders).length)})',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            children: [
+              for (final row in _buildFolderRows(_folders))
+                ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  contentPadding: EdgeInsets.only(
+                    right: 14.0 + row.depth * 18,
+                    left: 10,
+                  ),
+                  leading: Icon(
+                    row.node.isFolder || row.node.children.isNotEmpty
+                        ? Icons.folder_rounded
+                        : Icons.insert_drive_file_outlined,
+                    size: 18,
+                    color: _accent,
+                  ),
+                  title: Text(
+                    row.node.title,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: row.node.letterCount > 0
+                      ? Text(
+                          '${Fa.digits(row.node.letterCount)} نامه',
+                          style: const TextStyle(fontSize: 10.5),
+                        )
+                      : null,
+                  trailing: IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'بایگانی موارد انتخاب‌شده در این پوشه',
+                    onPressed: () async {
+                      final selected =
+                          _selectedErja.length + _selectedLetter.length;
+                      if (selected == 0) {
+                        showMessage(
+                          context,
+                          'ابتدا از لیست، نامه‌ها را انتخاب کنید.',
+                          error: true,
+                        );
+                        return;
+                      }
+                      try {
+                        await context.read<OfficeAutomationRepository>()
+                            .archiveLetters(
+                          widget.kind,
+                          folderId: row.node.id,
+                          erjaIds: _selectedErja.toList(),
+                          letterIds: _selectedLetter.toList(),
+                        );
+                        if (!mounted) return;
+                        showMessage(
+                          context,
+                          '${Fa.digits(selected)} نامه در «${row.node.title}» بایگانی شد.',
+                        );
+                        _clearSelection();
+                        await _reload();
+                        await _loadFolders();
+                      } catch (e) {
+                        if (mounted) {
+                          showMessage(context, e.toString(), error: true);
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.move_to_inbox_rounded, size: 17),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<({ArchiveNode node, int depth})> _buildFolderRows(
+    List<ArchiveNode> nodes,
+  ) {
+    final flat = <({ArchiveNode node, int depth})>[];
+    void walk(List<ArchiveNode> list, int depth) {
+      for (final n in list) {
+        flat.add((node: n, depth: depth));
+        if (n.children.isNotEmpty) walk(n.children, depth + 1);
+      }
+    }
+
+    walk(nodes, 0);
+    return flat;
   }
 
   Widget _buildBody() {
@@ -549,10 +959,32 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
               );
             }
             final it = _items[i];
-            return LetterTile(
+            final tile = LetterTile(
               item: it,
               kind: widget.kind,
-              onTap: () => _openDetail(it),
+              onTap: () => _selectionMode ? _toggleSelect(it) : _openDetail(it),
+            );
+            if (!_selectionMode) return tile;
+            final selected = _isSelected(it);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 2),
+              decoration: BoxDecoration(
+                color: selected ? _accent.withValues(alpha: 0.06) : null,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected ? _accent.withValues(alpha: 0.4) : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: selected,
+                    activeColor: _accent,
+                    onChanged: (_) => _toggleSelect(it),
+                  ),
+                  Expanded(child: tile),
+                ],
+              ),
             );
           },
         ),

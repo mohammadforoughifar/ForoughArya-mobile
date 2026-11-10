@@ -454,6 +454,12 @@ class EmailTestResult {
 //  توابع کمکی پردازش متن و آدرس ایمیل
 // ============================================================
 
+/// آیا رشته شامل تگ HTML است؟ (خروجی ادیتور وب)
+bool isHtmlLike(String raw) =>
+    RegExp(r'<\s*/?\s*(p|div|br|span|b|i|u|strong|em|ul|ol|li|table|tr|td|h[1-6]|a|img|font)\b',
+            caseSensitive: false)
+        .hasMatch(raw);
+
 /// تبدیل HTML ایمیل به متن تمیز و خوانای فارسی/انگلیسی
 String htmlToPlain(String raw) {
   if (raw.isEmpty) return '';
