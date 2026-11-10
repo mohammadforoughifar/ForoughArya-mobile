@@ -12,6 +12,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
 import '../../misc/presentation/minutes_list_page.dart';
+import '../../office_automation/data/email_repository.dart';
+import '../../office_automation/models/email_models.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
 import '../models/office_common.dart';
@@ -108,6 +110,12 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
     'drafts': _stats.pishnevis,
   };
 
+  /// آمار تفکیکی هر ماژول (برای عدد کنار هر کارتابل)
+  ModuleMailboxCounts _innerCounts = const ModuleMailboxCounts();
+  ModuleMailboxCounts _outgoingCounts = const ModuleMailboxCounts();
+  ModuleMailboxCounts _incomingCounts = const ModuleMailboxCounts();
+  int _emailToday = 0;
+
   Future<void> _loadStats() async {
     if (mounted) setState(() => _statsLoading = true);
     final s = await _repo.dashboardStats();
@@ -116,6 +124,24 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
       _stats = s;
       _statsLoading = false;
     });
+    // آمار تفکیکی برای کارت هر ماژول — خطاها بی‌صدا نادیده گرفته می‌شوند
+    Future<void> one(
+      Future<InboxStats> Function() f,
+      void Function(ModuleMailboxCounts) assign,
+    ) async {
+      try {
+        final st = await f();
+        if (!mounted) return;
+        setState(() => assign(ModuleMailboxCounts.fromStats(st)));
+      } catch (_) {}
+    }
+
+    await Future.wait([
+      one(_repo.innerStats, (v) => _innerCounts = v),
+      one(_repo.outgoingStats, (v) => _outgoingCounts = v),
+      one(_repo.incomingStats, (v) => _incomingCounts = v),
+      _loadEmailToday(),
+    ]);
   }
 
   void _ensureLoaded(String key) {
@@ -419,6 +445,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
             LetterBox.drafts,
             LetterBox.archive,
           ],
+          counts: _innerCounts,
           onOpenBox: (b) => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => LetterMailboxPage(
@@ -441,6 +468,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
             LetterBox.dabirkhane,
             LetterBox.archive,
           ],
+          counts: _outgoingCounts,
           onOpenBox: (b) => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => LetterMailboxPage(
@@ -462,6 +490,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
             LetterBox.drafts,
             LetterBox.archive,
           ],
+          counts: _incomingCounts,
           onOpenBox: (b) => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => LetterMailboxPage(
@@ -473,6 +502,26 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
         ),
       ],
     );
+  }
+
+  /// تعداد ایمیل‌های امروز کارتابل سازمانی — از لیست واقعی ایمیل‌ها
+  Future<void> _loadEmailToday() async {
+    try {
+      final repo =
+          Provider.of<EmailRepository?>(context, listen: false) ??
+          EmailRepository(context.read<ApiClient>());
+      // شمارش ایمیل‌های امروز از بازهٔ تاریخ (نه فقط صفحهٔ اول) — داده واقعی
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final res = await repo.inbox(
+        pageSize: 100,
+        dateFrom: startOfDay,
+        dateTo: now,
+        personal: false,
+      );
+      if (!mounted) return;
+      setState(() => _emailToday = res.totalCount);
+    } catch (_) {}
   }
 
   // ============================================================
@@ -547,7 +596,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                         Text(
                           _statsLoading
                               ? 'در حال دریافت…'
-                              : '${Fa.digits(s.inboxUnread)} نامهٔ خوانده‌نشده در انتظار شماست',
+                              : '${Fa.digits(s.inboxUnread)} نامهٔ خوانده‌نشده • '
+                                  '${Fa.digits(_emailToday)} ایمیل امروز',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -1281,6 +1331,7 @@ class _ModuleCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.boxes,
+    required this.counts,
     required this.onOpenBox,
   });
 
@@ -1289,7 +1340,18 @@ class _ModuleCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final List<LetterBox> boxes;
+  final ModuleMailboxCounts counts;
   final ValueChanged<LetterBox> onOpenBox;
+
+  /// عدد واقعی هر کارتابل (اگر سرور مقدار نداده باشد، null → بج نمایش داده نمی‌شود)
+  int? _countOf(LetterBox b) => switch (b) {
+    LetterBox.inbox => counts.inbox,
+    LetterBox.sent => counts.sent,
+    LetterBox.drafts => counts.drafts,
+    LetterBox.archive => counts.archive,
+    LetterBox.signing => counts.signing,
+    LetterBox.dabirkhane => counts.dabirkhane,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1384,6 +1446,29 @@ class _ModuleCard extends StatelessWidget {
                               color: color,
                             ),
                           ),
+                          if (_countOf(b) != null) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 18),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                Fa.digits(_countOf(b)!),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

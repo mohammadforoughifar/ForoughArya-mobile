@@ -411,6 +411,39 @@ class AutomationStats {
   );
 }
 
+/// آمار تفکیکی هر ماژول — برای نمایش عدد کنار هر کارتابل در داشبورد
+class ModuleMailboxCounts {
+  const ModuleMailboxCounts({
+    this.inbox = 0,
+    this.sent = 0,
+    this.drafts = 0,
+    this.archive = 0,
+    this.signing = 0,
+    this.dabirkhane = 0,
+    this.unread = 0,
+  });
+
+  final int inbox, sent, drafts, archive, signing, dabirkhane, unread;
+
+  bool get isEmpty =>
+      inbox == 0 &&
+      sent == 0 &&
+      drafts == 0 &&
+      archive == 0 &&
+      signing == 0 &&
+      dabirkhane == 0;
+
+  factory ModuleMailboxCounts.fromStats(InboxStats s) => ModuleMailboxCounts(
+    inbox: s.inbox,
+    sent: s.sent,
+    drafts: s.pishnevis,
+    archive: s.archive,
+    signing: s.signingPending,
+    dabirkhane: s.dabirkhane,
+    unread: s.unread,
+  );
+}
+
 /// آمار یک کارتابل — پاسخ GET /stats
 class InboxStats {
   const InboxStats({
