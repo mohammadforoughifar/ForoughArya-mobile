@@ -108,13 +108,21 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
-    child: Container(
+    child: Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
       decoration: const BoxDecoration(
         color: MessengerColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -148,6 +156,32 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
               color: MessengerColors.inkSoft,
             ),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const Key('auto-detect-chat'),
+              onPressed: _busy ? null : _autoDetect,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.travel_explore_rounded, size: 18),
+              label: const Text('شناسایی خودکار مسیر چت'),
+              style: FilledButton.styleFrom(
+                backgroundColor: MessengerColors.brand,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 14),
           TextField(
             controller: _server,
@@ -155,7 +189,7 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: 'آدرس سرور پیام‌رسان',
-              hintText: 'https://94.183.59.57:4457',
+              hintText: 'https://server:port',
               isDense: true,
             ),
           ),
@@ -189,25 +223,6 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
                   onPressed: () => setState(() => _ctrl.text = p),
                 ),
             ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _busy ? null : _autoDetect,
-              icon: const Icon(Icons.travel_explore_rounded, size: 18),
-              label: const Text('شناسایی خودکار مسیر چت'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: MessengerColors.brand,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                side: BorderSide(
-                  color: MessengerColors.brand.withValues(alpha: 0.4),
-                ),
-              ),
-            ),
           ),
           if (_probes.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -295,6 +310,8 @@ class _ChatSettingsSheetState extends State<ChatSettingsSheet> {
             ),
           ),
         ],
+        ),
+      ),
       ),
     ),
   );

@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../data/chat_endpoints.dart';
 import '../data/chat_repository.dart';
 import '../models/chat_models.dart';
 import 'chat_page.dart';
@@ -44,6 +45,17 @@ class _MessengerPageState extends State<MessengerPage> {
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  /// باز کردن تنظیمات اتصال (هم برای آیکون و هم برای دکمهٔ وسط صفحه)
+  Future<void> _openSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ChatSettingsSheet(repo: _repo),
+    );
+    _load();
   }
 
   Future<void> _load() async {
@@ -123,15 +135,7 @@ class _MessengerPageState extends State<MessengerPage> {
         actions: [
           IconButton(
             tooltip: 'تنظیمات اتصال',
-            onPressed: () async {
-              await showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => ChatSettingsSheet(repo: _repo),
-              );
-              _load();
-            },
+            onPressed: _openSettings,
             icon: const Icon(
               Icons.tune_rounded,
               color: MessengerColors.inkSoft,
@@ -188,13 +192,25 @@ class _MessengerPageState extends State<MessengerPage> {
             return _Empty(
               icon: Icons.cloud_off_rounded,
               title: 'گفت‌وگوها دریافت نشد',
-              text: '$_error\n\nسرور: ${context.read<ApiClient>().baseUrl}\n'
-                  'اگر صندوق ایمیل سازمانی خالی است، ابتدا در ماژول ایمیل '
-                  'حساب سازمانی را تنظیم کنید.',
-              action: TextButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh_rounded, size: 17),
-                label: const Text('تلاش دوباره'),
+              text: '$_error\n\nسرور پیام‌رسان: '
+                  '${ChatEndpoints.defaultServer}${ChatEndpoints.defaultChatPath}\n'
+                  'اگر باز هم وصل نشد، در «تنظیمات اتصال» مسیر API چت را '
+                  'وارد کنید.',
+              action: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _openSettings,
+                    icon: const Icon(Icons.travel_explore_rounded, size: 17),
+                    label: const Text('شناسایی خودکار مسیر چت'),
+                  ),
+                  TextButton.icon(
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                    label: const Text('تلاش دوباره'),
+                  ),
+                ],
               ),
             );
           }
@@ -206,10 +222,21 @@ class _MessengerPageState extends State<MessengerPage> {
               text: 'این صفحه همان پیام‌رسان وب است (نه ایمیل). اگر گفت‌وگویی '
                   'دیده نمی‌شود یعنی مسیر API چت پیدا نشده است. از آیکون '
                   'تنظیمات بالا → «شناسایی خودکار مسیر چت» استفاده کنید.',
-              action: TextButton.icon(
-                onPressed: () => _newChat(),
-                icon: const Icon(Icons.add_rounded, size: 17),
-                label: const Text('گفت‌وگوی تازه'),
+              action: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _openSettings,
+                    icon: const Icon(Icons.travel_explore_rounded, size: 17),
+                    label: const Text('شناسایی خودکار مسیر چت'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _newChat(),
+                    icon: const Icon(Icons.add_rounded, size: 17),
+                    label: const Text('گفت‌وگوی تازه'),
+                  ),
+                ],
               ),
             );
           }
