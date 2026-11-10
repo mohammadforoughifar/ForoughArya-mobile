@@ -1,3 +1,5 @@
+import 'package:shamsi_date/shamsi_date.dart';
+
 class Assignee {
   Assignee.fromJson(Map<String, dynamic> j)
     : id = (j['id'] as num?)?.toInt() ?? 0,
@@ -24,10 +26,14 @@ class WorkOrder {
       description = j['description']?.toString() ?? '',
       ownerUserId = (j['ownerUserId'] as num?)?.toInt() ?? 0,
       ownerName = j['ownerName']?.toString() ?? '',
-      dueAt = j['dueAt']?.toString(),
+      // سرور مهلت را گاهی شمسی («1404/08/20») و گاهی ISO می‌فرستد؛ همه‌جا
+      // به ISO میلادی نرمال می‌شود تا Fa.date همیشه درست شمسی نشان دهد.
+      dueAt = jalaliOrIsoToIso(
+        j['dueAt'] ?? j['DueAt'] ?? j['dueDate'] ?? j['deadlineAnswer'],
+      ),
       status = j['status']?.toString() ?? 'Open',
       closeNote = j['closeNote']?.toString(),
-      createdAt = j['createdAt']?.toString(),
+      createdAt = jalaliOrIsoToIso(j['createdAt'] ?? j['CreatedAt']),
       extensionCount = (j['extensionCount'] as num?)?.toInt() ?? 0,
       priority = (j['priority'] as num?)?.toInt() ?? 1,
       recurrence = (j['recurrence'] as num?)?.toInt() ?? 0,
@@ -87,4 +93,33 @@ class TargetUser {
       username = j['username']?.toString() ?? '';
   final int id;
   final String username;
+}
+
+/// تبدیل مقدار تاریخ سرور به ISO میلادی.
+///   • ISO/UTC → همان (با toLocal)
+///   • «1404/08/20» یا «۱۴۰۴-۰۸-۲۰ ۱۴:۳۰» (شمسی) → ISO میلادی معادل
+///   • خالی/نامعتبر → null
+String? jalaliOrIsoToIso(Object? raw) {
+  final s = raw?.toString().trim();
+  if (s == null || s.isEmpty || s == 'null') return null;
+  final m = RegExp(r'^(1[34]\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[T ](\d{1,2}):(\d{2}))?')
+      .firstMatch(s);
+  if (m != null) {
+    final y = int.parse(m.group(1)!);
+    final mo = int.parse(m.group(2)!);
+    final d = int.parse(m.group(3)!);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && y >= 1300 && y <= 1500) {
+      try {
+        final j = Jalali(y, mo, d);
+        final g = j.toDateTime();
+        final hh = int.tryParse(m.group(4) ?? '') ?? 0;
+        final mm = int.tryParse(m.group(5) ?? '') ?? 0;
+        return DateTime(g.year, g.month, g.day, hh, mm).toIso8601String();
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+  final parsed = DateTime.tryParse(s);
+  return parsed?.toIso8601String();
 }

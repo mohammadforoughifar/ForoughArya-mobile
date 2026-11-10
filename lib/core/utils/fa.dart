@@ -11,8 +11,34 @@ class Fa {
         '';
   }
 
+  /// آیا رشته تاریخ شمسی است؟ (۱۴۰۴-۰۸-۱۹ یا ۱۴۰۴/۰۸/۱۹)
+  static bool isJalaliString(String s) {
+    final m = RegExp(r'^\s*(1[34]\d{2})[-/](\d{1,2})[-/](\d{1,2})')
+        .firstMatch(s);
+    if (m == null) return false;
+    final y = int.tryParse(m.group(1)!) ?? 0;
+    final mo = int.tryParse(m.group(2)!) ?? 0;
+    final d = int.tryParse(m.group(3)!) ?? 0;
+    return y >= 1300 && y <= 1500 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31;
+  }
+
   static String date(String? iso, {bool time = true}) {
     if (iso == null || iso.isEmpty) return '—';
+    // اگر سرور خودش تاریخ شمسی فرستاده باشد، دوباره تبدیل نمی‌کنیم
+    // (وگرنه ۱۴۰۴/۰۸/۱۹ به یک تاریخ بی‌معنی میلادی تفسیر می‌شد)
+    if (isJalaliString(iso)) {
+      final m = RegExp(r'^\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})(.*)$')
+          .firstMatch(iso);
+      if (m != null) {
+        final base =
+            '${digits(m.group(1))}/${digits(m.group(2)!.padLeft(2, '0'))}/${digits(m.group(3)!.padLeft(2, '0'))}';
+        final clock = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(m.group(4) ?? '');
+        if (time && clock != null) {
+          return '$base  ${digits(clock.group(1)!.padLeft(2, '0'))}:${digits(clock.group(2)!)}';
+        }
+        return base;
+      }
+    }
     final d = DateTime.tryParse(iso)?.toLocal();
     if (d == null) return '—';
     final j = Jalali.fromDateTime(d);

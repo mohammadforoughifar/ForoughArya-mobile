@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 // ============================================================
@@ -8,6 +9,7 @@ import 'dart:typed_data';
 //    AddIncomingLetterDto   (نامه وارده)
 // ============================================================
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shamsi_date/shamsi_date.dart';
@@ -89,6 +91,10 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   final _deliveryName = TextEditingController();
   final _description = TextEditingController();
   String _typeErsal = 'پست';
+  /// فایل‌هایی که کاربر در فرم انتخاب کرده و بعد از ثبت نامه پیوست می‌شوند
+  final List<File> _pendingFiles = [];
+  bool _uploading = false;
+
   DateTime _dateLetter = DateTime.now();
   DateTime _dateErsal = DateTime.now();
   int _foriatNum = 0;
@@ -336,6 +342,30 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
             }
           }
       }
+      // پیوست‌های انتخاب‌شده در فرم → روی همان نامهٔ ثبت‌شده آپلود می‌شوند
+      if (!asDraft && _pendingFiles.isNotEmpty && _savedId > 0) {
+        var failed = 0;
+        for (final f in List<File>.from(_pendingFiles)) {
+          try {
+            await _repo.uploadAttachment(
+              widget.kind,
+              _savedId,
+              f.path,
+              f.uri.pathSegments.last,
+            );
+            _pendingFiles.remove(f);
+          } catch (_) {
+            failed++;
+          }
+        }
+        if (failed > 0 && mounted) {
+          showMessage(
+            context,
+            'نامه ثبت شد ولی $failed فایل پیوست نشد (هر فایل حداکثر ۲۰ مگابایت).',
+            error: true,
+          );
+        }
+      }
       // پیوست PDF کامل صورتجلسه به نامهٔ ثبت‌شده (فقط در حالت «کل صورتجلسه»)
       if (!asDraft && widget.attachPdf != null && _savedId > 0) {
         try {
@@ -372,6 +402,124 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       }
     }
   }
+
+  // ---------------- پیوست‌ها ----------------
+
+  Future<void> _addFiles() async {
+    try {
+      final picked = await FilePicker.pickFiles();
+      if (picked.isEmpty) return;
+      var rejected = 0;
+      final added = <File>[];
+      for (final f in picked) {
+        final path = f.path;
+        if (path == null) continue;
+        final f2 = File(path);
+        if (!await f2.exists()) continue;
+        if (await f2.length() > 20 * 1024 * 1024) {
+          rejected++;
+          continue;
+        }
+        added.add(f2);
+      }
+      if (!mounted) return;
+      setState(() => _pendingFiles.addAll(added));
+      if (rejected > 0) {
+        showMessage(
+          context,
+          '$rejected فایل بزرگ‌تر از ۲۰ مگابایت بود و اضافه نشد.',
+          error: true,
+        );
+      }
+    } catch (e) {
+      if (mounted) showMessage(context, 'انتخاب فایل ممکن نشد: $e', error: true);
+    }
+  }
+
+  Widget _attachmentsCard() => _card(
+    title: 'پیوست‌ها',
+    icon: Icons.attach_file_rounded,
+    children: [
+      if (_pendingFiles.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'فایلی پیوست نشده است. (هر فایل حداکثر ۲۰ مگابایت)',
+            style: TextStyle(fontSize: 11.5, color: Color(0xff64748b)),
+          ),
+        ),
+      for (var i = 0; i < _pendingFiles.length; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+            decoration: BoxDecoration(
+              color: OfficeColors.bg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xffe2e8f0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.description_outlined,
+                  size: 17,
+                  color: OfficeColors.seed,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _pendingFiles[i].uri.pathSegments.last,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'حذف',
+                  onPressed: _uploading
+                      ? null
+                      : () => setState(() => _pendingFiles.removeAt(i)),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 17,
+                    color: Color(0xffb91c3c),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _uploading ? null : _addFiles,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: Text(
+            _pendingFiles.isEmpty ? 'افزودن فایل' : 'افزودن فایل دیگر',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: OfficeColors.seed,
+            side: BorderSide(
+              color: OfficeColors.seed.withValues(alpha: 0.35),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 4),
+      const Text(
+        'این فایل‌ها بلافاصله بعد از ثبت نامه، روی همان نامه پیوست می‌شوند.',
+        style: TextStyle(fontSize: 10.5, color: Color(0xff94a3b8)),
+      ),
+    ],
+  );
 
   Future<void> _pickRecipients({
     required String title,
@@ -527,6 +675,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
                     _recipientsCard(),
                     _relatedCard(),
                   ],
+                  if (widget.kind != LetterKind.incoming) _attachmentsCard(),
                   const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
