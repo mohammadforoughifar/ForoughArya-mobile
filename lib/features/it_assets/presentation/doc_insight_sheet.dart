@@ -9,6 +9,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
@@ -587,6 +588,28 @@ class _DocInsightSheetState extends State<DocInsightSheet> {
                         fontSize: 8.5,
                         height: 1.8,
                         color: ShopColors.inkSoft,
+                      ),
+                    ),
+                  ),
+                if (t.extractedText.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 26),
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                      ),
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: t.extractedText),
+                        );
+                        if (!mounted) return;
+                        _toast('متن کپی شد.');
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 12),
+                      label: const Text(
+                        'کپی متن',
+                        style: TextStyle(fontSize: 8.5),
                       ),
                     ),
                   ),

@@ -17,6 +17,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
@@ -306,6 +307,11 @@ class _DocArchivePageState extends State<DocArchivePage> {
             tooltip: 'برچسب‌ها',
             icon: const Icon(Icons.local_offer_rounded, size: 19),
             onPressed: _manageTags,
+          ),
+          IconButton(
+            tooltip: 'دانلود ZIP',
+            icon: const Icon(Icons.folder_zip_rounded, size: 19),
+            onPressed: _openZipExport,
           ),
           IconButton(
             tooltip: 'ورود انبوه آرشیو',
@@ -864,6 +870,103 @@ class _DocArchivePageState extends State<DocArchivePage> {
       out.addAll(_folderTreeNodes(n.children));
     }
     return out;
+  }
+
+  /// «دانلود ZIP» پوشه — همان `export-zip` وب
+  Future<void> _openZipExport() async {
+    var folder = _folderId;
+    var subfolders = true;
+    var onlyActive = true;
+    var manifest = true;
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text(
+            'دانلود ZIP',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DropdownButtonFormField<int?>(
+                isDense: true,
+                initialValue: folder,
+                style: const TextStyle(fontSize: 10, color: ShopColors.ink),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'پوشه',
+                  labelStyle: TextStyle(fontSize: 9),
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('همه پوشه‌ها', style: TextStyle(fontSize: 10)),
+                  ),
+                  for (final f in _folders)
+                    DropdownMenuItem<int?>(
+                      value: f.id,
+                      child: Text(f.name, style: TextStyle(fontSize: 10)),
+                    ),
+                ],
+                onChanged: (v) => setLocal(() => folder = v),
+              ),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: subfolders,
+                onChanged: (v) => setLocal(() => subfolders = v == true),
+                title: const Text(
+                  'شامل زیرپوشه‌ها',
+                  style: TextStyle(fontSize: 10.5),
+                ),
+              ),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: onlyActive,
+                onChanged: (v) => setLocal(() => onlyActive = v == true),
+                title: const Text(
+                  'فقط نسخه‌های فعال',
+                  style: TextStyle(fontSize: 10.5),
+                ),
+              ),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: manifest,
+                onChanged: (v) => setLocal(() => manifest = v == true),
+                title: const Text(
+                  'فایل فهرست (manifest)',
+                  style: TextStyle(fontSize: 10.5),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              child: const Text('دریافت لینک', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (res != true) return;
+    final url = _repo.exportZipUrl(
+      folderId: folder,
+      includeSubfolders: subfolders,
+      onlyActiveVersions: onlyActive,
+      includeManifest: manifest,
+    );
+    await Clipboard.setData(ClipboardData(text: url));
+    _toast('لینک خروجی ZIP کپی شد؛ آن را در مرورگر باز کنید.');
   }
 
   Future<void> _editFolderSettings(DocFolder f) async {
