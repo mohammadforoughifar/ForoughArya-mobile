@@ -6,13 +6,14 @@ plugins {
 
 android {
     namespace = "com.forougharya.forough_mobile"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // بدون core library desugaring حجم کتابخانه‌های اضافه کمتر می‌شود (نیازی در پروژه نیست)
+        // flutter_local_notifications به desugaring نیاز دارد (java.time روی API<26)
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -59,4 +60,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // برای درخواست مجوز میکروفن (ContextCompat / ActivityCompat)
+    implementation("androidx.core:core-ktx:1.13.1")
 }

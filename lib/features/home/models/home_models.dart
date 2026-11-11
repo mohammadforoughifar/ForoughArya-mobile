@@ -77,6 +77,85 @@ class CompanyContext {
 }
 
 /// یک اعلان (از `AppNotifications`).
+/// استخراج شناسهٔ رکورد مقصد از کلیدهای مستقیم یا از انتهای `link`.
+int? parseEntityId(Map<String, dynamic> j) {
+  for (final k in const [
+    'entityId',
+    'EntityId',
+    'workOrderId',
+    'WorkOrderId',
+    'minutesId',
+    'MinutesId',
+    'meetingMinutesId',
+    'letterId',
+    'LetterId',
+    'innerLetterId',
+    'outgoingLetterId',
+    'incomingLetterId',
+    'erjaId',
+    'ErjaId',
+    'messageId',
+    'referenceId',
+    'refId',
+    'objectId',
+  ]) {
+    final v = j[k];
+    if (v is num) return v.toInt();
+    if (v is String) {
+      final n = int.tryParse(v);
+      if (n != null) return n;
+    }
+  }
+  // از link: /workorders/123 ، /minutes/45 ، /letters/9 یا ?id=7
+  final link = (j['link'] ?? j['Link'] ?? j['url'] ?? '').toString();
+  if (link.isEmpty) return null;
+  // erjaId از letterId مهم‌تر است (ارجاع، رکورد دقیق‌تری است)
+  final q = RegExp(r'[?&](?:erjaId|ErjaId|erja)=(\d+)').firstMatch(link) ??
+      RegExp(r'[?&](?:id|Id|ID)=(\d+)').firstMatch(link);
+  if (q != null) return int.tryParse(q.group(1)!);
+  final seg = link.split('/').where((e) => e.isNotEmpty).toList();
+  for (final s in seg.reversed) {
+    final n = int.tryParse(s.split('?').first);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+/// تعیین نوع مقصد از فیلدهای صریح یا از متن/link اعلان.
+String? parseEntityKind(Map<String, dynamic> j) {
+  final explicit = (j['entityKind'] ?? j['EntityKind'] ?? j['kindName'] ?? '')
+      .toString()
+      .toLowerCase();
+  if (explicit.isNotEmpty) {
+    if (explicit.contains('work')) return 'wo';
+    if (explicit.contains('minute')) return 'minutes';
+    if (explicit.contains('letter')) return 'letter';
+    if (explicit.contains('mail') || explicit.contains('email')) return 'email';
+  }
+  final hay = [
+    j['title'],
+    j['body'],
+    j['formName'],
+    j['link'],
+  ].map((e) => e?.toString() ?? '').join(' ').toLowerCase();
+  if (hay.contains('workorder') || hay.contains('work-order') ||
+      hay.contains('دستور کار') || hay.contains('دستورکار')) {
+    return 'wo';
+  }
+  if (hay.contains('minute') || hay.contains('صورت‌جلسه') ||
+      hay.contains('صورتجلسه') || hay.contains('meeting')) {
+    return 'minutes';
+  }
+  if (hay.contains('letter') || hay.contains('نامه') || hay.contains('ارجاع') ||
+      hay.contains('کارتابل')) {
+    return 'letter';
+  }
+  if (hay.contains('mail') || hay.contains('email') || hay.contains('ایمیل')) {
+    return 'email';
+  }
+  return null;
+}
+
 class NotificationItem {
   const NotificationItem({
     required this.id,
@@ -87,6 +166,8 @@ class NotificationItem {
     this.link,
     this.isRead = false,
     this.createdAt,
+    this.entityId,
+    this.entityKind,
   });
 
   final int id;
@@ -98,6 +179,15 @@ class NotificationItem {
   final bool isRead;
   final DateTime? createdAt;
 
+  /// شناسهٔ رکورد مقصد (دستور کار / صورت‌جلسه / نامه) — از سرور یا از link
+  final int? entityId;
+
+  /// نوع مقصد: wo | minutes | letter | email | null
+  final String? entityKind;
+
+  /// مسیر وب اعلان — برای استخراج شناسه وقتی فیلد مستقیم نیامده
+  String? get targetLink => link;
+
   factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
     id: (j['id'] as num?)?.toInt() ?? 0,
     title: j['title']?.toString() ?? '',
@@ -107,6 +197,8 @@ class NotificationItem {
     link: j['link']?.toString(),
     isRead: j['isRead'] == true,
     createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? ''),
+    entityId: parseEntityId(j),
+    entityKind: parseEntityKind(j),
   );
 }
 

@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
+import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -18,10 +19,15 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
-import '../../office_automation/data/email_repository.dart';
-import '../../office_automation/models/email_models.dart';
+import '../../office_automation/data/office_repository.dart';
+import '../../office_automation/presentation/email_compose_page.dart';
+import '../../office_automation/presentation/email_page.dart';
+import '../../office_automation/presentation/letter_editor_page.dart';
+import '../../office_automation/presentation/letter_detail_page.dart';
+import '../../work_orders/presentation/work_order_editor_page.dart';
 import '../data/minutes_repository.dart';
 import '../models/minutes_models.dart';
+import 'minutes_dispatch_sheet.dart';
 import 'minutes_editor_page.dart';
 import 'misc_style.dart';
 
@@ -59,6 +65,14 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
 
   bool _isCreator(MinutesDetail d) =>
       _myUserId > 0 && d.createdByUserId == _myUserId;
+
+  /// طبق قاعدهٔ کسب‌وکار: حذف فقط برای «ایجادکننده» و تنها وقتی
+  /// «هیچ امضایی» روی صورتجلسه ثبت نشده باشد.
+  bool _canDelete(MinutesDetail d) {
+    if (!_isCreator(d)) return false;
+    final anySignature = d.participants.any((p) => p.isSigned);
+    return !anySignature;
+  }
 
   Future<void> _load() async {
     setState(() {
@@ -105,6 +119,17 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
   Future<void> _deleteMinutes() async {
     final d = _detail;
     if (d == null) return;
+    if (!_canDelete(d)) {
+      final signed = d.participants.where((p) => p.isSigned).length;
+      showMessage(
+        context,
+        signed > 0
+            ? 'صورتجلسه دارای امضاست و قابل حذف نیست.'
+            : 'فقط ایجادکنندهٔ صورتجلسه می‌تواند آن را حذف کند.',
+        error: true,
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => Directionality(
@@ -684,6 +709,134 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
     }
   }
 
+  // ================== ارسال/ارجاع (کل صورتجلسه یا یک بند) ==================
+
+  /// اگر [item] داده شود فقط همان بند ارسال می‌شود؛ در غیر این صورت کل
+  /// صورتجلسه (با پیوست PDF کامل) به ماژول مقصد می‌رود.
+  Future<void> _openDispatch({MinutesItem? item}) async {
+    final d = _detail;
+    if (d == null) return;
+    final result = await showModalBottomSheet<DispatchResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MinutesDispatchSheet(
+        minutesId: d.id,
+        item: item,
+        minutesTitle: d.title,
+        users: _users,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    // ── برای «کل صورتجلسه»: PDF کامل با سربرگ، یک‌بار گرفته می‌شود ──
+    Uint8List? pdf;
+    if (result.wholeMinutes && result.attachPdf) {
+      try {
+        pdf = await _repo.downloadPrintPdf(d.id);
+      } catch (e) {
+        if (mounted) showMessage(context, e.toString(), error: true);
+        return;
+      }
+      if (!mounted) return;
+    }
+
+    // ── هدایت به خودِ ماژول مقصد تا داده سر جای خودش بنشیند ──
+    switch (result.channel) {
+      case DispatchChannel.email:
+        // فرم نگارش ایمیل با دادهٔ پر شده + پیوست PDF (در حالت کل صورتجلسه)
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => EmailComposePage(
+              scope: EmailScope.corporate,
+              accounts: const [],
+              initialTo: result.toEmail,
+              initialSubject: result.subject,
+              initialBody: result.body,
+              initialAccountId: result.accountId > 0 ? result.accountId : null,
+              initialFiles: pdf == null
+                  ? const []
+                  : [
+                      (
+                        name: 'minutes-${d.id}.pdf',
+                        bytes: pdf,
+                        mimeType: 'application/pdf',
+                      ),
+                    ],
+            ),
+          ),
+        );
+        return;
+
+      case DispatchChannel.innerLetter:
+        final id = await Navigator.of(context).push<Object?>(
+          MaterialPageRoute<Object?>(
+            builder: (_) => LetterEditorPage(
+              kind: LetterKind.inner,
+              prefillTitle: result.subject,
+              prefillText: result.body,
+              attachRecipients: result.recipientUserIds,
+              attachPdf: pdf,
+              attachPdfName: 'minutes-${d.id}.pdf',
+              sourceMinutesId: d.id,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        if (id is int) {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  LetterDetailPage(kind: LetterKind.inner, letterId: id),
+            ),
+          );
+        }
+        return;
+
+      case DispatchChannel.outgoingLetter:
+        final id = await Navigator.of(context).push<Object?>(
+          MaterialPageRoute<Object?>(
+            builder: (_) => LetterEditorPage(
+              kind: LetterKind.outgoing,
+              prefillTitle: result.subject,
+              prefillText: result.body,
+              prefillOrganization: result.organization,
+              prefillReceiverName: result.receiverName,
+              attachRecipients: result.recipientUserIds,
+              attachPdf: pdf,
+              attachPdfName: 'minutes-${d.id}.pdf',
+              sourceMinutesId: d.id,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        if (id is int) {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  LetterDetailPage(kind: LetterKind.outgoing, letterId: id),
+            ),
+          );
+        }
+        return;
+
+      case DispatchChannel.workOrder:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkOrderEditorPage(
+              prefillTitle: result.subject,
+              prefillDescription: result.body,
+              prefillAssigneeIds: result.recipientUserIds,
+              prefillTags: const ['صورتجلسه'],
+              prefillDue: result.dueAt,
+              sourceLabel: 'صورتجلسه «${d.title}»',
+            ),
+          ),
+        );
+        return;
+    }
+  }
+
   // ================== تبدیل به نامه داخلی / صادره / ایمیل ==================
 
   Future<void> _convertToInnerLetter({int itemId = 0}) async {
@@ -900,140 +1053,6 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
         context,
         'نامهٔ صادره #${Fa.digits(lid)} با موفقیت ثبت شد.',
       );
-    } catch (e) {
-      if (mounted) showMessage(context, e.toString(), error: true);
-    }
-  }
-
-  Future<void> _sendByEmail() async {
-    final d = _detail;
-    if (d == null) return;
-    final emailRepo =
-        Provider.of<EmailRepository?>(context, listen: false) ??
-        EmailRepository(context.read<ApiClient>());
-    List<EmailAccount> accounts = const [];
-    try {
-      accounts = await emailRepo.dabirkhaneAccounts();
-      if (accounts.isEmpty) accounts = await emailRepo.accounts();
-    } catch (_) {}
-    if (!mounted) return;
-    if (accounts.isEmpty) {
-      showMessage(
-        context,
-        'هیچ حساب ایمیل سازمانی فعالی تعریف نشده است.',
-        error: true,
-      );
-      return;
-    }
-
-    int selectedAcc = accounts.first.id;
-    final toCtrl = TextEditingController();
-    final subCtrl = TextEditingController(text: 'صورتجلسه «${d.title}»');
-
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: StatefulBuilder(
-          builder: (ctx, setS) => SafeArea(
-            top: false,
-            child: Container(
-              padding: EdgeInsets.only(
-                left: 18,
-                right: 18,
-                top: 14,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-              ),
-              decoration: const BoxDecoration(
-                color: MiscColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'ارسال صورتجلسه با ایمیل سازمانی',
-                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: selectedAcc,
-                    decoration: const InputDecoration(
-                      labelText: 'حساب فرستنده',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      for (final a in accounts)
-                        DropdownMenuItem(
-                          value: a.id,
-                          child: Text(a.title),
-                        ),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) setS(() => selectedAcc = v);
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: toCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    textDirection: TextDirection.ltr,
-                    decoration: const InputDecoration(
-                      labelText: 'ایمیل گیرنده *',
-                      hintText: 'info@company.com',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: subCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'موضوع ایمیل',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('انصراف'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: () {
-                          if (toCtrl.text.trim().isEmpty) return;
-                          Navigator.pop(ctx, true);
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: MiscColors.teal,
-                        ),
-                        icon: const Icon(Icons.alternate_email, size: 17),
-                        label: const Text('ارسال ایمیل'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    if (ok != true || !mounted) return;
-    try {
-      await _repo.sendEmail(
-        d.id,
-        emailAccountId: selectedAcc,
-        to: toCtrl.text,
-        subject: subCtrl.text,
-      );
-      if (!mounted) return;
-      showMessage(context, 'صورتجلسه با ایمیل سازمانی ارسال شد.');
     } catch (e) {
       if (mounted) showMessage(context, e.toString(), error: true);
     }
@@ -1366,90 +1385,30 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
               icon: const Icon(Icons.send_rounded, size: 16),
               label: const Text('ارسال به گردش'),
             ),
+          FilledButton.tonalIcon(
+            onPressed: () => _openDispatch(),
+            icon: const Icon(Icons.outbox_rounded, size: 16),
+            label: const Text('ارسال کل صورتجلسه'),
+          ),
           if (canEdit)
             OutlinedButton.icon(
               onPressed: _editMinutes,
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('ویرایش'),
             ),
-          PopupMenuButton<String>(
-            tooltip: 'تبدیل و عملیات بیشتر',
-            onSelected: (v) {
-              switch (v) {
-                case 'inner':
-                  _convertToInnerLetter();
-                case 'outgoing':
-                  _convertToOutgoingLetter();
-                case 'email':
-                  _sendByEmail();
-                case 'delete':
-                  _deleteMinutes();
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'inner',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.mail_outline_rounded),
-                  title: Text('تبدیل به نامهٔ داخلی'),
+          // حذف صورتجلسه — فقط ایجادکننده و فقط بدون امضا
+          if (canEdit && _canDelete(d))
+            OutlinedButton.icon(
+              onPressed: _deleteMinutes,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: MiscColors.danger,
+                side: BorderSide(
+                  color: MiscColors.danger.withValues(alpha: 0.5),
                 ),
               ),
-              const PopupMenuItem(
-                value: 'outgoing',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.outbox_outlined),
-                  title: Text('تبدیل به نامهٔ صادره'),
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'email',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.alternate_email_rounded),
-                  title: Text('ارسال با ایمیل سازمانی'),
-                ),
-              ),
-              if (canEdit)
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      Icons.delete_outline_rounded,
-                      color: MiscColors.danger,
-                    ),
-                    title: Text(
-                      'حذف صورتجلسه',
-                      style: TextStyle(color: MiscColors.danger),
-                    ),
-                  ),
-                ),
-            ],
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                border: Border.all(color: MiscColors.line),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.more_horiz_rounded, size: 18),
-                  SizedBox(width: 4),
-                  Text(
-                    'نامه / ایمیل / بیشتر',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 16),
+              label: const Text('حذف صورتجلسه'),
             ),
-          ),
         ],
       ),
     );
@@ -1928,14 +1887,15 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
                   ),
                 ],
                 TextButton.icon(
-                  onPressed: () => _convertToInnerLetter(itemId: item.id),
+                  onPressed: () => _openDispatch(item: item),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
+                    foregroundColor: MiscColors.teal,
                   ),
-                  icon: const Icon(Icons.mail_outline_rounded, size: 15),
+                  icon: const Icon(Icons.outbox_rounded, size: 15),
                   label: const Text(
-                    'نامهٔ داخلی بند',
-                    style: TextStyle(fontSize: 11.5),
+                    'ارسال بند',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
                   ),
                 ),
               ],

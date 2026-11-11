@@ -4,13 +4,32 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
 
 class WorkOrderEditorPage extends StatefulWidget {
-  const WorkOrderEditorPage({super.key, this.order});
+  const WorkOrderEditorPage({
+    super.key,
+    this.order,
+    this.prefillTitle,
+    this.prefillDescription,
+    this.prefillAssigneeIds = const [],
+    this.prefillTags = const [],
+    this.prefillDue,
+    this.sourceLabel,
+  });
+
   final WorkOrder? order;
+
+  /// پیش‌پر کردن فرم از مبدأ (مثلاً یک بند صورتجلسه یا کل صورتجلسه)
+  final String? prefillTitle;
+  final String? prefillDescription;
+  final List<int> prefillAssigneeIds;
+  final List<String> prefillTags;
+  final DateTime? prefillDue;
+  final String? sourceLabel;
   @override
   State<WorkOrderEditorPage> createState() => _WorkOrderEditorPageState();
 }
@@ -29,9 +48,12 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   late int _priority = widget.order?.priority ?? 1;
   late int _recurrence = widget.order?.recurrence ?? 0;
   late int _weight = widget.order?.weight ?? 1;
-  late final List<String> _tags = [...?widget.order?.tags];
+  late final List<String> _tags = [
+    ...?widget.order?.tags,
+    ...widget.prefillTags.where((t) => (t).trim().isNotEmpty),
+  ];
   final List<String> _checklistItems = [];
-  final Set<int> _targets = {};
+  late final Set<int> _targets = {...widget.prefillAssigneeIds};
   List<TargetUser> _users = [];
   List<dynamic> _templates = [];
   final List<PlatformFile> _files = [];
@@ -45,6 +67,15 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   void initState() {
     super.initState();
     _targets.addAll((widget.order?.assignees ?? []).map((e) => e.userId));
+    if (widget.order == null) {
+      if ((widget.prefillTitle ?? '').trim().isNotEmpty) {
+        _title.text = widget.prefillTitle!.trim();
+      }
+      if ((widget.prefillDescription ?? '').trim().isNotEmpty) {
+        _description.text = widget.prefillDescription!.trim();
+      }
+      if (widget.prefillDue != null) _due = widget.prefillDue!;
+    }
     _load();
   }
 
@@ -76,28 +107,99 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
     super.dispose();
   }
 
+  /// انتخاب مهلت با تقویم شمسی.
+  /// انتخابگر ساعت پیش‌فرض فلاتر میلادی/۲۴ساعته نمایش داده و در بعضی
+  /// گوشی‌ها گیج‌کننده بود؛ اینجا فقط تاریخ شمسی انتخاب می‌شود و ساعت
+  /// همان ساعتِ فعلی (یا ساعت قبلی) حفظ می‌شود.
   Future<void> _pickDue() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _due,
+    final date = await showJalaliDatePicker(
+      context,
+      initial: _due,
+      title: 'مهلت انجام (شمسی)',
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
     if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_due),
+    setState(
+      () => _due = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        _due.hour,
+        _due.minute,
+      ),
     );
-    if (time != null)
-      setState(
-        () => _due = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
+  }
+
+  /// انتخاب ساعت با چیدمان فارسی (بدون انتخابگر میلادی فلاتر)
+  Future<void> _pickDueTime() async {
+    final hour = ValueNotifier<int>(_due.hour);
+    final minute = ValueNotifier<int>(_due.minute);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text(
+          'ساعت مهلت',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
         ),
-      );
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 80,
+              child: ValueListenableBuilder<int>(
+                valueListenable: hour,
+                builder: (_, v, _) => DropdownButtonFormField<int>(
+                  initialValue: v,
+                  decoration: const InputDecoration(labelText: 'ساعت'),
+                  items: [
+                    for (var h = 0; h < 24; h++)
+                      DropdownMenuItem(value: h, child: Text(Fa.digits(h))),
+                  ],
+                  onChanged: (x) => hour.value = x ?? v,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 80,
+              child: ValueListenableBuilder<int>(
+                valueListenable: minute,
+                builder: (_, v, _) => DropdownButtonFormField<int>(
+                  initialValue: v,
+                  decoration: const InputDecoration(labelText: 'دقیقه'),
+                  items: [
+                    for (var m = 0; m < 60; m += 5)
+                      DropdownMenuItem(value: m, child: Text(Fa.digits(m))),
+                  ],
+                  onChanged: (x) => minute.value = x ?? v,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('انصراف'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('تأیید'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(
+      () => _due = DateTime(
+        _due.year,
+        _due.month,
+        _due.day,
+        hour.value,
+        minute.value,
+      ),
+    );
   }
 
   Future<void> _chooseTargets() async {
@@ -368,11 +470,39 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
                   child: ListTile(
                     onTap: _pickDue,
                     leading: const Icon(Icons.event_available_outlined),
-                    title: const Text('مهلت انجام'),
-                    subtitle: Text(Fa.date(_due.toIso8601String())),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    title: const Text('مهلت انجام (شمسی)'),
+                    subtitle: Text(
+                      // همیشه شمسی با اعداد فارسی — بدون تاریخ میلادی
+                      '${Fa.date(_due.toIso8601String(), time: false)}  ساعت '
+                      '${Fa.digits(_due.hour.toString().padLeft(2, '0'))}:${Fa.digits(_due.minute.toString().padLeft(2, '0'))}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'ساعت',
+                          onPressed: _pickDueTime,
+                          icon: const Icon(
+                            Icons.schedule_rounded,
+                            size: 20,
+                          ),
+                        ),
+                        const Icon(Icons.edit_calendar_outlined),
+                      ],
+                    ),
                   ),
                 ),
+                if (!editing)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 4),
+                    child: Text(
+                      'تاریخ ثبت: ${Fa.date(DateTime.now().toIso8601String())}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xff64748b),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Row(
                   children: [

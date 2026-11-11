@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/email_draft_store.dart';
 import '../data/email_repository.dart';
@@ -43,7 +44,17 @@ class EmailPage extends StatefulWidget {
     super.key,
     this.initialScope = EmailScope.corporate,
     this.embedded = false,
+    this.prefillTo,
+    this.prefillSubject,
+    this.prefillBody,
+    this.prefillAccountId,
   });
+
+  /// پیش‌پر کردن فرم نگارش ایمیل از مبدأ (بند صورتجلسه / کل صورتجلسه)
+  final String? prefillTo;
+  final String? prefillSubject;
+  final String? prefillBody;
+  final int? prefillAccountId;
 
   final EmailScope initialScope;
 
@@ -426,16 +437,16 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _pickDateRange(String key) async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 1),
-      initialDateRange: _dateRange,
+    // تقویم شمسی (هیچ‌جا تقویم میلادی نمایش داده نمی‌شود)
+    final picked = await showJalaliDateRangePicker(
+      context,
+      title: 'بازهٔ تاریخ (شمسی)',
+      initialStart: _dateRange?.start,
+      initialEnd: _dateRange?.end,
     );
     if (picked == null || !mounted) return;
     setState(() {
-      _dateRange = picked;
+      _dateRange = DateTimeRange(start: picked.start, end: picked.end);
       _items.remove(key);
     });
     _load(key, reset: true);
@@ -732,6 +743,26 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
               ),
               if (_dateRange != null) ...[
                 const SizedBox(width: 5),
+                // بازهٔ انتخابی به تاریخ شمسی نمایش داده می‌شود
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    jalaliRangeLabel(_dateRange!.start, _dateRange!.end),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: accent,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
                 _SquareBtn(
                   icon: Icons.close,
                   color: OfficeColors.danger,
@@ -882,7 +913,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 onRefresh: () => _load(key, reset: true),
                 child: ListView.builder(
                   controller: _scrollFor(key),
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 92),
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 104),
                   itemCount: items.length + (_hasMore(key) ? 1 : 0),
                   itemBuilder: (context, i) {
                     if (i >= items.length) {
@@ -922,7 +953,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
     return RefreshIndicator(
       onRefresh: _loadDrafts,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 92),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 104),
         itemCount: _drafts.length,
         itemBuilder: (context, i) {
           final d = _drafts[i];

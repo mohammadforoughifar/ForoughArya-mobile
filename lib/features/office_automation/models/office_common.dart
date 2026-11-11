@@ -337,6 +337,16 @@ class ArchiveNode {
   final String title;
   final int parentId;
   final bool isFolder;
+
+  /// تعداد نامه‌های داخل پوشه (اگر سرور بدهد)
+  int get letterCount => _letterCount;
+  int get _letterCount {
+    var n = children.where((c) => !c.isFolder).length;
+    for (final c in children.where((c) => c.isFolder)) {
+      n += c.letterCount;
+    }
+    return n;
+  }
   final int? erjaId;
   final int? letterId;
   final String? letterNumber;
@@ -398,6 +408,59 @@ class AutomationStats {
     neshan: neshan + other.neshan,
     dabirkhane: dabirkhane + other.dabirkhane,
     signingPending: signingPending + other.signingPending,
+  );
+}
+
+/// آمار تفکیکی هر ماژول — برای نمایش عدد کنار هر کارتابل در داشبورد
+class ModuleMailboxCounts {
+  const ModuleMailboxCounts({
+    this.inbox = 0,
+    this.sent = 0,
+    this.drafts = 0,
+    this.archive = 0,
+    this.signing = 0,
+    this.dabirkhane = 0,
+    this.unread = 0,
+  });
+
+  final int inbox, sent, drafts, archive, signing, dabirkhane, unread;
+
+  /// شمارنده‌ای که مقدارش از سمت «آمار» نیامده قابل تشخیص نیست،
+  /// پس نبودِ هر خانه یعنی صفر.
+  ModuleMailboxCounts copyWith({
+    int? inbox,
+    int? sent,
+    int? drafts,
+    int? archive,
+    int? signing,
+    int? dabirkhane,
+    int? unread,
+  }) => ModuleMailboxCounts(
+    inbox: inbox ?? this.inbox,
+    sent: sent ?? this.sent,
+    drafts: drafts ?? this.drafts,
+    archive: archive ?? this.archive,
+    signing: signing ?? this.signing,
+    dabirkhane: dabirkhane ?? this.dabirkhane,
+    unread: unread ?? this.unread,
+  );
+
+  bool get isEmpty =>
+      inbox == 0 &&
+      sent == 0 &&
+      drafts == 0 &&
+      archive == 0 &&
+      signing == 0 &&
+      dabirkhane == 0;
+
+  factory ModuleMailboxCounts.fromStats(InboxStats s) => ModuleMailboxCounts(
+    inbox: s.inbox,
+    sent: s.sent,
+    drafts: s.pishnevis,
+    archive: s.archive,
+    signing: s.signingPending,
+    dabirkhane: s.dabirkhane,
+    unread: s.unread,
   );
 }
 

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
@@ -159,6 +160,71 @@ class _MinutesListPageState extends State<MinutesListPage> {
     if (mounted) await _reloadList();
   }
 
+  /// حذف صورتجلسه — فقط «ایجادکننده» و فقط اگر «هیچ امضایی» ثبت نشده باشد.
+  /// برای اطمینان، جزئیات تازه از سرور خوانده می‌شود.
+  Future<void> _confirmDelete(MinutesListItem m) async {
+    final myId = context.read<AuthController>().session?.userId ?? 0;
+    if (myId <= 0) {
+      showMessage(context, 'برای حذف باید وارد حساب شوید.', error: true);
+      return;
+    }
+    MinutesDetail d;
+    try {
+      d = await _repo.fetchDetail(m.id);
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+      return;
+    }
+    if (!mounted) return;
+    if (d.createdByUserId != myId) {
+      showMessage(
+        context,
+        'فقط ایجادکنندهٔ صورتجلسه («${d.createdByName}») می‌تواند آن را حذف کند.',
+        error: true,
+      );
+      return;
+    }
+    final signed = d.participants.where((p) => p.isSigned).toList();
+    if (signed.isNotEmpty) {
+      showMessage(
+        context,
+        'این صورتجلسه ${Fa.digits(signed.length)} امضا دارد و قابل حذف نیست؛ ابتدا امضاها را بردارید.',
+        error: true,
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('حذف صورتجلسه'),
+          content: Text('صورتجلسه «${m.title}» حذف شود؟ این کار بازگشت‌پذیر نیست.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('انصراف'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: MiscColors.danger),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.deleteMinutes(m.id);
+      if (!mounted) return;
+      showMessage(context, 'صورتجلسه حذف شد.');
+      await _reloadList();
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString(), error: true);
+    }
+  }
+
   Future<void> _openDetail(MinutesListItem m) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => MinutesDetailPage(minutesId: m.id)),
@@ -219,7 +285,15 @@ class _MinutesListPageState extends State<MinutesListPage> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
+                    // در ورود مستقیم (تب ماژول) دکمهٔ خانه؛ در ورود پشته‌ای، بازگشت
+                    onPressed: () {
+                      final nav = Navigator.of(context);
+                      if (nav.canPop()) {
+                        nav.maybePop();
+                      } else {
+                        nav.popUntil((r) => r.isFirst);
+                      }
+                    },
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.white.withValues(alpha: 0.14),
                       foregroundColor: Colors.white,
@@ -505,6 +579,7 @@ class _MinutesListPageState extends State<MinutesListPage> {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _MinutesCard(
           item: _items[i],
+          onDelete: () => _confirmDelete(_items[i]),
           onTap: () => _openDetail(_items[i]),
         ),
       ),
@@ -546,10 +621,15 @@ class _FilterChipBtn extends StatelessWidget {
 }
 
 class _MinutesCard extends StatelessWidget {
-  const _MinutesCard({required this.item, required this.onTap});
+  const _MinutesCard({
+    required this.item,
+    required this.onTap,
+    this.onDelete,
+  });
 
   final MinutesListItem item;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -592,14 +672,31 @@ class _MinutesCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   MinutesStatusBadge(status: item.status),
                   const Spacer(),
-                  Text(
-                    formatJalaliDate(item.meetingDate),
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: MiscColors.inkSoft,
+                  Flexible(
+                    child: Text(
+                      formatJalaliDate(item.meetingDate),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: MiscColors.inkSoft,
+                      ),
                     ),
                   ),
+                  if (onDelete != null)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 30,
+                        minHeight: 30,
+                      ),
+                      tooltip: 'حذف صورتجلسه',
+                      color: MiscColors.danger,
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    ),
                 ],
               ),
               const SizedBox(height: 10),

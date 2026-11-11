@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -110,6 +111,22 @@ class WorkOrderRepository {
     return map(r.data);
   }
 
+  /// دستورهای کارِ ساخته‌شده از یک مبدأ — `GET workorders/for-source`
+  Future<List<Map<String, dynamic>>> forSource({
+    required String module,
+    required int sourceId,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '$_root/for-source',
+      query: {'module': module, 'sourceId': sourceId},
+    );
+    final d = r.data;
+    final list = d is List
+        ? d
+        : (d is Map && d['items'] is List ? d['items'] as List : const []);
+    return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
   Future<void> seen(int id) async => _api.post('$_root/$id/seen');
   Future<void> reply(int id, bool done, String text) async =>
       _api.post('$_root/$id/reply', {'done': done, 'text': text});
@@ -173,12 +190,18 @@ class WorkOrderRepository {
   Future<List<dynamic>> attachments(int id) async => rows(
     (await _api.get('$_root/$id/attachments', query: {'take': 500})).data,
   );
-  Future<void> upload(int id, String path, String name) async {
+  Future<void> upload(
+    int id,
+    String? path,
+    String name, {
+    Uint8List? bytes,
+  }) async {
+    final file = bytes != null
+        ? MultipartFile.fromBytes(bytes, filename: name)
+        : await MultipartFile.fromFile(path!, filename: name);
     await _api.post(
       '$_root/$id/attachments',
-      FormData.fromMap({
-        'file': await MultipartFile.fromFile(path, filename: name),
-      }),
+      FormData.fromMap({'file': file}),
     );
   }
 

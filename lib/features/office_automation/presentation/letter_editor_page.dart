@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 // ============================================================
 //  فرم ثبت نامه — داخلی / صادره / وارده
 //  فیلدها عیناً مطابق DTOهای بک‌اند:
@@ -6,12 +9,14 @@
 //    AddIncomingLetterDto   (نامه وارده)
 // ============================================================
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
@@ -20,10 +25,36 @@ import 'office_style.dart';
 import 'office_widgets.dart';
 
 class LetterEditorPage extends StatefulWidget {
-  const LetterEditorPage({super.key, required this.kind, this.editingId});
+  const LetterEditorPage({
+    super.key,
+    required this.kind,
+    this.editingId,
+    this.prefillTitle,
+    this.prefillText,
+    this.prefillOrganization,
+    this.prefillReceiverName,
+    this.attachPdf,
+    this.attachPdfName = 'minutess.pdf',
+    this.attachRecipients,
+    this.sourceMinutesId,
+  });
 
   final LetterKind kind;
   final int? editingId;
+
+  /// پیش‌پر کردن فرم از مبدأ (مثلاً بند صورتجلسه یا کل صورتجلسه)
+  final String? prefillTitle;
+  final String? prefillText;
+  final String? prefillOrganization;
+  final String? prefillReceiverName;
+
+  /// PDF کامل صورتجلسه که پس از ثبت نامه به آن پیوست می‌شود
+  final Uint8List? attachPdf;
+  final String attachPdfName;
+
+  /// کاربرانی که به‌عنوان گیرنده پیش‌انتخاب می‌شوند (UserId)
+  final List<int>? attachRecipients;
+  final int? sourceMinutesId;
 
   @override
   State<LetterEditorPage> createState() => _LetterEditorPageState();
@@ -52,6 +83,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   final List<LetterRecipient> _signers = [];
   int? _companyId;
   List<Map<String, dynamic>> _companies = const [];
+  int _savedId = 0;
 
   // وارده
   final _ferestande = TextEditingController();
@@ -59,6 +91,10 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   final _deliveryName = TextEditingController();
   final _description = TextEditingController();
   String _typeErsal = 'پست';
+  /// فایل‌هایی که کاربر در فرم انتخاب کرده و بعد از ثبت نامه پیوست می‌شوند
+  final List<File> _pendingFiles = [];
+  bool _uploading = false;
+
   DateTime _dateLetter = DateTime.now();
   DateTime _dateErsal = DateTime.now();
   int _foriatNum = 0;
@@ -75,6 +111,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
     super.initState();
     if (widget.kind == LetterKind.outgoing) _loadCompanies();
     if (widget.editingId != null) _loadForEdit();
+    _applyPrefill();
     if (widget.kind == LetterKind.incoming) _reserve();
   }
 
@@ -87,6 +124,36 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// پرکردن فیلدها از دادهٔ مبدأ و انتخاب گیرندگان پیش‌فرض
+  Future<void> _applyPrefill() async {
+    final title = widget.prefillTitle?.trim() ?? '';
+    final text = widget.prefillText?.trim() ?? '';
+    if (title.isNotEmpty) _title.text = title;
+    if (text.isNotEmpty) _text.text = text;
+    if ((widget.prefillOrganization ?? '').trim().isNotEmpty) {
+      _org.text = widget.prefillOrganization!.trim();
+    }
+    if ((widget.prefillReceiverName ?? '').trim().isNotEmpty) {
+      _receiverName.text = widget.prefillReceiverName!.trim();
+    }
+    final ids = widget.attachRecipients ?? const <int>[];
+    if (ids.isEmpty) return;
+    // نام کاربران برای نمایش در لیست گیرندگان
+    try {
+      final all = await _repo.recipients(widget.kind);
+      final picked = all.where((u) => ids.contains(u.userId)).toList();
+      if (picked.isEmpty) return;
+      if (!mounted) return;
+      setState(() {
+        if (widget.kind == LetterKind.outgoing) {
+          _signers.addAll(picked);
+        } else {
+          _girande.addAll(picked);
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _reserve() async {
@@ -250,20 +317,24 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
         case LetterKind.inner:
           if (widget.editingId != null) {
             await _repo.editInner(widget.editingId!, _innerBody());
+            _savedId = widget.editingId!;
           } else {
-            await _repo.createInner(_innerBody());
+            _savedId = await _repo.createInner(_innerBody());
           }
         case LetterKind.outgoing:
           if (widget.editingId != null) {
             await _repo.editOutgoing(widget.editingId!, _outgoingBody());
+            _savedId = widget.editingId!;
           } else {
-            await _repo.createOutgoing(_outgoingBody());
+            _savedId = await _repo.createOutgoing(_outgoingBody());
           }
         case LetterKind.incoming:
           if (widget.editingId != null) {
             await _repo.editIncoming(widget.editingId!, _incomingBody());
+            _savedId = widget.editingId!;
           } else {
             final id = await _repo.createIncoming(_incomingBody());
+            _savedId = id;
             if (id > 0) {
               try {
                 await _repo.finalizeIncoming(id);
@@ -271,9 +342,53 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
             }
           }
       }
+      // پیوست‌های انتخاب‌شده در فرم → روی همان نامهٔ ثبت‌شده آپلود می‌شوند
+      if (!asDraft && _pendingFiles.isNotEmpty && _savedId > 0) {
+        var failed = 0;
+        for (final f in List<File>.from(_pendingFiles)) {
+          try {
+            await _repo.uploadAttachment(
+              widget.kind,
+              _savedId,
+              f.path,
+              f.uri.pathSegments.last,
+            );
+            _pendingFiles.remove(f);
+          } catch (_) {
+            failed++;
+          }
+        }
+        if (failed > 0 && mounted) {
+          showMessage(
+            context,
+            'نامه ثبت شد ولی $failed فایل پیوست نشد (هر فایل حداکثر ۲۰ مگابایت).',
+            error: true,
+          );
+        }
+      }
+      // پیوست PDF کامل صورتجلسه به نامهٔ ثبت‌شده (فقط در حالت «کل صورتجلسه»)
+      if (!asDraft && widget.attachPdf != null && _savedId > 0) {
+        try {
+          await _repo.uploadAttachment(
+            widget.kind,
+            _savedId,
+            '',
+            widget.attachPdfName,
+            bytes: widget.attachPdf,
+          );
+        } catch (e) {
+          if (mounted) {
+            showMessage(
+              context,
+              'نامه ثبت شد ولی پیوست PDF صورتجلسه بارگذاری نشد: $e',
+              error: true,
+            );
+          }
+        }
+      }
       if (mounted) {
         showMessage(context, widget.editingId != null ? 'نامه ویرایش شد.' : 'نامه ثبت شد.');
-        Navigator.pop(context, true);
+        Navigator.pop(context, _savedId > 0 ? _savedId : true);
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -287,6 +402,124 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       }
     }
   }
+
+  // ---------------- پیوست‌ها ----------------
+
+  Future<void> _addFiles() async {
+    try {
+      final picked = await FilePicker.pickFiles();
+      if (picked.isEmpty) return;
+      var rejected = 0;
+      final added = <File>[];
+      for (final f in picked) {
+        final path = f.path;
+        if (path == null) continue;
+        final f2 = File(path);
+        if (!await f2.exists()) continue;
+        if (await f2.length() > 20 * 1024 * 1024) {
+          rejected++;
+          continue;
+        }
+        added.add(f2);
+      }
+      if (!mounted) return;
+      setState(() => _pendingFiles.addAll(added));
+      if (rejected > 0) {
+        showMessage(
+          context,
+          '$rejected فایل بزرگ‌تر از ۲۰ مگابایت بود و اضافه نشد.',
+          error: true,
+        );
+      }
+    } catch (e) {
+      if (mounted) showMessage(context, 'انتخاب فایل ممکن نشد: $e', error: true);
+    }
+  }
+
+  Widget _attachmentsCard() => _card(
+    title: 'پیوست‌ها',
+    icon: Icons.attach_file_rounded,
+    children: [
+      if (_pendingFiles.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'فایلی پیوست نشده است. (هر فایل حداکثر ۲۰ مگابایت)',
+            style: TextStyle(fontSize: 11.5, color: Color(0xff64748b)),
+          ),
+        ),
+      for (var i = 0; i < _pendingFiles.length; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+            decoration: BoxDecoration(
+              color: OfficeColors.bg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xffe2e8f0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.description_outlined,
+                  size: 17,
+                  color: OfficeColors.seed,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _pendingFiles[i].uri.pathSegments.last,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'حذف',
+                  onPressed: _uploading
+                      ? null
+                      : () => setState(() => _pendingFiles.removeAt(i)),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 17,
+                    color: Color(0xffb91c3c),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _uploading ? null : _addFiles,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: Text(
+            _pendingFiles.isEmpty ? 'افزودن فایل' : 'افزودن فایل دیگر',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: OfficeColors.seed,
+            side: BorderSide(
+              color: OfficeColors.seed.withValues(alpha: 0.35),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 4),
+      const Text(
+        'این فایل‌ها بلافاصله بعد از ثبت نامه، روی همان نامه پیوست می‌شوند.',
+        style: TextStyle(fontSize: 10.5, color: Color(0xff94a3b8)),
+      ),
+    ],
+  );
 
   Future<void> _pickRecipients({
     required String title,
@@ -442,6 +675,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
                     _recipientsCard(),
                     _relatedCard(),
                   ],
+                  if (widget.kind != LetterKind.incoming) _attachmentsCard(),
                   const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
@@ -828,11 +1062,10 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   }
 
   Future<DateTime?> _pickJalali(BuildContext context, DateTime initial) =>
-      showDatePicker(
-        context: context,
-        initialDate: initial,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
+      showJalaliDatePicker(
+        context,
+        initial: initial,
+        title: 'انتخاب تاریخ (شمسی)',
       );
 }
 

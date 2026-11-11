@@ -64,6 +64,45 @@ class HomeRepository {
   /// علامت‌گذاری یک اعلان به خوانده‌شده — `POST /api/notifications/{id}/read`
   Future<void> markRead(int id) => _api.post<dynamic>('/api/notifications/$id/read');
 
+  /// پاک کردن یک اعلان — چند مسیر رایج بک‌اند امتحان می‌شود.
+  Future<void> deleteNotification(int id) async {
+    final attempts = <Future<void> Function()>[
+      () => _api.delete<dynamic>('/api/notifications/$id'),
+      () => _api.post<dynamic>('/api/notifications/$id/delete'),
+      () => _api.post<dynamic>('/api/notifications/delete/$id'),
+    ];
+    Object? last;
+    for (final a in attempts) {
+      try {
+        await a();
+        return;
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? Exception('اعلان پاک نشد.');
+  }
+
+  /// پاک کردن همهٔ اعلان‌ها — `DELETE /api/notifications` یا `clear`.
+  Future<void> clearNotifications() async {
+    final attempts = <Future<void> Function()>[
+      () => _api.delete<dynamic>('/api/notifications'),
+      () => _api.post<dynamic>('/api/notifications/clear'),
+      () => _api.post<dynamic>('/api/notifications/delete-all'),
+      () => _api.post<dynamic>('/api/notifications/mark-all-deleted'),
+    ];
+    Object? last;
+    for (final a in attempts) {
+      try {
+        await a();
+        return;
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? Exception('اعلان‌ها پاک نشدند.');
+  }
+
   /// دادهٔ یک ویجت داشبورد — `GET /api/my-dashboards/widget-data/{key}`
   ///
   /// [range] مطابق enum `DashRange` سرور: ۰=امروز، ۱=هفته، ۲=ماه.
@@ -274,8 +313,19 @@ List<HomeKpi> buildKpiCards() => const [
   ),
 ];
 
-/// کاشی‌های گرید ماژول‌ها — برگرفته از `MODULES.md` و `NavMenu.razor`.
+/// کاشی‌های گرید ماژول‌ها — ترتیب دقیقاً همان چیزی است که کاربر خواسته
+/// (از راست‌به‌چپ و سطر به سطر):
+///   اتوماسیون، دستور کار، صورتجلسه، مدیریت سخت‌افزار، فروشگاهی،
+///   پست الکترونیکی، ERP، منابع انسانی فروغ آریا، منابع انسانی بن‌سازه،
+///   منابع انسانی اصلی، سامانه مودیان
 List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
+  ModuleTile(
+    name: 'اتوماسیون',
+    subtitle: 'دبیرخانه و نامه',
+    icon: Icons.account_balance_rounded,
+    color: const Color(0xff2547a8),
+    tabIndex: 2,
+  ),
   ModuleTile(
     name: 'دستور کار',
     subtitle: 'پشتیبانی و تعمیر',
@@ -284,65 +334,87 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     tabIndex: 1,
   ),
   ModuleTile(
-    name: 'اتوماسیون اداری',
-    subtitle: 'دبیرخانه و نامه',
-    icon: Icons.account_balance_rounded,
-    color: const Color(0xff2547a8),
-    tabIndex: 2,
+    // ماژول مستقل «صورتجلسه» — ورود مستقیم به فهرست صورتجلسه‌ها
+    name: 'صورتجلسه',
+    subtitle: 'مصوبات و امضای جلسات',
+    icon: Icons.description_rounded,
+    color: const Color(0xff0f766e),
+    onTapName: 'minutes',
   ),
   ModuleTile(
-    name: 'پست الکترونیک',
+    name: 'مدیریت سخت‌افزار',
+    subtitle: 'دارایی‌های IT و شبکه',
+    icon: Icons.dns_rounded,
+    color: const Color(0xff1e3a8a),
+    onTapName: 'it-assets',
+  ),
+  ModuleTile(
+    // ماژول مستقل «آرشیو اسناد و مدارک» — آینهٔ منوی وب (گیت DocArchive)
+    name: 'آرشیو اسناد و مدارک',
+    subtitle: 'پوشه، نسخه و گردش',
+    icon: Icons.folder_open_rounded,
+    color: const Color(0xff4f7ce8),
+    onTapName: 'doc-archive',
+  ),
+  ModuleTile(
+    // کارتابل آرشیو — همان گروه وب «آرشیو اسناد و مدارک» (گیت DocArchive)
+    name: 'کارتابل آرشیو اسناد و مدارک',
+    subtitle: 'کارهای تأیید و اعلان',
+    icon: Icons.move_to_inbox_rounded,
+    color: const Color(0xffb45309),
+    onTapName: 'doc-archive-cartable',
+  ),
+  ModuleTile(
+    name: 'فروشگاهی',
+    subtitle: 'فاکتور و سفارش',
+    icon: Icons.point_of_sale_rounded,
+    color: const Color(0xff4f7ce8),
+    onTapName: 'sales',
+  ),
+  ModuleTile(
+    name: 'پست الکترونیکی',
     subtitle: 'ایمیل سازمانی',
     icon: Icons.alternate_email_rounded,
     color: const Color(0xff0e7490),
     tabIndex: 3,
   ),
   ModuleTile(
-    name: 'فرم‌های متفرقه',
-    subtitle: 'صورتجلسه و مصوبات',
-    icon: Icons.library_books_rounded,
-    color: const Color(0xff0f766e),
-    onTapName: 'misc',
+    name: 'پیام‌رسان',
+    subtitle: 'چت و پیام صوتی',
+    icon: Icons.forum_rounded,
+    color: const Color(0xff1f8f7a),
+    tabIndex: 4,
   ),
   ModuleTile(
-    name: 'فروش',
-    subtitle: 'فاکتور و سفارش',
-    icon: Icons.point_of_sale_rounded,
-    color: const Color(0xff4f7ce8),
-    badge: 'به‌زودی',
-    onTapName: 'sales',
+    name: 'ERP',
+    subtitle: 'سامانهٔ یکپارچه',
+    icon: Icons.hub_rounded,
+    color: const Color(0xff0b7285),
+    onTapName: 'erp',
   ),
   ModuleTile(
-    name: 'انبار و موجودی',
-    subtitle: 'رسید و حواله',
-    icon: Icons.inventory_2_outlined,
-    color: const Color(0xffc2410c),
-    badge: 'به‌زودی',
-    onTapName: 'inventory',
-  ),
-  ModuleTile(
-    name: 'خزانه',
-    subtitle: 'چک و اقساط',
-    icon: Icons.account_balance_wallet_rounded,
-    color: const Color(0xff1a7f37),
-    badge: 'به‌زودی',
-    onTapName: 'treasury',
-  ),
-  ModuleTile(
-    name: 'منابع انسانی',
+    name: 'منابع انسانی فروغ آریا',
     subtitle: 'پرسنل و احکام',
     icon: Icons.groups_rounded,
     color: const Color(0xff5b47d6),
     badge: 'به‌زودی',
-    onTapName: 'hr',
+    onTapName: 'hr-forough',
   ),
   ModuleTile(
-    name: 'تردد و مرخصی',
-    subtitle: 'کارتزنی',
-    icon: Icons.schedule_rounded,
+    name: 'منابع انسانی بن‌سازه',
+    subtitle: 'پرسنل و احکام',
+    icon: Icons.groups_2_rounded,
     color: const Color(0xff7c3aed),
     badge: 'به‌زودی',
-    onTapName: 'attendance',
+    onTapName: 'hr-bonsaze',
+  ),
+  ModuleTile(
+    name: 'منابع انسانی اصلی',
+    subtitle: 'پرسنل و احکام',
+    icon: Icons.badge_rounded,
+    color: const Color(0xff4c1d95),
+    badge: 'به‌زودی',
+    onTapName: 'hr-main',
   ),
   ModuleTile(
     name: 'سامانه مودیان',
@@ -351,45 +423,5 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     color: const Color(0xffd13438),
     badge: 'به‌زودی',
     onTapName: 'moadian',
-  ),
-  ModuleTile(
-    name: 'دارایی‌های IT',
-    subtitle: 'سیستم و شبکه',
-    icon: Icons.dns_rounded,
-    color: const Color(0xff1e3a8a),
-    badge: 'به‌زودی',
-    onTapName: 'it-assets',
-  ),
-  ModuleTile(
-    name: 'دوربین مداربسته',
-    subtitle: 'دوربین و NVR',
-    icon: Icons.videocam_rounded,
-    color: const Color(0xff0d7d8c),
-    badge: 'به‌زودی',
-    onTapName: 'cctv',
-  ),
-  ModuleTile(
-    name: 'آرشیو اسناد',
-    subtitle: 'پوشه و مدارک',
-    icon: Icons.folder_special_rounded,
-    color: const Color(0xff6b7a90),
-    badge: 'به‌زودی',
-    onTapName: 'archive',
-  ),
-  ModuleTile(
-    name: 'گزارش‌ساز',
-    subtitle: 'گزارش دلخواه',
-    icon: Icons.insights_rounded,
-    color: const Color(0xff2a6bd4),
-    badge: 'به‌زودی',
-    onTapName: 'reports',
-  ),
-  ModuleTile(
-    name: 'پروژه‌ها',
-    subtitle: 'کارفرما و گزارش',
-    icon: Icons.layers_rounded,
-    color: const Color(0xff1a7f37),
-    badge: 'به‌زودی',
-    onTapName: 'projects',
   ),
 ];

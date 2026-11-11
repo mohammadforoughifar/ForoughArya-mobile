@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 
 import '../core/auth/auth_controller.dart';
+import '../core/network/api_client.dart';
+import '../core/notifications/notification_launcher.dart';
+import '../core/notifications/push_service.dart';
+import '../features/messenger/data/upload_queue.dart';
 import '../features/auth/login_page.dart';
 import 'home_shell.dart';
-
 class ForoughApp extends StatelessWidget {
   const ForoughApp({super.key});
 
@@ -14,6 +18,8 @@ class ForoughApp extends StatelessWidget {
     const seed = Color(0xff2547a8);
     return MaterialApp(
       title: 'فروغ آریا',
+      // برای باز کردن سند از روی اعلانِ گوشی (بیرون از درخت ویجت‌ها)
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
@@ -67,7 +73,24 @@ class ForoughApp extends StatelessWidget {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          return auth.isLoggedIn ? const HomeShell() : const LoginPage();
+          if (!auth.isLoggedIn) {
+            PushService.instance.stop();
+            NotificationLauncher.instance.detach();
+            return const LoginPage();
+          }
+          // نوتیفیکیشن واقعی گوشی — تا وقتی کاربر لاگین است فعال می‌ماند
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final api = context.read<ApiClient>();
+            // مقصد کلیک روی اعلان‌ها را وصل کن (صفِ کلیک‌های زودرس هم باز می‌شود)
+            NotificationLauncher.instance.attach(api);
+            // صف ارسال پیوست‌ها به عمر اپ بسته است، نه به صفحهٔ چت
+            UploadQueue.instance.attach(api);
+            PushService.instance.start(
+              ApiClientPushAdapter(api),
+              const FlutterSecureStorage(),
+            );
+          });
+          return const HomeShell();
         },
       ),
     );

@@ -17,8 +17,22 @@ import 'package:shamsi_date/shamsi_date.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/notifications/push_service.dart';
 import '../../../core/utils/fa.dart';
+import '../../misc/presentation/minutes_detail_page.dart';
+import '../../misc/presentation/minutes_list_page.dart';
+import '../../shop/presentation/shop_home_page.dart';
+import '../../it_assets/presentation/it_home_page.dart';
+import '../data/notification_target.dart';
 import '../../misc/presentation/misc_forms_page.dart';
+import '../../office_automation/data/email_repository.dart';
+import '../../office_automation/models/office_common.dart';
+import '../../office_automation/presentation/letter_detail_page.dart';
+import '../../work_orders/presentation/work_order_detail_page.dart';
+import '../../it_assets/presentation/doc_archive_cartable_page.dart';
+import '../../it_assets/presentation/doc_archive_page.dart';
+import '../../office_automation/data/office_repository.dart';
+import '../../work_orders/data/work_order_repository.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
 import 'company_picker_sheet.dart';
@@ -44,6 +58,9 @@ class _HomePageState extends State<HomePage> {
   List<HomeKpi> _kpis = const [];
   int _unread = 0;
   bool _loading = true;
+
+  /// دادهٔ ویجت‌ها رسیده (یا شکست خورده) — برای نمایش «…» یا «—»
+  bool _widgetsSettled = false;
   String? _error;
 
   final PageController _pc = PageController(viewportFraction: 0.9);
@@ -70,6 +87,7 @@ class _HomePageState extends State<HomePage> {
     final api = context.read<ApiClient>();
     setState(() {
       _loading = true;
+      _widgetsSettled = false;
       _error = null;
     });
     try {
@@ -89,9 +107,9 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _companies = companies;
         _unread = unread;
-        _widgetData = widgets;
         _loading = false;
       });
+      await _loadWidgets(widgets);
     } on Exception catch (e) {
       if (!mounted) return;
       setState(() {
@@ -99,6 +117,152 @@ class _HomePageState extends State<HomePage> {
         _error = e.toString();
       });
     }
+  }
+
+  /// شرکت فعال را روی هدر شبکه ست می‌کند تا دادهٔ ویجت‌ها درست واکشی شود.
+  Future<void> _ensureCompany() async {
+    final api = context.read<ApiClient>();
+    var id = _companies.activeCompanyId;
+    if (id == null || id <= 0) {
+      try {
+        id = await api.ensureCompanyId();
+      } catch (_) {
+        id = null;
+      }
+      if (id != null) {
+        _companies = CompanyContext(
+          companies: _companies.companies,
+          activeCompanyId: id,
+        );
+      }
+    }
+    if (id != null) {
+      try {
+        await api.setCompanyId(id);
+      } catch (_) {
+        // ست‌شدن هدر شرکت نباید کل صفحه را خراب کند
+      }
+    }
+  }
+
+  Future<void> _loadWidgets(Map<String, WidgetData> initial) async {
+    setState(() => _widgetData = initial);
+    await _ensureCompany();
+    final keys = _kpis.map((k) => k.widgetKey).toList();
+    var have = _widgetData;
+    if (keys.any((k) => !have.containsKey(k))) {
+      final again = await _repo.fetchWidgets(keys);
+      if (!mounted) return;
+      if (again.isNotEmpty) setState(() => _widgetData = again);
+      have = again;
+    }
+    final missing = keys.where((k) => !have.containsKey(k)).toList();
+    // ویجت‌های داشبورد سرور در دسترس نیستند → مستقیم از خود ماژول‌ها می‌خوانیم
+    final fallback = missing.isEmpty
+        ? const <String, WidgetData>{}
+        : await _fallbackMetrics(missing);
+    if (!mounted) return;
+    setState(() {
+      _widgetData = {..._widgetData, ...fallback};
+      _widgetsSettled = true;
+    });
+  }
+
+  /// دادهٔ عددی واقعی از endpointهای خود ماژول‌ها (وقتی dashboard-api جواب نمی‌دهد).
+  Future<Map<String, WidgetData>> _fallbackMetrics(List<String> keys) async {
+    final api = context.read<ApiClient>();
+    final out = <String, WidgetData>{};
+    final start = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+    // نامه‌ها — سه کارتابل داخلی/صادره/وارده
+    if (keys.any((k) => k.startsWith('off-'))) {
+      final repo = OfficeAutomationRepository(api);
+      int inbox = 0, sent = 0, unread = 0, pish = 0, dab = 0, sign = 0;
+      for (final kind in LetterKind.values) {
+        try {
+          final c = await repo.mailboxCounts(kind);
+          inbox += c.inbox;
+          sent += c.sent;
+          pish += c.drafts;
+          sign += c.signing;
+          dab += c.dabirkhane;
+        } catch (_) {}
+      }
+      try {
+        final st = await repo.innerStats();
+        unread += st.unread;
+      } catch (_) {}
+      if (keys.contains('off-letters-count')) {
+        out['off-letters-count'] = WidgetData(
+          key: 'off-letters-count',
+          title: 'نامه‌ها',
+          value: (inbox + sent).toDouble(),
+          unit: 'نامه',
+          rows: [
+            ['وارده', Fa.digits(inbox)],
+            ['صادره', Fa.digits(sent)],
+            ['ارجاع نخوانده', Fa.digits(unread)],
+          ],
+        );
+      }
+      if (keys.contains('off-erja-unread')) {
+        out['off-erja-unread'] = WidgetData(
+          key: 'off-erja-unread',
+          title: 'ارجاع‌های من',
+          value: unread.toDouble(),
+          unit: 'ارجاع نخوانده',
+          rows: [
+            ['پیش‌نویس', Fa.digits(pish)],
+            ['در انتظار امضا', Fa.digits(sign)],
+            ['دبیرخانه', Fa.digits(dab)],
+          ],
+        );
+      }
+    }
+
+    // دستور کارها
+    if (keys.contains('wo-open')) {
+      try {
+        final c = await WorkOrderRepository(api).counts();
+        int pick(List<String> names) => names
+            .map((n) => (c[n] as num?)?.toInt())
+            .whereType<int>()
+            .fold<int>(0, (a, b) => a + b);
+        final open = pick([
+          'open', 'Open', 'openCount', 'inProgress', 'inprogress', 'pending',
+        ]);
+        final overdue = pick(['overdue', 'Overdue', 'late', 'delayed']);
+        final done = pick(['done', 'Done', 'closed', 'completed', 'doneCount']);
+        out['wo-open'] = WidgetData(
+          key: 'wo-open',
+          title: 'دستور کار',
+          value: open.toDouble(),
+          unit: 'دستور کار باز',
+          rows: [
+            ['معوق', Fa.digits(overdue)],
+            ['انجام‌شده', Fa.digits(done)],
+          ],
+        );
+      } catch (_) {}
+    }
+
+    // ایمیل امروز (سازمانی)
+    if (keys.contains('email-today')) {
+      try {
+        final r = await EmailRepository(api).inbox(
+          pageSize: 100,
+          dateFrom: start,
+          dateTo: DateTime.now(),
+        );
+        out['email-today'] = WidgetData(
+          key: 'email-today',
+          title: 'ایمیل امروز',
+          value: r.totalCount.toDouble(),
+          unit: 'ایمیل',
+        );
+      } catch (_) {}
+    }
+    return out;
   }
 
   Future<void> _pickCompany(CompanyOption c) async {
@@ -117,7 +281,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _reloadWidgets() async {
     final widgets = await _repo.fetchWidgets(_kpis.map((k) => k.widgetKey));
     if (!mounted) return;
-    setState(() => _widgetData = widgets);
+    await _loadWidgets(widgets);
   }
 
   void _openCompanies() {
@@ -134,17 +298,293 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// کلیک روی اعلان → پیدا کردن «همان رکورد» و باز کردن مستقیم آن.
+  /// (نه رفتن به صفحهٔ اصلی ماژول)
+  Future<void> _openFromNotification(NotificationItem n) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // نشانگر کوتاه تا کاربر بداند در حال باز شدن است
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Text('در حال باز کردن مورد مرتبط…'),
+          ],
+        ),
+        duration: Duration(seconds: 8),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    NotificationTarget target;
+    try {
+      target = await NotificationResolver(
+        context.read<ApiClient>(),
+      ).resolve(n);
+    } catch (e) {
+      target = NotificationTarget(kind: 'none', reason: e.toString());
+    }
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+
+    if (target.isResolved) {
+      switch (target.kind) {
+        case 'wo':
+          await _openExactTarget(target, n);
+          return;
+        case 'minutes':
+          await _openExactTarget(target, n);
+          return;
+        case 'letter':
+          await _openExactTarget(target, n);
+          return;
+        case 'email':
+          widget.onOpenTab(3);
+          return;
+        default:
+          break;
+      }
+    }
+
+    // پیدا نشد: فقط در این حالت به ماژول مربوطه می‌رویم
+    switch (target.kind) {
+      case 'wo':
+        widget.onOpenTab(1);
+        return;
+      case 'minutes':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const MinutesListPage()),
+        );
+        return;
+      default:
+        widget.onOpenTab(2);
+    }
+  }
+
+  /// باز کردن صفحهٔ جزئیات دقیقاً همان سند.
+  Future<void> _openExactTarget(
+    NotificationTarget target,
+    NotificationItem n,
+  ) async {
+    switch (target.kind) {
+      case 'wo':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkOrderDetailPage(id: target.id!),
+          ),
+        );
+        return;
+      case 'minutes':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => MinutesDetailPage(minutesId: target.id!),
+          ),
+        );
+        return;
+      case 'letter':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => LetterDetailPage(
+              kind: target.letterKind ?? LetterKind.inner,
+              letterId: target.id!,
+              erjaId: target.erjaId ?? n.entityId,
+            ),
+          ),
+        );
+        return;
+    }
+  }
+
   Future<void> _openNotifications() async {
     HapticFeedback.lightImpact();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => NotificationsSheet(repository: _repo),
+      builder: (_) => NotificationsSheet(
+        repository: _repo,
+        onOpen: _openFromNotification,
+        onCleared: () async {
+          // نوار گوشی هم خالی شود
+          await PushService.instance.cancelAll();
+          final c = await _repo.fetchUnreadCount();
+          if (mounted) setState(() => _unread = c);
+        },
+      ),
     );
     // شمارندهٔ زنگوله بعد از بستن شیت به‌روز شود.
     final n = await _repo.fetchUnreadCount();
     if (mounted) setState(() => _unread = n);
+  }
+
+  /// چرخ‌دندهٔ هدر — منوی کوتاه خروج و تغییر رمز عبور.
+  Future<void> _openSettings() async {
+    HapticFeedback.lightImpact();
+    final auth = context.read<AuthController>();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (c) => SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: HomeColors.surface,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: const Icon(
+                  Icons.password_rounded,
+                  color: HomeColors.seed,
+                ),
+                title: const Text(
+                  'تغییر رمز عبور',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                onTap: () => Navigator.pop(c, 'password'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: HomeColors.danger,
+                ),
+                title: const Text(
+                  'خروج از حساب',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                onTap: () => Navigator.pop(c, 'logout'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'logout') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('خروج از حساب'),
+          content: const Text('از حساب کاربری خارج می‌شوید؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('انصراف'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('خروج'),
+            ),
+          ],
+        ),
+      );
+      if (ok == true) await auth.logout();
+      return;
+    }
+    if (action == 'password') await _changePassword();
+  }
+
+  Future<void> _changePassword() async {
+    final current = TextEditingController();
+    final replacement = TextEditingController();
+    final again = TextEditingController();
+    final form = GlobalKey<FormState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('تغییر رمز عبور'),
+        content: Form(
+          key: form,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: current,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'رمز فعلی'),
+                validator: (v) =>
+                    (v ?? '').isEmpty ? 'رمز فعلی را وارد کنید.' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: replacement,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'رمز جدید'),
+                validator: (v) => (v ?? '').length < 6
+                    ? 'رمز جدید حداقل ۶ کاراکتر باشد.'
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: again,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'تکرار رمز جدید',
+                ),
+                validator: (v) =>
+                    v != replacement.text ? 'تکرار رمز یکسان نیست.' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('انصراف'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) Navigator.pop(c, true);
+            },
+            child: const Text('ذخیره'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      try {
+        await context.read<AuthController>().changePassword(
+          current.text,
+          replacement.text,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('رمز عبور تغییر کرد.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('تغییر رمز انجام نشد: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+    current.dispose();
+    replacement.dispose();
+    again.dispose();
   }
 
   void _openModule(ModuleTile m) {
@@ -162,6 +602,43 @@ class _HomePageState extends State<HomePage> {
       widget.onOpenTab(m.tabIndex!);
       return;
     }
+    if (m.onTapName == 'minutes') {
+      HapticFeedback.selectionClick();
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const MinutesListPage()));
+      return;
+    }
+    if (m.onTapName == 'it-assets') {
+      HapticFeedback.selectionClick();
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const ItHomePage()));
+      return;
+    }
+    if (m.onTapName == 'doc-archive') {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const DocArchivePage()),
+      );
+      return;
+    }
+    if (m.onTapName == 'doc-archive-cartable') {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const DocArchiveCartablePage(),
+        ),
+      );
+      return;
+    }
+    if (m.onTapName == 'sales') {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ShopHomePage()),
+      );
+      return;
+    }
     if (m.onTapName == 'misc') {
       HapticFeedback.selectionClick();
       Navigator.of(
@@ -169,10 +646,96 @@ class _HomePageState extends State<HomePage> {
       ).push(MaterialPageRoute<void>(builder: (_) => const MiscFormsPage()));
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('ماژول «${m.name}» به‌زودی به نسخهٔ موبایل اضافه می‌شود.'),
-        behavior: SnackBarBehavior.floating,
+    // تا وقتی صفحهٔ اختصاصی این ماژول در موبایل نیست، «برگهٔ ماژول»
+    // باز می‌شود تا کلیک بی‌اثر نماند.
+    HapticFeedback.selectionClick();
+    _openModuleSheet(m);
+  }
+
+  Future<void> _openModuleSheet(ModuleTile m) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (c) => SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          decoration: BoxDecoration(
+            color: HomeColors.surface,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: m.color.withValues(alpha: 0.13),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(m.icon, color: m.color, size: 21),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.name,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: HomeColors.ink,
+                          ),
+                        ),
+                        Text(
+                          m.subtitle,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: HomeColors.inkSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'نسخهٔ وب این ماژول در دسترس است؛ نسخهٔ موبایل آن به‌زودی '
+                'تکمیل می‌شود. تا آن زمان از داشبورد و ماژول‌های فعال '
+                '(اتوماسیون، دستور کار، صورتجلسه، ایمیل) استفاده کنید.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.9,
+                  color: HomeColors.inkSoft,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(c),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: m.color,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('بستن'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -196,6 +759,7 @@ class _HomePageState extends State<HomePage> {
               name: name,
               unread: _unread,
               onBell: _openNotifications,
+              onSettings: _openSettings,
             ),
             SliverToBoxAdapter(
               child: HFadeSlideIn(
@@ -204,7 +768,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                   child: _CompanyPill(
                     context_: _companies,
-                    loading: _loading,
+                    loading: _loading || !_widgetsSettled,
                     onTap: _openCompanies,
                   ),
                 ),
@@ -250,7 +814,8 @@ class _HomePageState extends State<HomePage> {
               child: _SectionHeader(title: 'ماژول‌ها'),
             ),
             _buildModules(),
-            const SliverToBoxAdapter(child: SizedBox(height: 22)),
+            // فضای پایین برای نوار شیشه‌ای شناور
+            const SliverToBoxAdapter(child: SizedBox(height: 104)),
           ],
         ),
       ),
@@ -291,6 +856,7 @@ class _HomePageState extends State<HomePage> {
             child: _KpiCard(
               kpi: _kpis[i],
               data: _widgetData[_kpis[i].widgetKey],
+              loading: _loading || !_widgetsSettled,
             ),
             builder: (_, child) => Transform.scale(
               scale: scale,
@@ -409,11 +975,15 @@ class _Header extends StatelessWidget {
     required this.name,
     required this.unread,
     required this.onBell,
+    required this.onSettings,
   });
 
   final String name;
   final int unread;
   final VoidCallback onBell;
+
+  /// چرخ‌دندهٔ تنظیمات — خروج و تغییر رمز عبور
+  final VoidCallback onSettings;
 
   String get _todayFa {
     final j = Jalali.now();
@@ -481,10 +1051,21 @@ class _Header extends StatelessWidget {
                       ),
                     ),
                   ),
-                  HFadeSlideIn(
-                    index: 1,
-                    offsetY: 14,
-                    child: _BellButton(unread: unread, onTap: onBell),
+                  Row(
+                    children: [
+                      HFadeSlideIn(
+                        index: 1,
+                        offsetY: 14,
+                        child: _BellButton(unread: unread, onTap: onBell),
+                      ),
+                      const SizedBox(width: 8),
+                      // چرخ‌دنده سمت چپ زنگوله
+                      HFadeSlideIn(
+                        index: 2,
+                        offsetY: 14,
+                        child: _SettingsButton(onTap: onSettings),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -501,6 +1082,34 @@ class _Header extends StatelessWidget {
     decoration: BoxDecoration(
       shape: BoxShape.circle,
       color: Colors.white.withValues(alpha: alpha),
+    ),
+  );
+}
+
+/// چرخ‌دندهٔ تنظیمات هدر — خروج و تغییر رمز عبور
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => HPressable(
+    onTap: onTap,
+    scale: 0.9,
+    child: Container(
+      width: 38,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: const Icon(
+        Icons.settings_rounded,
+        size: 19,
+        color: Colors.white,
+      ),
     ),
   );
 }
@@ -748,14 +1357,22 @@ class _SectionHeader extends StatelessWidget {
 // ============================================================
 
 class _KpiCard extends StatelessWidget {
-  const _KpiCard({required this.kpi, this.data});
+  const _KpiCard({required this.kpi, this.data, this.loading = false});
 
   final HomeKpi kpi;
   final WidgetData? data;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final value = data?.value ?? kpi.value;
+    // اگر سرور مقداری نداده باشد، «—» نمایش می‌دهیم نه صفرِ گمراه‌کننده.
+    // مقدار اعشاری‌دار تا یک رقم اعشار (بدون وابستگی به en_US locale) نمایش داده می‌شود.
+    final String? valueText = data?.value == null
+        ? (loading ? '…' : '—')
+        : (value == value.roundToDouble()
+              ? Fa.number(value, decimals: 0)
+              : Fa.number(value, decimals: 1));
     final delta = data == null
         ? kpi.deltaPercent
         : (data!.deltaUp == null ? null : (data!.deltaUp! ? 1.0 : -1.0));
@@ -866,16 +1483,27 @@ class _KpiCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        HCountUp(
-                          value: value,
-                          style: const TextStyle(
-                            fontSize: 32,
-                            height: 1,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -1.3,
-                            color: HomeColors.ink,
+                        if (valueText == null)
+                          HCountUp(
+                            value: value,
+                            style: const TextStyle(
+                              fontSize: 32,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1.3,
+                              color: HomeColors.ink,
+                            ),
+                          )
+                        else
+                          Text(
+                            valueText,
+                            style: const TextStyle(
+                              fontSize: 30,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: HomeColors.inkSoft,
+                            ),
                           ),
-                        ),
                         const SizedBox(width: 7),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 3),
@@ -891,7 +1519,30 @@ class _KpiCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
-                    _Delta(delta: delta, text: deltaText),
+                    if (data == null && !loading)
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 12,
+                            color: HomeColors.inkSoft,
+                          ),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'دادهٔ این ویجت از سرور دریافت نشد',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: HomeColors.inkSoft,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      _Delta(delta: delta, text: deltaText),
                     const SizedBox(height: 2),
                     HSparkline(
                       values: spark.isEmpty
@@ -1003,7 +1654,8 @@ class _KpiRows extends StatelessWidget {
               ),
           ]
         : [
-            for (final r in fallback) (r.label, r.value, r.hint),
+            // داده‌ای از سرور نرسیده → عدد ساختگی/صفر نمایش نمی‌دهیم
+            for (final r in fallback) (r.label, '—', r.hint),
           ];
 
     return Column(
@@ -1092,46 +1744,54 @@ class _ModuleCard extends StatelessWidget {
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // آیکون و بج وسط‌چین
+            Stack(
+              alignment: Alignment.center,
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 44,
+                  height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(15),
                     color: tile.color.withValues(alpha: 0.13),
                   ),
-                  child: Icon(tile.icon, size: 19, color: tile.color),
+                  child: Icon(tile.icon, size: 22, color: tile.color),
                 ),
-                const Spacer(),
                 if (tile.locked)
-                  Icon(
-                    Icons.lock_outline_rounded,
-                    size: 14,
-                    color: HomeColors.inkFaint,
+                  PositionedDirectional(
+                    end: -6,
+                    top: -4,
+                    child: Icon(
+                      Icons.lock_outline_rounded,
+                      size: 14,
+                      color: HomeColors.inkFaint,
+                    ),
                   )
                 else if ((tile.badge ?? '').isNotEmpty)
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 22),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: tile.color.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      tile.badge!,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        color: tile.color,
+                  PositionedDirectional(
+                    end: -10,
+                    top: -5,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 22),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: tile.color.withValues(alpha: 0.13),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        tile.badge!,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: tile.color,
+                        ),
                       ),
                     ),
                   ),
@@ -1140,10 +1800,12 @@ class _ModuleCard extends StatelessWidget {
             const Spacer(),
             Text(
               tile.name,
-              maxLines: 1,
+              maxLines: 2,
+              textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12.5,
+                height: 1.35,
                 fontWeight: FontWeight.w800,
                 color: HomeColors.ink,
               ),
@@ -1152,6 +1814,7 @@ class _ModuleCard extends StatelessWidget {
             Text(
               tile.locked ? 'بدون مجوز' : tile.subtitle,
               maxLines: 1,
+              textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 10,
