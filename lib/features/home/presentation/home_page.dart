@@ -29,6 +29,7 @@ import '../../office_automation/data/email_repository.dart';
 import '../../office_automation/models/office_common.dart';
 import '../../office_automation/presentation/letter_detail_page.dart';
 import '../../work_orders/presentation/work_order_detail_page.dart';
+import '../../it_assets/presentation/doc_archive_page.dart';
 import '../../office_automation/data/office_repository.dart';
 import '../../work_orders/data/work_order_repository.dart';
 import '../data/home_repository.dart';
@@ -612,6 +613,13 @@ class _HomePageState extends State<HomePage> {
       Navigator.of(
         context,
       ).push(MaterialPageRoute<void>(builder: (_) => const ItHomePage()));
+      return;
+    }
+    if (m.onTapName == 'doc-archive') {
+      HapticFeedback.selectionClick();
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const DocArchivePage()),
+      );
       return;
     }
     if (m.onTapName == 'sales') {

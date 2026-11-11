@@ -349,6 +349,14 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     onTapName: 'it-assets',
   ),
   ModuleTile(
+    // ماژول مستقل «آرشیو اسناد» — آینهٔ منوی وب (گیت DocArchive)
+    name: 'آرشیو اسناد',
+    subtitle: 'پوشه، نسخه و گردش',
+    icon: Icons.folder_open_rounded,
+    color: const Color(0xff4f7ce8),
+    onTapName: 'doc-archive',
+  ),
+  ModuleTile(
     name: 'فروشگاهی',
     subtitle: 'فاکتور و سفارش',
     icon: Icons.point_of_sale_rounded,
