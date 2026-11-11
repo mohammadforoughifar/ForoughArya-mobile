@@ -19,6 +19,8 @@ class WorkOrderEditorPage extends StatefulWidget {
     this.prefillTags = const [],
     this.prefillDue,
     this.sourceLabel,
+    this.sourceModule,
+    this.sourceId,
   });
 
   final WorkOrder? order;
@@ -30,6 +32,10 @@ class WorkOrderEditorPage extends StatefulWidget {
   final List<String> prefillTags;
   final DateTime? prefillDue;
   final String? sourceLabel;
+
+  /// مبدأ سند (آینهٔ وب): مثلاً `Document` + شناسهٔ مدرک
+  final String? sourceModule;
+  final int? sourceId;
   @override
   State<WorkOrderEditorPage> createState() => _WorkOrderEditorPageState();
 }
@@ -367,6 +373,10 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
     'parentOrderId': widget.order?.parentOrderId,
     'weight': _weight,
     'clientRequestId': _requestId,
+    if ((widget.sourceModule ?? '').trim().isNotEmpty && (widget.sourceId ?? 0) > 0)
+      'sourceModule': widget.sourceModule!.trim(),
+    if ((widget.sourceModule ?? '').trim().isNotEmpty && (widget.sourceId ?? 0) > 0)
+      'sourceId': widget.sourceId,
   };
 
   Future<void> _save() async {

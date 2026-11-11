@@ -20,7 +20,15 @@ import '../../../core/utils/fa.dart';
 import '../../shop/presentation/shop_style.dart';
 import '../data/doc_archive_repository.dart';
 import '../models/doc_archive_models.dart';
+import '../../work_orders/data/work_order_repository.dart';
+import '../../work_orders/presentation/work_order_detail_page.dart';
+import '../../work_orders/presentation/work_order_editor_page.dart';
 import 'doc_archive_form_page.dart';
+import 'doc_automation_sheet.dart';
+import 'doc_chat_sheet.dart';
+import 'doc_content_compare_page.dart';
+import 'doc_insight_sheet.dart';
+import 'doc_management_sheet.dart';
 import 'doc_permission_sheet.dart';
 import 'doc_version_sheet.dart';
 import 'doc_archive_page.dart' show colorFromHex, docLevelColor, docVersionColor;
@@ -46,11 +54,16 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
   List<DocLinkRow> _links = const [];
   String? _logFilter;
 
+  /// فاز ۹-ل — دستورهای کار مرتبط با این مدرک
+  List<DocWorkOrderLink> _workOrders = const [];
+  bool _woLoading = false;
+
   @override
   void initState() {
     super.initState();
     _repo = DocArchiveRepository(context.read<ApiClient>());
     _load();
+    _loadWorkOrders();
   }
 
   Future<void> _load() async {
@@ -99,6 +112,31 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
         ),
         actions: [
+          if (doc != null && doc.myLevel >= DocLevel.read)
+            IconButton(
+              tooltip: 'گفتگو با سند',
+              icon: const Icon(Icons.smart_toy_rounded, size: 19),
+              onPressed: _openChat,
+            ),
+          if (doc != null && doc.isActive && doc.myLevel >= DocLevel.read &&
+              _canIssueWorkOrder)
+            IconButton(
+              tooltip: 'صدور دستور کار',
+              icon: const Icon(Icons.playlist_add_check_rounded, size: 20),
+              onPressed: _issueWorkOrder,
+            ),
+          if (doc != null && doc.myLevel >= DocLevel.read)
+            IconButton(
+              tooltip: 'گزارش‌ها و نظرات',
+              icon: const Icon(Icons.shield_outlined, size: 19),
+              onPressed: _openInsights,
+            ),
+          if (doc != null && doc.myLevel >= DocLevel.write)
+            IconButton(
+              tooltip: 'ارتباط با اتوماسیون اداری',
+              icon: const Icon(Icons.hub_outlined, size: 19),
+              onPressed: _openAutomation,
+            ),
           if (doc != null && doc.isActive && doc.myLevel >= DocLevel.write)
             IconButton(
               tooltip: 'ثبت ورژن جدید',
@@ -116,6 +154,12 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
               tooltip: 'ویرایش مدرک',
               icon: const Icon(Icons.edit_rounded, size: 19),
               onPressed: _edit,
+            ),
+          if (doc != null && doc.myLevel >= DocLevel.full)
+            IconButton(
+              tooltip: 'ابزارهای مدیریت مدرک',
+              icon: const Icon(Icons.settings_suggest_rounded, size: 19),
+              onPressed: _openManagementTools,
             ),
           if (doc != null && doc.myLevel >= DocLevel.full) ...[
             IconButton(
@@ -226,11 +270,11 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
                   const SizedBox(height: 8),
                   _versionsCard(),
                   const SizedBox(height: 8),
+                  _workOrdersCard(),
+                  const SizedBox(height: 8),
+                  _linksCard(),
+                  const SizedBox(height: 8),
                   _logsCard(),
-                  if (_links.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _linksCard(),
-                  ],
                 ],
               ],
             ),
@@ -936,11 +980,15 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
           for (final l in _links)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Wrap(
-                spacing: 5,
-                runSpacing: 3,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 5,
+                      runSpacing: 3,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
                   Text(
                     '${l.code} — ${l.title}',
                     style: const TextStyle(
@@ -966,9 +1014,460 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
                         color: ShopColors.inkFaint,
                       ),
                     ),
+                      ],
+                    ),
+                  ),
+                  if (_canLink)
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 26,
+                        minHeight: 26,
+                      ),
+                      tooltip: 'حذف لینک',
+                      icon: const Icon(
+                        Icons.link_off_rounded,
+                        size: 15,
+                        color: ShopColors.danger,
+                      ),
+                      onPressed: () => _unlink(l),
+                    ),
                 ],
               ),
             ),
+          if (_links.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'مدرک مرتبطی ثبت نشده است.',
+                style: TextStyle(fontSize: 9.5, color: ShopColors.inkFaint),
+              ),
+            ),
+          if (_canLink) ...[
+            const Divider(height: 16),
+            const Text(
+              'لینک به چند مدرک (چندانتخابی)',
+              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                foregroundColor: ShopColors.ink,
+                side: const BorderSide(color: ShopColors.line),
+                alignment: Alignment.centerRight,
+              ),
+              onPressed: _linkMany,
+              icon: const Icon(Icons.add_link_rounded, size: 15),
+              label: const Text(
+                'انتخاب چند مدرک برای لینک',
+                style: TextStyle(fontSize: 9.5),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              kDocLinkHint,
+              style: TextStyle(
+                fontSize: 8.5,
+                height: 1.8,
+                color: ShopColors.inkFaint,
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  // ============================================================
+  //  فاز ۹-ک/۹-ل/۱۰ — لینک چندمدرکی، گفتگو، دستور کار، اتوماسیون، گزارش‌ها
+  // ============================================================
+
+  /// گیت وب: فقط مدرک فعال + سطح «نوشتن»
+  bool get _canLink {
+    final d = _doc;
+    return d != null && d.isActive && !d.isDeleted && d.myLevel >= DocLevel.write;
+  }
+
+  void _toast(String text, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ? text : text,
+          style: const TextStyle(fontSize: 10.5),
+        ),
+        backgroundColor: error ? ShopColors.danger : null,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _clean(Object e) => e
+      .toString()
+      .replaceFirst('ApiException: ', '')
+      .replaceFirst('Exception: ', '')
+      .trim();
+
+  Future<void> _unlink(DocLinkRow l) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text(
+          'حذف لینک',
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'لینک مدرک «${l.code} — ${l.title}» حذف شود؟',
+          style: const TextStyle(fontSize: 10.5, height: 1.8),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ShopColors.danger),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('حذف', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.unlinkDocument(
+        documentId: _doc!.id,
+        linkedDocumentId: l.linkedDocumentId,
+      );
+      _toast('لینک حذف شد.');
+      await _load();
+    } catch (e) {
+      _toast(_clean(e), error: true);
+    }
+  }
+
+  Future<void> _linkMany() async {
+    List<DocLookup> list;
+    try {
+      list = await _repo.linkableDocuments(_doc!.id);
+    } catch (e) {
+      _toast(_clean(e), error: true);
+      return;
+    }
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<List<int>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => _DocLinkPicker(
+        docs: list,
+        already: _links.map((e) => e.linkedDocumentId).toSet(),
+      ),
+    );
+    if (picked == null || picked.isEmpty) return;
+    final note = await _askLinkNote();
+    if (note == null) return;
+    try {
+      final n = await _repo.linkMany(
+        DocLinkInput(
+          documentId: _doc!.id,
+          linkedDocumentIds: picked,
+          note: note,
+        ),
+      );
+      _toast('${Fa.digits(n)} مدرک لینک شد.');
+      await _load();
+    } catch (e) {
+      _toast(_clean(e), error: true);
+    }
+  }
+
+  Future<String?> _askLinkNote() async {
+    final ctrl = TextEditingController();
+    final res = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text(
+          'یادداشت لینک',
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+        ),
+        content: TextField(
+          controller: ctrl,
+          style: const TextStyle(fontSize: 11),
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: 'یادداشت (اختیاری)',
+            hintStyle: TextStyle(fontSize: 9.5),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(null),
+            child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(c).pop(ctrl.text),
+            child: const Text('لینک کن', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+    return res;
+  }
+
+  // ---------------- گفتگو با سند ----------------
+
+  Future<void> _openChat() async {
+    final doc = _doc!;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => DocChatSheet(
+        documentId: doc.id,
+        documentTitle: '${doc.code} — ${doc.title}',
+      ),
+    );
+  }
+
+  // ---------------- ابزارهای مدیریت ----------------
+
+  Future<void> _openManagementTools() async {
+    var users = <DocLookup>[];
+    try {
+      users = (await _repo.lookups()).users;
+    } catch (_) {}
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => DocManagementSheet(documentId: _doc!.id, users: users),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _openInsights() async {
+    final doc = _doc!;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => DocInsightSheet(
+        documentId: doc.id,
+        myLevel: doc.myLevel,
+        isActive: doc.isActive,
+      ),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _openAutomation() async {
+    final doc = _doc!;
+    List<DocAttachment> files = const [];
+    final vid = _activeVersionId;
+    if (vid > 0) {
+      try {
+        files = await _repo.attachments(vid);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => DocAutomationSheet(document: doc, attachments: files),
+    );
+  }
+
+  int get _activeVersionId {
+    for (final v in _versions) {
+      if (v.isActive) return v.id;
+    }
+    return _versions.isEmpty ? 0 : _versions.first.id;
+  }
+
+  // ---------------- مقایسهٔ محتوای فایل‌ها ----------------
+
+  void _openContentCompare() {
+    if (_versions.length < 2) {
+      _toast('برای مقایسه محتوا حداقل دو ورژن لازم است.', error: true);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DocContentComparePage(
+          documentId: _doc!.id,
+          versions: _versions,
+        ),
+      ),
+    );
+  }
+
+  // ---------------- ارتباط با دستور کار ----------------
+
+  bool get _canIssueWorkOrder {
+    final d = _doc;
+    if (d == null) return false;
+    return d.isActive && d.myLevel >= DocLevel.read;
+  }
+
+  Future<void> _loadWorkOrders() async {
+    final d = _doc;
+    if (d == null) return;
+    setState(() => _woLoading = true);
+    try {
+      final rows = await WorkOrderRepository(
+        context.read<ApiClient>(),
+      ).forSource(module: kDocWoSourceModule, sourceId: d.id);
+      if (!mounted) return;
+      setState(() {
+        _workOrders = DocWorkOrderLink.listFrom(rows);
+        _woLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _workOrders = const [];
+        _woLoading = false;
+      });
+    }
+  }
+
+  Future<void> _issueWorkOrder() async {
+    final doc = _doc!;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WorkOrderEditorPage(
+          prefillTitle: 'بررسی مدرک ${doc.code}',
+          prefillDescription:
+              'مدرک «${doc.title}» (کد ${doc.code}) در آرشیو اسناد نیازمند بررسی است.',
+          sourceLabel: 'مدرک ${doc.code}',
+          sourceModule: kDocWoSourceModule,
+          sourceId: doc.id,
+        ),
+      ),
+    );
+    if (mounted) await _loadWorkOrders();
+  }
+
+  Widget _workOrdersCard() => Container(
+    decoration: BoxDecoration(
+      color: ShopColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: ShopColors.line),
+    ),
+    child: Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        onExpansionChanged: (open) {
+          if (open && _workOrders.isEmpty && !_woLoading) _loadWorkOrders();
+        },
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        leading: const Icon(
+          Icons.playlist_add_check_rounded,
+          size: 16,
+          color: ShopColors.seed,
+        ),
+        title: Text(
+          'دستورهای کار (${Fa.digits(_workOrders.length)})',
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900),
+        ),
+        children: [
+          if (_woLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (_workOrders.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'برای این مدرک دستور کاری ثبت نشده است.',
+                style: TextStyle(fontSize: 9.5, color: ShopColors.inkFaint),
+              ),
+            )
+          else
+            for (final w in _workOrders)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${w.number} — ${w.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    ShopTag(
+                      text: w.statusFa,
+                      color: w.isClosed ? ShopColors.inkFaint : ShopColors.warn,
+                    ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      icon: const Icon(Icons.chevron_left_rounded, size: 16),
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => WorkOrderDetailPage(id: w.id),
+                          ),
+                        );
+                        if (mounted) await _loadWorkOrders();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+          if (_canIssueWorkOrder) ...[
+            const Divider(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 34),
+                ),
+                onPressed: _issueWorkOrder,
+                icon: const Icon(Icons.add_task_rounded, size: 15),
+                label: const Text(
+                  'صدور دستور کار از این مدرک',
+                  style: TextStyle(fontSize: 9.5),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     ),
@@ -1263,5 +1762,133 @@ class DocLinkRow {
         activeVersionNo: (j['activeVersionNo'] as num?)?.toInt() ?? 0,
       );
     }).toList();
+  }
+}
+
+// ============================================================
+//  انتخابگر چندمدرکی لینک — «لینک به چند مدرک (چندانتخابی)»
+// ============================================================
+
+class _DocLinkPicker extends StatefulWidget {
+  const _DocLinkPicker({required this.docs, this.already = const {}});
+
+  final List<DocLookup> docs;
+
+  /// مدارکی که از قبل لینک شده‌اند
+  final Set<int> already;
+
+  @override
+  State<_DocLinkPicker> createState() => _DocLinkPickerState();
+}
+
+class _DocLinkPickerState extends State<_DocLinkPicker> {
+  final Set<int> _sel = {};
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _q.trim();
+    final rows = q.isEmpty
+        ? widget.docs
+        : widget.docs
+              .where(
+                (d) =>
+                    d.name.contains(q) ||
+                    (d.infoText ?? '').contains(q),
+              )
+              .toList();
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.72,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'لینک به چند مدرک (${Fa.digits(_sel.length)} انتخاب)',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _sel.isEmpty
+                      ? null
+                      : () => Navigator.of(context).pop(_sel.toList()),
+                  child: const Text(
+                    'لینک کن',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: TextField(
+              onChanged: (v) => setState(() => _q = v),
+              style: const TextStyle(fontSize: 11),
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: 'کد یا عنوان مدرک را تایپ کنید…',
+                hintStyle: TextStyle(fontSize: 9.5),
+                prefixIcon: Icon(Icons.search_rounded, size: 18),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: rows.isEmpty
+                ? const Center(
+                    child: Text(
+                      'مدرکی یافت نشد.',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: ShopColors.inkFaint,
+                      ),
+                    ),
+                  )
+                : ListView(
+                    children: [
+                      for (final d in rows)
+                        CheckboxListTile(
+                          dense: true,
+                          value:
+                              _sel.contains(d.id) || widget.already.contains(d.id),
+                          onChanged: widget.already.contains(d.id)
+                              ? null
+                              : (v) => setState(() {
+                                  if (v == true) {
+                                    _sel.add(d.id);
+                                  } else {
+                                    _sel.remove(d.id);
+                                  }
+                                }),
+                          title: Text(
+                            d.name,
+                            style: const TextStyle(fontSize: 10.5),
+                          ),
+                          subtitle: widget.already.contains(d.id)
+                              ? const Text(
+                                  'قبلاً لینک شده',
+                                  style: TextStyle(fontSize: 8.5),
+                                )
+                              : ((d.infoText ?? '').isEmpty
+                                    ? null
+                                    : Text(
+                                        d.infoText!,
+                                        style: const TextStyle(fontSize: 8.5),
+                                      )),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 }

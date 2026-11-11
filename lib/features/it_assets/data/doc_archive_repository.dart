@@ -527,6 +527,389 @@ class DocArchiveRepository {
 
   // ---------------- جستجوی هوشمند ----------------
 
+  // ---------------- فاز ۹-ک/۹-ل: لینک چندمدرکی ----------------
+
+  /// لینک چند مدرک — `POST documents/links/many` با fallback تک‌تک روی `documents/links`
+  Future<int> linkMany(DocLinkInput input) async {
+    final ids = input.linkedDocumentIds.where((e) => e > 0).toList();
+    if (ids.isEmpty) return 0;
+    try {
+      await _api.post<dynamic>('$_root/documents/links/many', input.toJson());
+      return ids.length;
+    } catch (_) {
+      // سرورهای قدیمی‌تر فقط مسیر تک‌تک دارند
+      var ok = 0;
+      for (final id in ids) {
+        try {
+          await linkDocument(
+            documentId: input.documentId,
+            linkedDocumentId: id,
+            note: input.note,
+          );
+          ok++;
+        } catch (_) {}
+      }
+      if (ok == 0) rethrow;
+      return ok;
+    }
+  }
+
+  /// مدارک قابل لینک‌شدن (فعال) برای انتخابگر چندتایی
+  Future<List<DocLookup>> linkableDocuments(int documentId, {String? q}) async {
+    final page = await documents(
+      take: 200,
+      search: q,
+      status: 'active',
+    );
+    return page.items
+        .where((d) => d.id != documentId)
+        .map((d) => DocLookup(id: d.id, name: '${d.code} — ${d.title}'))
+        .toList();
+  }
+
+  // ---------------- فاز ۹-ک: ورود انبوه ----------------
+
+  /// پیکربندی ورود انبوه — `GET import/config`
+  Future<DocImportConfig> importConfig() async {
+    final r = await _api.get<dynamic>('$_root/import/config');
+    final d = r.data;
+    return d is Map
+        ? DocImportConfig.fromJson(Map<String, dynamic>.from(d))
+        : const DocImportConfig();
+  }
+
+  /// بارگذاری یک فایل از ورود انبوه — `POST import/upload`
+  Future<void> importUpload({
+    required int rootFolderId,
+    required String relativePath,
+    required List<int> bytes,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final form = FormData.fromMap({
+      'rootFolderId': rootFolderId,
+      'path': relativePath,
+      'file': MultipartFile.fromBytes(bytes, filename: relativePath),
+    });
+    await _api.postForm<dynamic>(
+      '$_root/import/upload',
+      form,
+      onSendProgress: onProgress,
+    );
+  }
+
+  /// اجرای ورود انبوه روی فایل‌های بارگذاری‌شده — `POST import/run`
+  Future<DocImportResult> importRun({
+    required int rootFolderId,
+    required List<String> relativePaths,
+  }) async {
+    final r = await _api.post<dynamic>('$_root/import/run', {
+      'rootFolderId': rootFolderId,
+      'paths': relativePaths,
+    });
+    final d = r.data;
+    return d is Map
+        ? DocImportResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocImportResult();
+  }
+
+  // ---------------- فاز ۹-ل: گفتگو با سند ----------------
+
+  /// پرسش از متن سند — `POST documents/{id}/chat`
+  Future<DocChatAnswer> chatWithDocument(
+    int documentId,
+    DocChatRequest req,
+  ) async {
+    final r = await _api.post<dynamic>(
+      '$_root/documents/$documentId/chat',
+      req.toJson(),
+    );
+    final d = r.data;
+    return d is Map
+        ? DocChatAnswer.fromJson(Map<String, dynamic>.from(d))
+        : const DocChatAnswer();
+  }
+
+  // ---------------- فاز ۹-ل: دسترسی موقت ----------------
+
+  Future<List<DocTemporaryGrant>> temporaryGrants(int documentId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/temporary-grants',
+    );
+    final raw = r.data;
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => DocTemporaryGrant.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  Future<void> saveTemporaryGrant({
+    required int documentId,
+    required int userId,
+    required DateTime expiresAtUtc,
+    bool canDownload = false,
+  }) => _api.post<dynamic>(
+    '$_root/documents/$documentId/temporary-grants',
+    {
+      'userId': userId,
+      'canDownload': canDownload,
+      'expiresAtUtc': expiresAtUtc.toUtc().toIso8601String(),
+    },
+  );
+
+  Future<void> revokeTemporaryGrant({
+    required int documentId,
+    required int grantId,
+  }) => _api.delete<dynamic>(
+    '$_root/documents/$documentId/temporary-grants/$grantId',
+  );
+
+  // ---------------- فاز ۹-ل: پیگیری تمدید ----------------
+
+  Future<DocRenewalPolicy> renewalPolicy(int documentId) async {
+    final r = await _api.get<dynamic>('$_root/documents/$documentId/renewal');
+    final d = r.data;
+    return d is Map
+        ? DocRenewalPolicy.fromJson(Map<String, dynamic>.from(d))
+        : const DocRenewalPolicy();
+  }
+
+  Future<void> saveRenewalPolicy(int documentId, DocRenewalPolicy p) =>
+      _api.put<dynamic>('$_root/documents/$documentId/renewal', {
+        'enabled': p.enabled,
+        'assigneeUserId': p.assigneeUserId,
+        'leadDays': p.leadDays,
+      });
+
+  // ---------------- فاز ۹-ل: صف پردازش و ابزار مدیر ----------------
+
+  Future<DocIndexQueue> indexQueue() async {
+    final r = await _api.get<dynamic>('$_root/index-queue');
+    final d = r.data;
+    return d is Map
+        ? DocIndexQueue.fromJson(Map<String, dynamic>.from(d))
+        : const DocIndexQueue();
+  }
+
+  Future<void> retryIndex(int attachmentId) =>
+      _api.post<dynamic>('$_root/index-queue/$attachmentId/retry', const {});
+
+  Future<void> reindexAll() =>
+      _api.post<dynamic>('$_root/reindex', const {});
+
+  Future<void> semanticReindex({int take = 200}) =>
+      _api.post<dynamic>('$_root/semantic-reindex?take=$take', const {});
+
+  Future<void> expiryCheck() =>
+      _api.post<dynamic>('$_root/expiry-check', const {});
+
+  // ---------------- فاز ۱۰: مقایسهٔ محتوای فایل‌ها ----------------
+
+  /// پیوست‌های یک نسخه برای انتخاب در مقایسه — `GET compare-files/{versionId}`
+  Future<List<DocLookup>> compareFiles(int documentId, int versionId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/compare-files/$versionId',
+      query: {'take': 500},
+    );
+    final d = r.data;
+    final raw = d is List ? d : (d is Map ? (d['items'] ?? []) : const []);
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((e) {
+      final m = Map<String, dynamic>.from(e);
+      return DocLookup(
+        id: m['id'] is num
+            ? (m['id'] as num).toInt()
+            : int.tryParse('${m['id']}') ?? 0,
+        name: '${m['name'] ?? ''}',
+      );
+    }).toList();
+  }
+
+  /// مقایسهٔ متن/سلول‌های دو پیوست — `POST compare-content`
+  Future<DocContentCompare> compareContent({
+    required int documentId,
+    required int leftAttachmentId,
+    required int rightAttachmentId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '$_root/documents/$documentId/compare-content',
+      {
+        'leftAttachmentId': leftAttachmentId,
+        'rightAttachmentId': rightAttachmentId,
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? DocContentCompare.fromJson(Map<String, dynamic>.from(d))
+        : const DocContentCompare();
+  }
+
+  /// تأیید رمز برای مقایسهٔ محتوای محرمانه — `POST confirm-download`
+  Future<void> confirmDownload(int documentId, String password) =>
+      _api.post<dynamic>('$_root/documents/$documentId/confirm-download', {
+        'password': password,
+      });
+
+  // ---------------- فاز ۱۰: گزارش‌های امنیتی ----------------
+
+  Future<List<DocFileAccessLog>> accessLogs(int documentId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/access-logs',
+    );
+    return DocFileAccessLog.listFrom(r.data);
+  }
+
+  Future<List<DocPrintLog>> printLogs(int documentId) async {
+    final r = await _api.get<dynamic>('$_root/print/logs/$documentId');
+    return DocPrintLog.listFrom(r.data);
+  }
+
+  Future<List<DocLeakTrace>> leakTraces(int documentId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/leak-traces',
+    );
+    return DocLeakTrace.listFrom(r.data);
+  }
+
+  // ---------------- فاز ۱۰: درخواست‌های دسترسی ----------------
+
+  Future<List<DocAccessRequest>> accessRequests(int documentId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/access-requests',
+    );
+    return DocAccessRequest.listFrom(r.data);
+  }
+
+  Future<List<DocAccessRequest>> myAccessRequests(int documentId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/access-requests/mine',
+    );
+    return DocAccessRequest.listFrom(r.data);
+  }
+
+  Future<void> requestAccess({
+    required int documentId,
+    int level = DocLevel.read,
+    String note = '',
+  }) => _api.post<dynamic>(
+    '$_root/documents/$documentId/request-access',
+    {'requestedLevel': level, 'note': note.trim()},
+  );
+
+  Future<void> approveAccessRequest(int requestId, {int? level, String note = ''}) =>
+      _api.post<dynamic>('$_root/access-requests/$requestId/approve', {
+        'requestedLevel': level,
+        'note': note.trim(),
+      });
+
+  Future<void> rejectAccessRequest(int requestId, {String note = ''}) =>
+      _api.post<dynamic>('$_root/access-requests/$requestId/reject', {
+        'note': note.trim(),
+      });
+
+  Future<void> cancelAccessRequest(int requestId) =>
+      _api.post<dynamic>('$_root/access-requests/$requestId/cancel', const {});
+
+  // ---------------- فاز ۱۰: متن استخراج‌شده و OCR ----------------
+
+  Future<List<DocExtractedText>> extractedTexts(int documentId) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/extracted-texts',
+    );
+    return DocExtractedText.listFrom(r.data);
+  }
+
+  Future<String> runOcr(int attachmentId) async {
+    final r = await _api.post<dynamic>(
+      '$_root/attachments/$attachmentId/ocr',
+      const {},
+    );
+    final d = r.data;
+    return d is Map ? '${d['message'] ?? ''}' : '';
+  }
+
+  // ---------------- فاز ۱۰: نظرات مدرک ----------------
+
+  Future<List<DocComment>> comments(int documentId) async {
+    final r = await _api.get<dynamic>('$_root/documents/$documentId/comments');
+    return DocComment.listFrom(r.data);
+  }
+
+  Future<String> addComment({
+    required int documentId,
+    required String body,
+    int? versionId,
+    int? parentId,
+    List<int> mentionedUserIds = const [],
+  }) async {
+    final r = await _api.post<dynamic>(
+      '$_root/documents/$documentId/comments',
+      {
+        'documentId': documentId,
+        'versionId': versionId,
+        'parentId': parentId,
+        'body': body,
+        'mentionedUserIds': mentionedUserIds,
+      },
+    );
+    final d = r.data;
+    return d is Map ? '${d['message'] ?? ''}' : '';
+  }
+
+  Future<void> resolveComment(int documentId, int commentId) =>
+      _api.post<dynamic>(
+        '$_root/documents/$documentId/comments/$commentId/resolve',
+        const {},
+      );
+
+  // ---------------- فاز ۱۰: شماره‌گذاری کد مدرک ----------------
+
+  Future<DocCodeSettings> codeSettings() async {
+    final r = await _api.get<dynamic>('$_root/settings/code-numbering');
+    final d = r.data;
+    return d is Map
+        ? DocCodeSettings.fromJson(Map<String, dynamic>.from(d))
+        : const DocCodeSettings();
+  }
+
+  Future<void> saveCodeSettings(DocCodeSettings s) =>
+      _api.put<dynamic>('$_root/settings/code-numbering', s.toJson());
+
+  Future<String> runCodeBackfill() async {
+    final r = await _api.post<dynamic>(
+      '$_root/settings/code-numbering/run-once',
+      const {},
+    );
+    final d = r.data;
+    return d is Map ? '${d['message'] ?? ''}' : '';
+  }
+
+  // ---------------- فاز ۱۰: بررسی تکراری ----------------
+
+  Future<DocDuplicateResult> checkDuplicate(DocDuplicateRequest req) async {
+    final r = await _api.post<dynamic>('$_root/duplicate-check', req.toJson());
+    final d = r.data;
+    return d is Map
+        ? DocDuplicateResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocDuplicateResult();
+  }
+
+  // ---------------- فاز ۱۰: خروجی ZIP پوشه ----------------
+
+  /// آدرس خروجی ZIP — همان `export-zip` وب
+  String exportZipUrl({
+    int? folderId,
+    bool includeSubfolders = true,
+    bool onlyActiveVersions = true,
+    bool includeManifest = true,
+  }) {
+    final q =
+        'includeSubfolders=$includeSubfolders&onlyActiveVersions=$onlyActiveVersions&includeManifest=$includeManifest';
+    return (folderId ?? 0) <= 0
+        ? _api.resolveUrl('$_root/export-zip?$q')
+        : _api.resolveUrl('$_root/folders/$folderId/export-zip?$q');
+  }
+
   /// جستجوی معنایی — `POST api/doc-archive/semantic-search`
   Future<DocSemanticResult> semanticSearch(DocSemanticRequest req) async {
     final r = await _api.post<dynamic>('$_root/semantic-search', req.toJson());
