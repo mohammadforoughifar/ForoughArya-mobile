@@ -327,7 +327,7 @@ void main() {
       // ماژول‌های قابل دسترس در تب
       expect(find.text('دستور کار'), findsWidgets);
       expect(find.text('اتوماسیون'), findsWidgets);
-      expect(find.text('آرشیو اسناد'), findsWidgets);
+      expect(find.text('آرشیو اسناد و مدارک'), findsWidgets);
 
       // endpoint‌های واقعی صدا زده شدند
       expect(r.adapter.companyCalls, 1);

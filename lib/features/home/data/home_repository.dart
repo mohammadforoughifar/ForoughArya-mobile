@@ -349,12 +349,20 @@ List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
     onTapName: 'it-assets',
   ),
   ModuleTile(
-    // ماژول مستقل «آرشیو اسناد» — آینهٔ منوی وب (گیت DocArchive)
-    name: 'آرشیو اسناد',
+    // ماژول مستقل «آرشیو اسناد و مدارک» — آینهٔ منوی وب (گیت DocArchive)
+    name: 'آرشیو اسناد و مدارک',
     subtitle: 'پوشه، نسخه و گردش',
     icon: Icons.folder_open_rounded,
     color: const Color(0xff4f7ce8),
     onTapName: 'doc-archive',
+  ),
+  ModuleTile(
+    // کارتابل آرشیو — همان گروه وب «آرشیو اسناد و مدارک» (گیت DocArchive)
+    name: 'کارتابل آرشیو اسناد و مدارک',
+    subtitle: 'کارهای تأیید و اعلان',
+    icon: Icons.move_to_inbox_rounded,
+    color: const Color(0xffb45309),
+    onTapName: 'doc-archive-cartable',
   ),
   ModuleTile(
     name: 'فروشگاهی',
