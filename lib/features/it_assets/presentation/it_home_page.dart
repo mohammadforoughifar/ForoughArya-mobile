@@ -15,6 +15,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../data/it_perms.dart';
 import 'cctv_cameras_page.dart';
 import 'cctv_nvrs_page.dart';
+import 'network_scan_page.dart';
 import 'hardware_dashboard_page.dart';
 import 'ipam_page.dart';
 import 'it_requests_page.dart';
@@ -186,6 +187,16 @@ class ItHomePage extends StatelessWidget {
                   icon: Icons.dns_rounded,
                   color: const Color(0xff0891b2),
                   onTap: () => _push(context, const CctvNvrsPage()),
+                ),
+              if (perms.canSeeSystemUsers)
+                _card(
+                  context,
+                  title: 'اسکن شبکه',
+                  subtitle:
+                      'کشف سیستم‌های داخل شبکه با پیشرفت زنده و پیدا کردن دوربین‌ها و دستگاه‌های NVR/DVR',
+                  icon: Icons.radar_rounded,
+                  color: const Color(0xff4f8cff),
+                  onTap: () => _push(context, const NetworkScanPage()),
                 ),
               if (perms.canSeeItVault)
                 _card(
