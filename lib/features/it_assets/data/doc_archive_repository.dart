@@ -232,6 +232,191 @@ class DocArchiveRepository {
         .map((e) => DocTag.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
+
+  // ---------------- فاز ۹-ط: عملیات گروهی ----------------
+
+  Future<DocBulkResult> bulkMove({
+    required List<int> ids,
+    required int targetFolderId,
+  }) async {
+    final r = await _api.post<dynamic>('$_root/bulk/move', {
+      'documentIds': ids,
+      'targetFolderId': targetFolderId,
+    });
+    final d = r.data;
+    return d is Map
+        ? DocBulkResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocBulkResult();
+  }
+
+  Future<DocBulkResult> bulkTags({
+    required List<int> ids,
+    required List<int> tagIds,
+    DocBulkTagMode mode = DocBulkTagMode.append,
+  }) async {
+    final r = await _api.post<dynamic>('$_root/bulk/tags', {
+      'documentIds': ids,
+      'tagIds': tagIds,
+      'mode': mode == DocBulkTagMode.replace ? 'replace' : 'append',
+    });
+    final d = r.data;
+    return d is Map
+        ? DocBulkResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocBulkResult();
+  }
+
+  Future<DocBulkResult> bulkExpire({
+    required List<int> ids,
+    DateTime? expireDate,
+  }) async {
+    final r = await _api.post<dynamic>('$_root/bulk/expire', {
+      'documentIds': ids,
+      'expireDate': expireDate?.toIso8601String(),
+    });
+    final d = r.data;
+    return d is Map
+        ? DocBulkResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocBulkResult();
+  }
+
+  Future<DocBulkResult> bulkDelete(List<int> ids) async {
+    final r = await _api.post<dynamic>('$_root/bulk/delete', ids);
+    final d = r.data;
+    return d is Map
+        ? DocBulkResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocBulkResult();
+  }
+
+  // ---------------- سطل بازیافت ----------------
+
+  /// بازگرداندن مدرک — `PUT documents/{id}/restore`
+  Future<String> restoreDocument(int id) async {
+    final r = await _api.put<dynamic>('$_root/documents/$id/restore');
+    final d = r.data;
+    return d is Map ? '${d['message'] ?? 'مدرک بازگردانده شد.'}' : 'مدرک بازگردانده شد.';
+  }
+
+  /// حذف قطعی برگشت‌ناپذیر — `DELETE documents/{id}/purge`
+  Future<String> purgeDocument(int id) async {
+    final r = await _api.delete<dynamic>('$_root/documents/$id/purge');
+    final d = r.data;
+    return d is Map ? '${d['message'] ?? 'مدرک حذف شد.'}' : 'مدرک حذف شد.';
+  }
+
+  /// خالی کردن کامل سطل — `DELETE api/doc-archive/trash`
+  Future<String> emptyTrash() async {
+    final r = await _api.delete<dynamic>('$_root/trash');
+    final d = r.data;
+    return d is Map
+        ? '${d['message'] ?? 'سطل بازیافت خالی شد.'}'
+        : 'سطل بازیافت خالی شد.';
+  }
+
+  // ---------------- فعال/غیرفعال مدرک ----------------
+
+  Future<void> setDocumentActive({
+    required int id,
+    required bool isActive,
+    String? reason,
+  }) => _api.put<dynamic>('$_root/documents/$id/active', {
+    'isActive': isActive,
+    'reason': (reason ?? '').trim(),
+  });
+
+  // ---------------- دسترسی پوشه و مدرک ----------------
+
+  Future<void> saveFolderPermissions(
+    int id, {
+    required bool isPublic,
+    required bool publicCanDownload,
+    required List<DocPermissionInput> items,
+  }) => _api.put<dynamic>('$_root/folders/$id/permissions', {
+    'isPublic': isPublic,
+    'publicCanDownload': isPublic && publicCanDownload,
+    'items': [for (final p in items) p.toJson()],
+  });
+
+  Future<void> saveDocumentPermissions(
+    int id, {
+    required bool isPublic,
+    required bool publicCanDownload,
+    required bool requireDownloadConfirm,
+    required bool watermarkPreview,
+    required List<DocPermissionInput> items,
+  }) => _api.put<dynamic>('$_root/documents/$id/permissions', {
+    'isPublic': isPublic,
+    'publicCanDownload': isPublic && publicCanDownload,
+    'requireDownloadConfirm': requireDownloadConfirm,
+    'watermarkPreview': watermarkPreview,
+    'items': [for (final p in items) p.toJson()],
+  });
+
+  /// دسترسی‌های یک پوشه (فقط برای دارندهٔ دسترسی کامل برمی‌گردد)
+  Future<List<DocPermissionInput>> folderPermissions(int id) async {
+    final r = await _api.get<dynamic>('$_root/folders/$id');
+    final d = r.data;
+    if (d is! Map) return const [];
+    final list = d['permissions'];
+    if (list is! List) return const [];
+    return list.whereType<Map>().map((e) {
+      final j = Map<String, dynamic>.from(e);
+      return DocPermissionInput(
+        userId: (j['userId'] as num?)?.toInt() ?? 0,
+        roleId: (j['roleId'] as num?)?.toInt() ?? 0,
+        level: (j['level'] as num?)?.toInt() ?? DocLevel.read,
+        canDownload: j['canDownload'] == true,
+      );
+    }).toList();
+  }
+
+  /// دسترسی‌های تعریف‌شدهٔ یک مدرک — از `GET documents/{id}` (فقط برای دسترسی کامل)
+  Future<List<DocPermissionInput>> documentPermissionsRaw(int id) async {
+    final r = await _api.get<dynamic>('$_root/documents/$id');
+    final d = r.data;
+    if (d is! Map) return const [];
+    final list = d['permissions'];
+    if (list is! List) return const [];
+    return list.whereType<Map>().map((e) {
+      final j = Map<String, dynamic>.from(e);
+      return DocPermissionInput(
+        userId: (j['userId'] as num?)?.toInt() ?? 0,
+        roleId: (j['roleId'] as num?)?.toInt() ?? 0,
+        level: (j['level'] as num?)?.toInt() ?? DocLevel.read,
+        canDownload: j['canDownload'] == true,
+      );
+    }).toList();
+  }
+
+  // ---------------- برچسب‌ها (نوشتن) ----------------
+
+  Future<void> createTag({
+    required String name,
+    String color = '#4f46e5',
+    String? description,
+  }) => _api.post<dynamic>('$_root/tags', {
+    'name': name.trim(),
+    'color': color.trim().isEmpty ? '#4f46e5' : color.trim(),
+    'description': (description ?? '').trim(),
+  });
+
+  Future<void> updateTag({
+    required int id,
+    required String name,
+    String color = '#4f46e5',
+    String? description,
+  }) => _api.put<dynamic>('$_root/tags/$id', {
+    'name': name.trim(),
+    'color': color.trim().isEmpty ? '#4f46e5' : color.trim(),
+    'description': (description ?? '').trim(),
+  });
+
+  Future<String> deleteTag(int id) async {
+    final r = await _api.delete<dynamic>('$_root/tags/$id');
+    final d = r.data;
+    return d is Map
+        ? '${d['message'] ?? 'تگ با موفقیت حذف شد.'}'
+        : 'تگ با موفقیت حذف شد.';
+  }
 }
 
 /// یک ردیف دسترسی پوشه/مدرک — `DocPermissionDto`

@@ -21,8 +21,10 @@ import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../shop/presentation/shop_style.dart';
 import '../data/doc_archive_repository.dart';
+import '../data/it_perms.dart';
 import '../models/doc_archive_models.dart';
 import 'doc_archive_cartable_page.dart';
 import 'doc_archive_detail_page.dart';
@@ -68,10 +70,18 @@ class _DocArchivePageState extends State<DocArchivePage> {
 
   final Set<int> _selectedTagIds = {};
 
+  /// انتخاب چندگانهٔ مدارک برای عملیات گروهی (فاز ۹-ط)
+  final Set<int> _selectedIds = {};
+  bool _selecting = false;
+  bool _bulkBusy = false;
+  bool _isManager = false;
+
   @override
   void initState() {
     super.initState();
     _repo = DocArchiveRepository(context.read<ApiClient>());
+    final perms = ItPerms(context.read<AuthController>().session);
+    _isManager = perms.has('DocArchive.Manage');
     _bootstrap();
   }
 
@@ -266,6 +276,29 @@ class _DocArchivePageState extends State<DocArchivePage> {
             ),
           ),
           IconButton(
+            tooltip: _selecting ? 'پایان انتخاب' : 'انتخاب گروهی',
+            icon: Icon(
+              _selecting
+                  ? Icons.close_rounded
+                  : Icons.checklist_rounded,
+              size: 20,
+            ),
+            onPressed: () => setState(() {
+              _selecting = !_selecting;
+              if (!_selecting) _selectedIds.clear();
+            }),
+          ),
+          IconButton(
+            tooltip: 'برچسب‌ها',
+            icon: const Icon(Icons.local_offer_rounded, size: 19),
+            onPressed: _manageTags,
+          ),
+          IconButton(
+            tooltip: 'پوشه جدید',
+            icon: const Icon(Icons.create_new_folder_rounded, size: 20),
+            onPressed: _openNewFolder,
+          ),
+          IconButton(
             tooltip: 'مدرک جدید',
             icon: const Icon(Icons.add_rounded, size: 20),
             onPressed: _openNewDoc,
@@ -307,6 +340,39 @@ class _DocArchivePageState extends State<DocArchivePage> {
               const SizedBox(height: 8),
               _filtersRow(),
               const SizedBox(height: 8),
+              if (_selecting) ...[
+                _selectionBar(),
+                const SizedBox(height: 8),
+              ],
+              if (_status == DocStatusFilter.deleted &&
+                  _isManager &&
+                  _docs.isNotEmpty) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ShopColors.danger,
+                      side: BorderSide(
+                        color: ShopColors.danger.withValues(alpha: 0.5),
+                      ),
+                      minimumSize: const Size(0, 38),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(19),
+                      ),
+                    ),
+                    onPressed: _emptyTrash,
+                    icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                    label: const Text(
+                      'خالی کردن سطل',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               _countRow(),
               const SizedBox(height: 6),
               if (_loading)
@@ -927,7 +993,11 @@ class _DocArchivePageState extends State<DocArchivePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            onTap: () => _openDoc(d.id),
+            onTap: _selecting
+                ? () => setState(() {
+                    if (!_selectedIds.remove(d.id)) _selectedIds.add(d.id);
+                  })
+                : () => _openDoc(d.id),
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(13),
             ),
@@ -983,19 +1053,33 @@ class _DocArchivePageState extends State<DocArchivePage> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
+                  if (_selecting)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 2),
+                      child: Icon(
+                        _selectedIds.contains(d.id)
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 20,
+                        color: _selectedIds.contains(d.id)
+                            ? ShopColors.ok
+                            : ShopColors.inkFaint,
+                      ),
+                    )
+                  else
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      icon: const Icon(
+                        Icons.star_border_rounded,
+                        size: 18,
+                        color: Colors.amber,
+                      ),
+                      onPressed: () => _toggleFavorite(d),
                     ),
-                    icon: const Icon(
-                      Icons.star_border_rounded,
-                      size: 18,
-                      color: Colors.amber,
-                    ),
-                    onPressed: () => _toggleFavorite(d),
-                  ),
                 ],
               ),
             ),
@@ -1039,10 +1123,1311 @@ class _DocArchivePageState extends State<DocArchivePage> {
               ],
             ),
           ),
+          if (_status == DocStatusFilter.deleted)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 7),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: ShopColors.ok,
+                        minimumSize: const Size(0, 32),
+                      ),
+                      onPressed: () => _restore(d),
+                      icon: const Icon(Icons.restore_rounded, size: 15),
+                      label: const Text(
+                        'بازگرداندن',
+                        style: TextStyle(fontSize: 10),
+                      ),
+                    ),
+                  ),
+                  if (_isManager)
+                    Expanded(
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: ShopColors.danger,
+                          minimumSize: const Size(0, 32),
+                        ),
+                        onPressed: () => _purgeOne(d),
+                        icon: const Icon(Icons.delete_forever_rounded, size: 15),
+                        label: const Text(
+                          'حذف قطعی',
+                          style: TextStyle(fontSize: 10),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
+
+  // ============================================================
+  //  فاز ۹-ط — عملیات گروهی، سطل بازیافت، پوشه و برچسب
+  // ============================================================
+
+  void _toast(String text, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: error ? ShopColors.danger : null,
+      ),
+    );
+  }
+
+  Widget _selectionBar() => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: ShopColors.surface,
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: ShopColors.seed.withValues(alpha: 0.4)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            ShopTag(
+              text: '${Fa.digits(_selectedIds.length)} انتخاب شده',
+              color: ShopColors.seed,
+              icon: Icons.checklist_rounded,
+            ),
+            const SizedBox(width: 6),
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 26),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              onPressed: () => setState(_selectedIds.clear),
+              child: const Text(
+                'پاک کردن انتخاب',
+                style: TextStyle(fontSize: 9.5),
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 26),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              onPressed: () => setState(() {
+                if (_selectedIds.length == _docs.length) {
+                  _selectedIds.clear();
+                } else {
+                  _selectedIds
+                    ..clear()
+                    ..addAll(_docs.map((d) => d.id));
+                }
+              }),
+              child: Text(
+                _selectedIds.length == _docs.length ? 'لغو همه' : 'انتخاب همه',
+                style: const TextStyle(fontSize: 9.5),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _bulkButton(
+              label: 'انتقال پوشه',
+              icon: Icons.drive_file_move_rounded,
+              onTap: _bulkMove,
+            ),
+            _bulkButton(
+              label: 'برچسب گروهی',
+              icon: Icons.local_offer_rounded,
+              onTap: _bulkTags,
+            ),
+            _bulkButton(
+              label: 'تمدید انقضا',
+              icon: Icons.event_repeat_rounded,
+              onTap: _bulkExpire,
+            ),
+            _bulkButton(
+              label: 'حذف گروهی',
+              icon: Icons.delete_outline_rounded,
+              danger: true,
+              onTap: _bulkDelete,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _bulkButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final color = danger ? ShopColors.danger : ShopColors.seed;
+    return OutlinedButton.icon(
+      onPressed: _bulkBusy || _selectedIds.isEmpty ? null : onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(color: color.withValues(alpha: 0.45)),
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      icon: _bulkBusy
+          ? const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.8),
+            )
+          : Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 9.5)),
+    );
+  }
+
+  Future<void> _afterBulk() async {
+    setState(() => _selectedIds.clear());
+    await _loadDocs();
+    await _reloadSide();
+  }
+
+  Future<void> _reloadSide() async {
+    try {
+      final results = await Future.wait([
+        _repo.folders(take: 500),
+        _repo.stats(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _folders = (results[0] as DocPage<DocFolder>).items;
+        _stats = results[1] as DocArchiveStats;
+      });
+    } catch (_) {}
+  }
+
+  String _cleanErr(Object e) => e
+      .toString()
+      .replaceFirst('ApiException: ', '')
+      .replaceFirst('Exception: ', '')
+      .trim();
+
+  Future<void> _bulkMove() async {
+    final targets = _folders.where((f) => f.canWrite).toList();
+    if (targets.isEmpty) {
+      _toast('پوشه‌ای با دسترسی نوشتن برای انتقال وجود ندارد.');
+      return;
+    }
+    var target = 0;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text(
+            'انتقال گروهی به پوشه',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'انتقال ${Fa.digits(_selectedIds.length)} مدرک انتخاب‌شده به پوشه جدید:',
+                style: const TextStyle(fontSize: 10.5, height: 1.8),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                initialValue: target == 0 ? null : target,
+                isDense: true,
+                style: const TextStyle(fontSize: 11, color: ShopColors.ink),
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: true,
+                  fillColor: const Color(0xfff9fbfe),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 11,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                items: [
+                  for (final f in targets)
+                    DropdownMenuItem(
+                      value: f.id,
+                      child: Text(
+                        folderPathText(_folders, f.id),
+                        style: const TextStyle(fontSize: 10.5),
+                      ),
+                    ),
+                ],
+                onChanged: (v) => setLocal(() => target = v ?? 0),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                kBulkMoveWarning,
+                style: const TextStyle(
+                  fontSize: 9,
+                  height: 1.8,
+                  color: ShopColors.warn,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: target > 0 ? () => Navigator.of(c).pop(true) : null,
+              child: const Text('انتقال', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await _runBulk(
+      () => _repo.bulkMove(
+        ids: _selectedIds.toList(),
+        targetFolderId: target,
+      ),
+    );
+  }
+
+  Future<void> _bulkTags() async {
+    if (_tags.isEmpty) {
+      _toast('برچسبی تعریف نشده است.');
+      return;
+    }
+    final sel = <int>{};
+    var mode = DocBulkTagMode.append;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text(
+            'برچسب گروهی',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${Fa.digits(_selectedIds.length)} مدرک انتخاب شده',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: ShopColors.inkFaint,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final t in _tags)
+                    FilterChip(
+                      label: Text(
+                        t.name,
+                        style: const TextStyle(fontSize: 9.5),
+                      ),
+                      selected: sel.contains(t.id),
+                      onSelected: (v) => setLocal(() {
+                        if (v) {
+                          sel.add(t.id);
+                        } else {
+                          sel.remove(t.id);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ShopSegmented(
+                labels: [for (final m in kDocBulkTagModes) m.value],
+                index: mode == DocBulkTagMode.append ? 0 : 1,
+                onChanged: (i) => setLocal(
+                  () => mode = i == 0
+                      ? DocBulkTagMode.append
+                      : DocBulkTagMode.replace,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              child: const Text('اعمال', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await _runBulk(
+      () => _repo.bulkTags(ids: _selectedIds.toList(), tagIds: sel.toList(), mode: mode),
+    );
+  }
+
+  Future<void> _bulkExpire() async {
+    DateTime? date;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text(
+            'تمدید انقضای گروهی',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'تاریخ انقضای ${Fa.digits(_selectedIds.length)} مدرک به:',
+                style: const TextStyle(fontSize: 10.5),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 38),
+                  foregroundColor: ShopColors.ink,
+                ),
+                onPressed: () async {
+                  final now = DateTime.now();
+                  final picked = await showDatePicker(
+                    context: c,
+                    initialDate: date ?? now,
+                    firstDate: DateTime(now.year - 20),
+                    lastDate: DateTime(now.year + 30),
+                  );
+                  if (picked != null) setLocal(() => date = picked);
+                },
+                icon: const Icon(Icons.event_rounded, size: 15),
+                label: Text(
+                  date == null
+                      ? 'بدون انقضا (حذف تاریخ)'
+                      : Fa.date(date!.toIso8601String(), time: false),
+                  style: const TextStyle(fontSize: 10.5),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'اگر خالی بگذارید تاریخ انقضا حذف می‌شود.',
+                style: TextStyle(fontSize: 9, color: ShopColors.inkFaint),
+              ),
+            ],
+          ),
+          actions: [
+            if (date != null)
+              TextButton(
+                onPressed: () => setLocal(() => date = null),
+                child: const Text(
+                  'پاک کردن تاریخ',
+                  style: TextStyle(fontSize: 10),
+                ),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              child: const Text('ذخیره', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await _runBulk(
+      () => _repo.bulkExpire(ids: _selectedIds.toList(), expireDate: date),
+    );
+  }
+
+  Future<void> _bulkDelete() async {
+    final count = _selectedIds.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text(
+          'حذف گروهی',
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          bulkDeleteConfirmText(count),
+          style: const TextStyle(fontSize: 10.5, height: 1.8),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ShopColors.danger),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text(
+              'انتقال به سطل',
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _runBulk(() => _repo.bulkDelete(_selectedIds.toList()));
+  }
+
+  Future<void> _runBulk(Future<DocBulkResult> Function() action) async {
+    setState(() => _bulkBusy = true);
+    try {
+      final res = await action();
+      _toast(res.display);
+      await _afterBulk();
+    } catch (e) {
+      _toast(_cleanErr(e), error: true);
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
+    }
+  }
+
+  // ---------- سطل بازیافت ----------
+
+  Future<void> _restore(DocRow d) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text(
+          'بازگرداندن مدرک از سطل بازیافت',
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'آیا مدرک «${d.code} — ${d.title}» بازگردانده شود؟',
+              style: const TextStyle(fontSize: 10.5, height: 1.9),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'مدرک مجدداً در پوشه اصلی خود (یا اولین پوشه موجود در صورت حذف پوشه اصلی) فعال خواهد شد.',
+              style: TextStyle(
+                fontSize: 9,
+                height: 1.8,
+                color: ShopColors.seed,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ShopColors.ok),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text(
+              'بازگرداندن مدرک',
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final msg = await _repo.restoreDocument(d.id);
+      _toast(msg);
+      await _afterBulk();
+    } catch (e) {
+      _toast(_cleanErr(e), error: true);
+    }
+  }
+
+  Future<void> _purgeOne(DocRow d) async {
+    final done = await _askPurge(title: 'حذف قطعی و برگشت‌ناپذیر مدرک');
+    if (!done) return;
+    try {
+      final msg = await _repo.purgeDocument(d.id);
+      _toast(msg);
+      await _afterBulk();
+    } catch (e) {
+      _toast(_cleanErr(e), error: true);
+    }
+  }
+
+  Future<void> _emptyTrash() async {
+    final done = await _askPurge(title: 'خالی کردن کامل سطل بازیافت');
+    if (!done) return;
+    try {
+      final msg = await _repo.emptyTrash();
+      _toast(msg);
+      await _afterBulk();
+    } catch (e) {
+      _toast(_cleanErr(e), error: true);
+    }
+  }
+
+  /// تایید با تایپ عبارت «حذف قطعی» — همان قاعدهٔ وب
+  Future<bool> _askPurge({required String title}) async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: ShopColors.danger.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'هشدار بسیار مهم: $kPurgeWarning',
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    height: 1.8,
+                    color: ShopColors.danger,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'برای تایید، عبارت «$kPurgePhrase» را در کادر زیر تایپ کنید:',
+                style: const TextStyle(fontSize: 10, height: 1.8),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: ctrl,
+                onChanged: (_) => setLocal(() {}),
+                style: const TextStyle(fontSize: 11),
+                decoration: InputDecoration(
+                  hintText: kPurgePhrase,
+                  isDense: true,
+                  filled: true,
+                  fillColor: const Color(0xfff9fbfe),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: ShopColors.danger),
+              onPressed: ctrl.text.trim() == kPurgePhrase
+                  ? () => Navigator.of(c).pop(true)
+                  : null,
+              child: const Text(
+                'تایید و حذف قطعی',
+                style: TextStyle(fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return ok == true;
+  }
+
+  // ---------- پوشه ----------
+
+  Future<void> _openNewFolder() async {
+    final name = TextEditingController();
+    final description = TextEditingController();
+    int? parentId;
+    var isPublic = false;
+    var publicCanDownload = false;
+    final perms = <DocPermissionInput>[];
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text(
+            'پوشه جدید',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShopField(
+                  label: 'نام پوشه',
+                  required: true,
+                  child: TextField(
+                    controller: name,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                ShopField(
+                  label: 'پوشه والد',
+                  child: DropdownButtonFormField<int?>(
+                    initialValue: parentId,
+                    isDense: true,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: ShopColors.ink,
+                    ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text(
+                          'بدون پوشه والد',
+                          style: TextStyle(fontSize: 10.5),
+                        ),
+                      ),
+                      for (final f in _folders)
+                        DropdownMenuItem(
+                          value: f.id,
+                          child: Text(
+                            folderPathText(_folders, f.id),
+                            style: const TextStyle(fontSize: 10.5),
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => setLocal(() => parentId = v),
+                  ),
+                ),
+                ShopField(
+                  label: 'توضیحات',
+                  child: TextField(
+                    controller: description,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: isPublic,
+                  onChanged: (v) => setLocal(() {
+                    isPublic = v;
+                    if (!v) publicCanDownload = false;
+                  }),
+                  title: const Text(
+                    'نمایش برای همه',
+                    style: TextStyle(fontSize: 10.5),
+                  ),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: publicCanDownload,
+                  onChanged: isPublic
+                      ? (v) => setLocal(() => publicCanDownload = v)
+                      : null,
+                  title: const Text(
+                    'دانلود برای همه کاربران',
+                    style: TextStyle(fontSize: 10.5),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                  ),
+                  onPressed: () async {
+                    final rows = await _pickPermissions(
+                      context,
+                      initial: perms,
+                    );
+                    if (rows != null) {
+                      setLocal(() {
+                        perms
+                          ..clear()
+                          ..addAll(rows);
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.people_rounded, size: 15),
+                  label: Text(
+                    'دسترسی کاربران و گروه‌ها (${Fa.digits(perms.length)})',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              child: const Text('ذخیره', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    // همان ترتیب/پیام وب: «نام پوشه اجباری است.»
+    if (name.text.trim().isEmpty) {
+      _toast('نام پوشه اجباری است.', error: true);
+      return;
+    }
+    try {
+      await _repo.createFolder(
+        name: name.text,
+        parentId: parentId,
+        description: description.text,
+        isPublic: isPublic,
+        publicCanDownload: publicCanDownload,
+        permissions: perms,
+      );
+      _toast('پوشه ساخته شد.');
+      await _reloadSide();
+      await _loadDocs();
+    } catch (e) {
+      _toast(_cleanErr(e), error: true);
+    }
+  }
+
+  /// ویرایشگر دسترسی — همان ساختار «نفر / گروه» وب
+  Future<List<DocPermissionInput>?> _pickPermissions(
+    BuildContext ctx, {
+    required List<DocPermissionInput> initial,
+  }) async {
+    final rows = [...initial];
+    final users = <DocLookup>[];
+    final roles = <DocLookup>[];
+    try {
+      final l = await _repo.lookups();
+      users.addAll(l.users);
+      roles.addAll(l.roles);
+    } catch (_) {}
+    if (!ctx.mounted) return null;
+
+    var pickRole = false;
+    var pickId = 0;
+    var pickLevel = DocLevel.read;
+    var pickDownload = false;
+
+    return showDialog<List<DocPermissionInput>>(
+      context: ctx,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text(
+            'دسترسی کاربران و گروه‌ها',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '«خواندن» فقط برای مشاهده است؛ ویرایش و ورژن جدید نیازمند «نوشتن» است. دانلود باید جداگانه انتخاب شود.',
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      height: 1.8,
+                      color: ShopColors.inkFaint,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ShopSegmented(
+                    labels: const ['نفر', 'گروه'],
+                    index: pickRole ? 1 : 0,
+                    onChanged: (i) => setLocal(() {
+                      pickRole = i == 1;
+                      pickId = 0;
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    initialValue: pickId == 0 ? null : pickId,
+                    isDense: true,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: ShopColors.ink,
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: pickRole ? 'افزودن گروه/نقش' : 'افزودن نفر',
+                      labelStyle: const TextStyle(fontSize: 9.5),
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final u in (pickRole ? roles : users))
+                        DropdownMenuItem(
+                          value: u.id,
+                          child: Text(
+                            u.name,
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => setLocal(() => pickId = v ?? 0),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          initialValue: pickLevel,
+                          isDense: true,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: ShopColors.ink,
+                          ),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            labelText: 'سطح دسترسی',
+                            labelStyle: TextStyle(fontSize: 9),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final o in DocLevel.options)
+                              DropdownMenuItem(
+                                value: o.key,
+                                child: Text(
+                                  o.key == 4 ? 'دسترسی کامل' : o.value,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              ),
+                          ],
+                          onChanged: (v) => setLocal(() {
+                            pickLevel = v ?? DocLevel.read;
+                            if (pickLevel < DocLevel.read) pickDownload = false;
+                          }),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Column(
+                        children: [
+                          const Text(
+                            'دانلود',
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              color: ShopColors.inkFaint,
+                            ),
+                          ),
+                          Switch(
+                            value: pickDownload,
+                            onChanged: pickLevel < DocLevel.read
+                                ? null
+                                : (v) => setLocal(() => pickDownload = v),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        tooltip: 'افزودن',
+                        icon: const Icon(
+                          Icons.add_circle_rounded,
+                          size: 22,
+                          color: ShopColors.seed,
+                        ),
+                        onPressed: pickId <= 0
+                            ? null
+                            : () => setLocal(() {
+                                rows.add(
+                                  DocPermissionInput(
+                                    userId: pickRole ? 0 : pickId,
+                                    roleId: pickRole ? pickId : 0,
+                                    level: pickLevel,
+                                    canDownload: pickDownload,
+                                  ),
+                                );
+                                pickId = 0;
+                              }),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 18),
+                  if (rows.isEmpty)
+                    const Text(
+                      'هنوز نفر یا گروهی اضافه نشده است.',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        color: ShopColors.inkFaint,
+                      ),
+                    )
+                  else
+                    for (var i = 0; i < rows.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 5),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                rows[i].isRole
+                                    ? _lookupName(roles, rows[i].roleId)
+                                    : _lookupName(users, rows[i].userId),
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                            ),
+                            ShopTag(
+                              text: DocLevel.name(rows[i].level),
+                              color: docLevelColor(rows[i].level),
+                            ),
+                            if (rows[i].canDownload)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.download_rounded,
+                                  size: 13,
+                                  color: ShopColors.ok,
+                                ),
+                              ),
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                size: 14,
+                                color: ShopColors.danger,
+                              ),
+                              onPressed: () =>
+                                  setLocal(() => rows.removeAt(i)),
+                            ),
+                          ],
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(c).pop(rows),
+              child: const Text('تأیید', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _lookupName(List<DocLookup> list, int id) {
+    for (final x in list) {
+      if (x.id == id) return x.name;
+    }
+    return '#$id';
+  }
+
+  // ---------- مدیریت برچسب‌ها ----------
+
+  Future<void> _manageTags() async {
+    final name = TextEditingController();
+    final color = TextEditingController(text: '#4f46e5');
+    final description = TextEditingController();
+    int? editingId;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom),
+          child: SizedBox(
+            height: MediaQuery.of(c).size.height * 0.74,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'برچسب‌ها',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () => Navigator.of(c).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+                    children: [
+                      ShopField(
+                        label: 'عنوان تگ',
+                        required: true,
+                        child: TextField(
+                          controller: name,
+                          style: const TextStyle(fontSize: 11),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            hintText: 'مثلاً: قرارداد مالی، فوری، ایزو…',
+                            hintStyle: TextStyle(fontSize: 9.5),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      ShopField(
+                        label: 'رنگ تگ',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final h in kTagPalette)
+                                  InkWell(
+                                    onTap: () => setLocal(() => color.text = h),
+                                    child: Container(
+                                      width: 26,
+                                      height: 26,
+                                      decoration: BoxDecoration(
+                                        color: colorFromHex(h),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: color.text.trim() == h
+                                              ? ShopColors.ink
+                                              : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: color,
+                              textDirection: TextDirection.ltr,
+                              onChanged: (_) => setLocal(() {}),
+                              style: const TextStyle(fontSize: 11),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                hintText: '#4f46e5',
+                                hintStyle: TextStyle(fontSize: 9.5),
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ShopField(
+                        label: 'توضیحات (اختیاری)',
+                        child: TextField(
+                          controller: description,
+                          style: const TextStyle(fontSize: 11),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            hintText: 'کاربرد تگ…',
+                            hintStyle: TextStyle(fontSize: 9.5),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 38),
+                              ),
+                              onPressed: () async {
+                                final err = validateTagName(name.text);
+                                if (err != null) {
+                                  _toast(err, error: true);
+                                  return;
+                                }
+                                try {
+                                  if (editingId == null) {
+                                    await _repo.createTag(
+                                      name: name.text,
+                                      color: color.text,
+                                      description: description.text,
+                                    );
+                                  } else {
+                                    await _repo.updateTag(
+                                      id: editingId!,
+                                      name: name.text,
+                                      color: color.text,
+                                      description: description.text,
+                                    );
+                                  }
+                                  name.clear();
+                                  description.clear();
+                                  color.text = '#4f46e5';
+                                  editingId = null;
+                                  final fresh = await _repo.tags();
+                                  setLocal(() {});
+                                  setState(() => _tags = fresh);
+                                } catch (e) {
+                                  _toast(_cleanErr(e), error: true);
+                                }
+                              },
+                              child: Text(
+                                editingId == null ? 'افزودن' : 'ذخیره',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ),
+                          if (editingId != null) ...[
+                            const SizedBox(width: 8),
+                            OutlinedButton(
+                              onPressed: () => setLocal(() {
+                                editingId = null;
+                                name.clear();
+                                description.clear();
+                                color.text = '#4f46e5';
+                              }),
+                              child: const Text(
+                                'انصراف',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const Divider(height: 20),
+                      if (_tags.isEmpty)
+                        const Text(
+                          'برچسبی تعریف نشده است.',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: ShopColors.inkFaint,
+                          ),
+                        )
+                      else
+                        for (final t in _tags)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                ShopTag(
+                                  text: t.name,
+                                  color: colorFromHex(t.color),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${Fa.digits(t.documentCount)} مدرک',
+                                  style: const TextStyle(
+                                    fontSize: 8.5,
+                                    color: ShopColors.inkFaint,
+                                  ),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  tooltip: 'ویرایش',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 30,
+                                    minHeight: 30,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.edit_rounded,
+                                    size: 15,
+                                  ),
+                                  onPressed: () => setLocal(() {
+                                    editingId = t.id;
+                                    name.text = t.name;
+                                    color.text = t.color;
+                                    description.text = t.description ?? '';
+                                  }),
+                                ),
+                                IconButton(
+                                  tooltip: 'حذف',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 30,
+                                    minHeight: 30,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 15,
+                                    color: ShopColors.danger,
+                                  ),
+                                  onPressed: () async {
+                                    try {
+                                      final msg = await _repo.deleteTag(t.id);
+                                      _toast(msg);
+                                      final fresh = await _repo.tags();
+                                      setLocal(() {});
+                                      setState(() => _tags = fresh);
+                                    } catch (e) {
+                                      _toast(_cleanErr(e), error: true);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 }
 
 /// نگاشت رنگ HEX سرور به Color — برای برچسب‌ها

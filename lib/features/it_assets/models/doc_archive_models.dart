@@ -636,3 +636,86 @@ String? validateDocForm({
   if (folderId <= 0) return 'پوشه مدرک را انتخاب کنید.';
   return null;
 }
+
+// ============================================================
+//  فاز ۹-ط — عملیات گروهی، سطل بازیافت، پوشه و برچسب
+//  منبع: DocBulkController.cs، DocFoldersController.cs، DocTagsController.cs،
+//        و مودال‌های DocArchiveExplorer.razor
+// ============================================================
+
+/// نتیجهٔ عملیات گروهی — `DocBulkResultDto`
+class DocBulkResult {
+  const DocBulkResult({
+    this.requested = 0,
+    this.succeeded = 0,
+    this.failed = 0,
+    this.errors = const [],
+    this.message = '',
+  });
+  final int requested;
+  final int succeeded;
+  final int failed;
+  final List<String> errors;
+  final String message;
+
+  factory DocBulkResult.fromJson(Map<String, dynamic> j) {
+    final raw = j['errors'];
+    return DocBulkResult(
+      requested: _i(j['requested']),
+      succeeded: _i(j['succeeded']),
+      failed: _i(j['failed']),
+      errors: raw is List ? raw.map((e) => _s(e)).toList() : const [],
+      message: _s(j['message']),
+    );
+  }
+
+  /// پیام نهایی برای نمایش — همان قاعدهٔ وب (پیام + سه خطای اول)
+  String get display {
+    final base = message.trim().isEmpty
+        ? '$succeeded از $requested مورد انجام شد.'
+        : message;
+    if (errors.isEmpty) return base;
+    return '$base\n${errors.take(3).join('\n')}';
+  }
+}
+
+/// حالت برچسب گروهی — همان دو گزینهٔ وب
+enum DocBulkTagMode { append, replace }
+
+const List<MapEntry<DocBulkTagMode, String>> kDocBulkTagModes = [
+  MapEntry(DocBulkTagMode.append, 'افزودن'),
+  MapEntry(DocBulkTagMode.replace, 'جایگزینی'),
+];
+
+/// متن هشدار مودال «انتقال گروهی به پوشه»
+const String kBulkMoveWarning =
+    'فقط مدارکی که روی آن‌ها دسترسی نوشتن دارید منتقل می‌شوند؛ بقیه رد می‌شوند.';
+
+/// متن هشدار مودال «حذف قطعی»
+const String kPurgeWarning =
+    'این عملیات برگشت‌ناپذیر است. مدرک به‌همراه کلیه ورژن‌ها، پیوست‌ها، دسترسی‌ها و تاریخچه به‌صورت قطعی از دیتابیس پاک خواهد شد.';
+
+/// عبارت تایید حذف قطعی — عیناً وب
+const String kPurgePhrase = 'حذف قطعی';
+
+/// متن تایید حذف گروهی به سطل
+String bulkDeleteConfirmText(int count) =>
+    'آیا $count مدرک انتخاب‌شده به سطل بازیافت منتقل شود؟';
+
+/// رنگ‌های پیشنهادی برچسب — همان نمونهٔ فرم وب (`#4f46e5` پیش‌فرض)
+const List<String> kTagPalette = [
+  '#4f46e5',
+  '#0ea5e9',
+  '#0f766e',
+  '#16a34a',
+  '#ca8a04',
+  '#ea580c',
+  '#dc2626',
+  '#be185d',
+  '#7c3aed',
+  '#475569',
+];
+
+/// اعتبارسنجی برچسب — عیناً پیام‌های DocTagsController
+String? validateTagName(String name) =>
+    name.trim().isEmpty ? 'نام تگ اجباری است.' : null;

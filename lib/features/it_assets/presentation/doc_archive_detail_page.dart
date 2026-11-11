@@ -21,6 +21,7 @@ import '../../shop/presentation/shop_style.dart';
 import '../data/doc_archive_repository.dart';
 import '../models/doc_archive_models.dart';
 import 'doc_archive_form_page.dart';
+import 'doc_permission_sheet.dart';
 import 'doc_archive_page.dart' show colorFromHex, docLevelColor, docVersionColor;
 import 'system_style.dart';
 
@@ -103,6 +104,24 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
               icon: const Icon(Icons.edit_rounded, size: 19),
               onPressed: _edit,
             ),
+          if (doc != null && doc.myLevel >= DocLevel.full) ...[
+            IconButton(
+              tooltip: 'دسترسی اختصاصی',
+              icon: const Icon(Icons.people_alt_rounded, size: 19),
+              onPressed: _editPermissions,
+            ),
+            IconButton(
+              tooltip: doc.isActive ? 'غیرفعال کردن مدرک' : 'فعال کردن مدرک',
+              icon: Icon(
+                doc.isActive
+                    ? Icons.toggle_on_rounded
+                    : Icons.toggle_off_rounded,
+                size: 22,
+                color: doc.isActive ? ShopColors.ok : ShopColors.inkFaint,
+              ),
+              onPressed: _toggleActive,
+            ),
+          ],
         ],
       ),
       body: _loading
@@ -727,6 +746,172 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
       ),
     ),
   );
+
+  // ---------- فاز ۹-ط: فعال/غیرفعال و دسترسی اختصاصی ----------
+
+  /// همان متن‌های مودال وب (`DocumentView.razor`)
+  Future<void> _toggleActive() async {
+    final doc = _doc!;
+    final reason = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(
+          doc.isActive ? 'غیرفعال کردن مدرک' : 'فعال کردن مدرک',
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (doc.isActive) ...[
+              const Text(
+                'با غیرفعال کردن، این مدرک فقط‌خواندنی می‌شود و به زیرمنوی «مدارک غیرفعال» منتقل می‌گردد. کارهای باز آن در کارتابل‌ها بسته می‌شوند.',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  height: 1.9,
+                  color: ShopColors.warn,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'دلیل غیرفعال‌سازی',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: reason,
+                maxLines: 2,
+                style: const TextStyle(fontSize: 11),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText:
+                      'مثلاً: منسوخ شده و با مدرک جدید جایگزین گردید',
+                  hintStyle: TextStyle(fontSize: 9.5),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ] else
+              const Text(
+                'مدرک دوباره فعال شده و همه عملیات روی آن مجاز می‌شود.',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  height: 1.9,
+                  color: ShopColors.seed,
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: doc.isActive
+                  ? ShopColors.danger
+                  : ShopColors.ok,
+            ),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('تایید', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.setDocumentActive(
+        id: doc.id,
+        isActive: !doc.isActive,
+        reason: reason.text,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            doc.isActive ? 'مدرک غیرفعال شد.' : 'مدرک فعال شد.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e
+                .toString()
+                .replaceFirst('ApiException: ', '')
+                .replaceFirst('Exception: ', '')
+                .trim(),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _editPermissions() async {
+    final doc = _doc!;
+    final lookups = await _repo.lookups();
+    final perms = await _repo.documentPermissionsRaw(doc.id);
+    if (!mounted) return;
+    final result = await showModalBottomSheet<DocPermResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (c) => DocPermissionSheet(
+        users: lookups.users,
+        roles: lookups.roles,
+        initialItems: perms,
+        isPublic: doc.isPublic,
+        requireDownloadConfirm: doc.requireDownloadConfirm,
+        watermarkPreview: doc.watermarkPreview,
+      ),
+    );
+    if (result == null) return;
+    try {
+      await _repo.saveDocumentPermissions(
+        doc.id,
+        isPublic: result.isPublic,
+        publicCanDownload: result.publicCanDownload,
+        requireDownloadConfirm: result.requireDownloadConfirm,
+        watermarkPreview: result.watermarkPreview,
+        items: result.items,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('دسترسی‌ها ذخیره شد.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e
+                .toString()
+                .replaceFirst('ApiException: ', '')
+                .replaceFirst('Exception: ', '')
+                .trim(),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
 }
 
 // ============================================================
