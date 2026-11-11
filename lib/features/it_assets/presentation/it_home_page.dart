@@ -13,6 +13,8 @@ import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../data/it_perms.dart';
+import 'cctv_cameras_page.dart';
+import 'cctv_nvrs_page.dart';
 import 'hardware_dashboard_page.dart';
 import 'ipam_page.dart';
 import 'it_requests_page.dart';
@@ -165,6 +167,26 @@ class ItHomePage extends StatelessWidget {
                   color: const Color(0xff0f766e),
                   onTap: () => _push(context, const IpamPage()),
                 ),
+              if (perms.canSeeCctvCameras)
+                _card(
+                  context,
+                  title: 'دوربین‌های مداربسته',
+                  subtitle:
+                      'ثبت‌نام دوربین‌ها، گروه‌بندی بر اساس محل و NVR، ورود گروهی و خروجی اکسل',
+                  icon: Icons.videocam_rounded,
+                  color: const Color(0xff6d43d6),
+                  onTap: () => _push(context, const CctvCamerasPage()),
+                ),
+              if (perms.canSeeCctvNvrs)
+                _card(
+                  context,
+                  title: 'دستگاه‌های NVR',
+                  subtitle:
+                      'مدیریت دستگاه‌های ضبط NVR/DVR و دوربین‌های متصل به هر دستگاه',
+                  icon: Icons.dns_rounded,
+                  color: const Color(0xff0891b2),
+                  onTap: () => _push(context, const CctvNvrsPage()),
+                ),
               if (perms.canSeeItVault)
                 _card(
                   context,
@@ -195,12 +217,8 @@ class ItHomePage extends StatelessWidget {
 
   /// متن راهنمای گروه — تا فازهای بعدی که صفحات را اضافه می‌کنند.
   static String _pendingNote(ItPerms perms) {
-    final parts = <String>[];
-    if (perms.canSeeCctvCameras) parts.add('دوربین‌های مداربسته');
-    if (perms.canSeeCctvNvrs) parts.add('دستگاه‌های NVR');
-    if (parts.isEmpty) return '';
-    return 'شما مجوز مشاهدهٔ این بخش‌ها را دارید: ${parts.join('، ')}.\n'
-        'صفحهٔ اختصاصی هر یک در فازهای بعدی همین ماژول اضافه می‌شود.';
+    // همهٔ صفحات گروه «مدیریت سیستم» پیاده شده‌اند.
+    return '';
   }
 
   Widget _card(
