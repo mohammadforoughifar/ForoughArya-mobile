@@ -28,6 +28,7 @@ import '../data/it_perms.dart';
 import '../models/doc_archive_models.dart';
 import 'doc_archive_cartable_page.dart';
 import 'doc_archive_detail_page.dart';
+import 'doc_search_page.dart';
 import 'doc_archive_form_page.dart';
 import 'system_style.dart';
 
@@ -266,6 +267,15 @@ class _DocArchivePageState extends State<DocArchivePage> {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
         ),
         actions: [
+          IconButton(
+            tooltip: 'جستجوی هوشمند',
+            icon: const Icon(Icons.manage_search_rounded, size: 20),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const DocSearchPage(),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: 'کارتابل آرشیو',
             icon: const Icon(Icons.move_to_inbox_rounded, size: 19),

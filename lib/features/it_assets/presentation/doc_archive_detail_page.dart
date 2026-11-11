@@ -22,6 +22,7 @@ import '../data/doc_archive_repository.dart';
 import '../models/doc_archive_models.dart';
 import 'doc_archive_form_page.dart';
 import 'doc_permission_sheet.dart';
+import 'doc_version_sheet.dart';
 import 'doc_archive_page.dart' show colorFromHex, docLevelColor, docVersionColor;
 import 'system_style.dart';
 
@@ -98,6 +99,18 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
         ),
         actions: [
+          if (doc != null && doc.isActive && doc.myLevel >= DocLevel.write)
+            IconButton(
+              tooltip: 'ثبت ورژن جدید',
+              icon: const Icon(Icons.layers_rounded, size: 19),
+              onPressed: _newVersion,
+            ),
+          if (doc != null && doc.myLevel >= DocLevel.read)
+            IconButton(
+              tooltip: 'مقایسه دو ورژن',
+              icon: const Icon(Icons.compare_arrows_rounded, size: 20),
+              onPressed: _compare,
+            ),
           if (doc != null && doc.myLevel >= DocLevel.write)
             IconButton(
               tooltip: 'ویرایش مدرک',
@@ -491,6 +504,41 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
               const ShopTag(text: 'نوبت شما', color: ShopColors.danger),
           ],
         ),
+        const SizedBox(height: 5),
+        Wrap(
+          spacing: 4,
+          runSpacing: 2,
+          children: [
+            if (v.isMyTurn && _doc != null && _doc!.myLevel >= DocLevel.write) ...[
+              _miniBtn(
+                'تایید',
+                Icons.check_circle_outline_rounded,
+                ShopColors.ok,
+                () => _approve(v, true),
+              ),
+              _miniBtn(
+                'رد',
+                Icons.cancel_outlined,
+                ShopColors.danger,
+                () => _approve(v, false),
+              ),
+            ],
+            if (!v.isActive && _doc != null && _doc!.myLevel >= DocLevel.full)
+              _miniBtn(
+                'فعال‌سازی این ورژن',
+                Icons.play_circle_outline_rounded,
+                ShopColors.seed,
+                () => _setActive(v),
+              ),
+            if (_doc != null && _doc!.myLevel >= DocLevel.read)
+              _miniBtn(
+                'پیوست‌ها',
+                Icons.attach_file_rounded,
+                ShopColors.inkSoft,
+                () => _attachments(v),
+              ),
+          ],
+        ),
         const SizedBox(height: 3),
         Text(
           '${v.createdByName} — ${Fa.date(v.createdAt?.toIso8601String())}',
@@ -565,6 +613,185 @@ class _DocArchiveDetailPageState extends State<DocArchiveDetailPage> {
       ],
     ),
   );
+
+  /// دکمهٔ کوچک اقدام داخل کارت ورژن
+  Widget _miniBtn(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) => TextButton.icon(
+    style: TextButton.styleFrom(
+      minimumSize: const Size(0, 26),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      foregroundColor: color,
+      visualDensity: VisualDensity.compact,
+    ),
+    onPressed: onTap,
+    icon: Icon(icon, size: 13),
+    label: Text(
+      label,
+      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
+    ),
+  );
+
+  Future<void> _approve(DocVersionRow v, bool approve) async {
+    final msg = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => DocApprovalSheet(version: v, approve: approve),
+    );
+    if (!mounted) return;
+    if (msg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    }
+  }
+
+  Future<void> _setActive(DocVersionRow v) async {
+    try {
+      await _repo.setVersionActive(v.id, true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ورژن فعال شد.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e
+                .toString()
+                .replaceFirst('ApiException: ', '')
+                .replaceFirst('Exception: ', '')
+                .trim(),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _attachments(DocVersionRow v) async {
+    final doc = _doc!;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (c) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(c).viewInsets.bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(c).size.height * 0.6,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 10, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'پیوست‌های ورژن ${Fa.digits(v.versionNo)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () => Navigator.of(c).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
+                  child: DocAttachmentsBlock(
+                    versionId: v.id,
+                    canUpload:
+                        doc.myLevel >= DocLevel.write && !v.isFrozen,
+                    canDeleteAny: doc.myLevel >= DocLevel.full,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _newVersion() async {
+    final doc = _doc!;
+    final lookups = await _repo.lookups();
+    if (!mounted) return;
+    final msg = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ShopColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => DocNewVersionSheet(
+        documentId: doc.id,
+        documentTitle: '${doc.code} — ${doc.title}',
+        users: lookups.users,
+      ),
+    );
+    if (!mounted) return;
+    if (msg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    }
+  }
+
+  void _compare() {
+    final doc = _doc!;
+    if (_versions.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('برای مقایسه حداقل دو ورژن لازم است.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DocComparePage(
+          documentId: doc.id,
+          versions: _versions,
+        ),
+      ),
+    );
+  }
 
   Widget _logsCard() => Container(
     decoration: BoxDecoration(
@@ -999,61 +1226,6 @@ class DocApproverRow {
       );
     }).toList();
   }
-}
-
-class DocLogRow {
-  const DocLogRow({
-    this.id = 0,
-    this.action = '',
-    this.detail,
-    this.userName = '',
-    this.createdAt,
-    this.versionId,
-  });
-  final int id;
-  final String action;
-  final String? detail;
-  final String userName;
-  final DateTime? createdAt;
-  final int? versionId;
-
-  static List<DocLogRow> listFrom(Object? v) {
-    if (v is! List) return const [];
-    return v.whereType<Map>().map((e) {
-      final j = Map<String, dynamic>.from(e);
-      return DocLogRow(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        action: j['action']?.toString() ?? '',
-        detail: j['detail']?.toString(),
-        userName: j['userName']?.toString() ?? '',
-        createdAt: Fa.parseServerDate(j['createdAt']),
-        versionId: (j['versionId'] as num?)?.toInt(),
-      );
-    }).toList();
-  }
-
-  /// همان نگاشت `ActionName` وب
-  static String actionName(String a) => switch (a) {
-    'Create' => 'ایجاد',
-    'Update' => 'ویرایش',
-    'NewVersion' => 'ورژن جدید',
-    'Approve' => 'تایید',
-    'Approved' => 'تایید نهایی',
-    'Reject' => 'رد',
-    'Activate' => 'فعال‌سازی ورژن',
-    'Link' => 'لینک',
-    'Unlink' => 'حذف لینک',
-    'RelatedUpdate' => 'مدرک مرتبط',
-    'Deactivate' => 'غیرفعال‌سازی',
-    'Permissions' => 'دسترسی‌ها',
-    'ExpiryAlert' => 'هشدار انقضا',
-    'Delete' => 'حذف',
-    'Restore' => 'بازگردانی',
-    'Print' => 'چاپ',
-    'View' => 'بازدید',
-    'Read' => 'مطالعه',
-    _ => a,
-  };
 }
 
 class DocLinkRow {

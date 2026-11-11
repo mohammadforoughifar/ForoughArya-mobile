@@ -719,3 +719,428 @@ const List<String> kTagPalette = [
 /// اعتبارسنجی برچسب — عیناً پیام‌های DocTagsController
 String? validateTagName(String name) =>
     name.trim().isEmpty ? 'نام تگ اجباری است.' : null;
+
+// ============================================================
+//  فاز ۹-ی — نسخه‌ها، گردش تأیید، پیوست‌ها، مقایسه و جستجوی هوشمند
+//  منبع: DocumentService.cs (CreateVersion/ActApproval)، ArchiveController.cs
+//        (api/attachments)، DocSearchController.cs و DocSemanticController.cs
+// ============================================================
+
+/// ورودی ثبت نسخهٔ جدید — `DocVersionCreateDto`
+class DocVersionInput {
+  const DocVersionInput({
+    required this.documentId,
+    this.title,
+    this.changeNote,
+    this.expireDate,
+    this.activateOnApprove = true,
+    this.sendToFlow = true,
+    this.approverUserIds = const [],
+  });
+
+  final int documentId;
+  final String? title;
+  final String? changeNote;
+  final DateTime? expireDate;
+  final bool activateOnApprove;
+  final bool sendToFlow;
+  final List<int> approverUserIds;
+
+  Map<String, dynamic> toJson() => {
+    'documentId': documentId,
+    'title': (title ?? '').trim(),
+    'changeNote': (changeNote ?? '').trim(),
+    'expireDate': expireDate?.toIso8601String(),
+    'activateOnApprove': activateOnApprove,
+    'sendToFlow': sendToFlow,
+    'approverUserIds': approverUserIds,
+  };
+}
+
+/// اعتبارسنجی نسخهٔ جدید — عیناً پیام وب («شرح تغییرات را وارد کنید.»)
+String? validateVersionForm({required String changeNote}) =>
+    changeNote.trim().isEmpty ? 'شرح تغییرات را وارد کنید.' : null;
+
+/// ورودی اقدام تایید/رد — `DocApprovalActionDto`
+class DocApprovalInput {
+  const DocApprovalInput({
+    required this.versionId,
+    required this.approve,
+    this.comment,
+  });
+  final int versionId;
+  final bool approve;
+  final String? comment;
+
+  Map<String, dynamic> toJson() => {
+    'versionId': versionId,
+    'approve': approve,
+    'comment': (comment ?? '').trim(),
+  };
+}
+
+/// یک پیوست — خروجی `GET api/attachments/{module}/{refId}`
+class DocAttachment {
+  const DocAttachment({
+    this.id = 0,
+    this.fileName = '',
+    this.uploaderName = '',
+    this.uploaderUserId = 0,
+    this.uploadedAt,
+    this.size = 0,
+    this.contentType = '',
+    this.canPreview = false,
+    this.canDownload = false,
+    this.canDelete = false,
+    this.documentId = 0,
+    this.needsConfirm = false,
+    this.watermark = false,
+  });
+
+  final int id;
+  final String fileName;
+  final String uploaderName;
+  final int uploaderUserId;
+  final DateTime? uploadedAt;
+  final int size;
+  final String contentType;
+  final bool canPreview;
+  final bool canDownload;
+  final bool canDelete;
+  final int documentId;
+  final bool needsConfirm;
+  final bool watermark;
+
+  factory DocAttachment.fromJson(Map<String, dynamic> j) => DocAttachment(
+    id: _i(j['id']),
+    fileName: _s(j['fileName']),
+    uploaderName: _s(j['uploaderName']),
+    uploaderUserId: _i(j['uploaderUserId']),
+    uploadedAt: _d(j['uploadedAt']),
+    size: _i(j['size']),
+    contentType: _s(j['contentType']),
+    canPreview: _b(j['canPreview']),
+    canDownload: _b(j['canDownload']),
+    canDelete: _b(j['canDelete']),
+    documentId: _i(j['documentId']),
+    needsConfirm: _b(j['needsConfirm']),
+    watermark: _b(j['watermark']),
+  );
+
+  String get sizeFa => Fa.bytes(size);
+
+  /// آیا تصویر است؟ (پیش‌نمایش داخل برنامه)
+  bool get isImage => contentType.startsWith('image/');
+  bool get isPdf => contentType == 'application/pdf';
+
+  String get uploadedAtFa => Fa.date(uploadedAt?.toIso8601String());
+}
+
+/// حد مجاز آپلود — همان پیام سرور
+const int kAttachmentMaxBytes = 10 * 1024 * 1024;
+const String kAttachmentTooLarge = 'حداکثر حجم فایل ۱۰ مگابایت است.';
+
+/// یک ردیف تفاوت در مقایسهٔ دو نسخه — `DocVersionDiffRow`
+class DocDiffRow {
+  const DocDiffRow({
+    this.field = '',
+    this.left,
+    this.right,
+    this.kind = 'same',
+  });
+  final String field;
+  final String? left;
+  final String? right;
+
+  /// same | added | removed | changed
+  final String kind;
+
+  factory DocDiffRow.fromJson(Map<String, dynamic> j) => DocDiffRow(
+    field: _s(j['field']),
+    left: _ns(j['left']),
+    right: _ns(j['right']),
+    kind: _s(j['kind']).isEmpty ? 'same' : _s(j['kind']),
+  );
+
+  bool get isChanged => kind != 'same';
+  String get leftCell => (left ?? '').isEmpty ? '—' : left!;
+  String get rightCell => (right ?? '').isEmpty ? '—' : right!;
+
+  /// برچسب فارسی تغییر — همان منطق وب
+  String get kindLabel => switch (kind) {
+    'added' => 'افزوده شد',
+    'removed' => 'حذف شد',
+    'changed' => 'تغییر کرد',
+    _ => 'یکسان',
+  };
+}
+
+/// نتیجهٔ مقایسهٔ دو نسخه — `DocVersionCompareDto`
+class DocVersionCompare {
+  const DocVersionCompare({
+    this.documentId = 0,
+    this.documentCode = '',
+    this.documentTitle = '',
+    this.fields = const [],
+    this.approvers = const [],
+    this.attachments = const [],
+    this.between = const [],
+    this.changeCount = 0,
+  });
+  final int documentId;
+  final String documentCode;
+  final String documentTitle;
+  final List<DocDiffRow> fields;
+  final List<DocDiffRow> approvers;
+  final List<DocDiffRow> attachments;
+  final List<DocLogRow> between;
+  final int changeCount;
+
+  factory DocVersionCompare.fromJson(Map<String, dynamic> j) {
+    List<DocDiffRow> rows(Object? v) => v is List
+        ? v
+              .whereType<Map>()
+              .map((e) => DocDiffRow.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : const [];
+    return DocVersionCompare(
+      documentId: _i(j['documentId']),
+      documentCode: _s(j['documentCode']),
+      documentTitle: _s(j['documentTitle']),
+      fields: rows(j['fields']),
+      approvers: rows(j['approvers']),
+      attachments: rows(j['attachments']),
+      between: DocLogRow.listFrom(j['between']),
+      changeCount: _i(j['changeCount']),
+    );
+  }
+
+  /// متن خلاصه — «N تفاوت»
+  String get summaryFa =>
+      changeCount == 0 ? 'بدون تفاوت' : '${Fa.digits(changeCount)} تفاوت';
+}
+
+/// یک نتیجهٔ جستجوی معنایی — `DocSemanticHitDto`
+class DocSemanticHit {
+  const DocSemanticHit({
+    this.documentId = 0,
+    this.code = '',
+    this.title = '',
+    this.folderId = 0,
+    this.folderName = '',
+    this.snippet = '',
+    this.score = 0,
+    this.myLevel = 0,
+    this.tags = const [],
+    this.expireDate,
+  });
+  final int documentId;
+  final String code;
+  final String title;
+  final int folderId;
+  final String folderName;
+  final String snippet;
+  final double score;
+  final int myLevel;
+  final List<DocTag> tags;
+  final DateTime? expireDate;
+
+  factory DocSemanticHit.fromJson(Map<String, dynamic> j) => DocSemanticHit(
+    documentId: _i(j['documentId']),
+    code: _s(j['code']),
+    title: _s(j['title']),
+    folderId: _i(j['folderId']),
+    folderName: _s(j['folderName']),
+    snippet: _s(j['snippet']),
+    score: (j['score'] is num) ? (j['score'] as num).toDouble() : 0,
+    myLevel: _i(j['myLevel']),
+    tags: j['tags'] is List
+        ? (j['tags'] as List)
+              .whereType<Map>()
+              .map((e) => DocTag.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : const [],
+    expireDate: _d(j['expireDate']),
+  );
+
+  /// «0.00» — مثل `Score.ToString("0.00")` وب
+  String get scoreFa => score.toStringAsFixed(2);
+
+  String get folderCell => folderName.trim().isEmpty ? '—' : folderName;
+}
+
+/// نتیجهٔ جستجوی معنایی — `DocSemanticSearchResultDto`
+class DocSemanticResult {
+  const DocSemanticResult({
+    this.hits = const [],
+    this.semantic = false,
+    this.note,
+    this.totalCandidates = 0,
+  });
+  final List<DocSemanticHit> hits;
+
+  /// true = بردار معنایی · false = کلیدواژه‌ای
+  final bool semantic;
+  final String? note;
+  final int totalCandidates;
+
+  factory DocSemanticResult.fromJson(Map<String, dynamic> j) =>
+      DocSemanticResult(
+        hits: j['hits'] is List
+            ? (j['hits'] as List)
+                  .whereType<Map>()
+                  .map((e) => DocSemanticHit.fromJson(Map<String, dynamic>.from(e)))
+                  .toList()
+            : const [],
+        semantic: _b(j['semantic']),
+        note: _ns(j['note']),
+        totalCandidates: _i(j['totalCandidates']),
+      );
+
+  String get modeLabel => semantic ? 'معنایی' : 'کلیدواژه‌ای';
+}
+
+/// ورودی جستجوی معنایی — `DocSemanticSearchRequest`
+class DocSemanticRequest {
+  const DocSemanticRequest({
+    required this.query,
+    this.folderId,
+    this.includeSubfolders = true,
+    this.tagIds = const [],
+    this.status = 'active',
+    this.take = 15,
+  });
+  final String query;
+  final int? folderId;
+  final bool includeSubfolders;
+  final List<int> tagIds;
+  final String status;
+  final int take;
+
+  Map<String, dynamic> toJson() => {
+    'query': query.trim(),
+    'folderId': folderId,
+    'includeSubfolders': includeSubfolders,
+    'tagIds': tagIds,
+    'status': status,
+    'take': take,
+  };
+}
+
+/// اعتبارسنجی جستجوی معنایی — همان دو پیام سرور
+String? validateSemanticQuery(String q) {
+  final t = q.trim();
+  if (t.length < 2) return 'عبارت جستجو حداقل ۲ حرف باشد.';
+  if (t.length > 500) return 'عبارت جستجو خیلی طولانی است.';
+  return null;
+}
+
+/// ورودی جستجوی پیشرفته/تمام‌متن — `DocSearchFilterDto`
+class DocSearchFilter {
+  const DocSearchFilter({
+    this.page = 1,
+    this.pageSize = 25,
+    this.search,
+    this.contentSearch,
+    this.folderId,
+    this.includeSubfolders = true,
+    this.status = 'active',
+    this.expiryStatus = 'all',
+    this.fileTypes = const [],
+    this.tagIds = const [],
+  });
+  final int page;
+  final int pageSize;
+  final String? search;
+
+  /// جستجوی تمام‌متن در محتوای فایل‌ها و OCR
+  final String? contentSearch;
+  final int? folderId;
+  final bool includeSubfolders;
+  final String status;
+  final String expiryStatus;
+
+  /// pdf | word | excel | image | text
+  final List<String> fileTypes;
+  final List<int> tagIds;
+
+  Map<String, dynamic> toJson() => {
+    'page': page,
+    'pageSize': pageSize,
+    if ((search ?? '').trim().isNotEmpty) 'search': search!.trim(),
+    if ((contentSearch ?? '').trim().isNotEmpty)
+      'contentSearch': contentSearch!.trim(),
+    if (folderId != null && folderId! > 0) 'folderId': folderId,
+    'includeSubfolders': includeSubfolders,
+    'status': status,
+    'expiryStatus': expiryStatus,
+    'fileTypes': fileTypes,
+    'tagIds': tagIds,
+  };
+}
+
+/// انواع فایل جستجوی پیشرفته — همان پنج دکمهٔ وب
+const List<MapEntry<String, String>> kDocFileTypes = [
+  MapEntry('pdf', 'PDF'),
+  MapEntry('word', 'Word'),
+  MapEntry('excel', 'Excel'),
+  MapEntry('image', 'تصویر'),
+  MapEntry('text', 'متن'),
+];
+
+// ---- از صفحهٔ جزئیات منتقل شد تا استوریج و مدل‌ها یک‌جا باشند ----
+class DocLogRow {
+  const DocLogRow({
+    this.id = 0,
+    this.action = '',
+    this.detail,
+    this.userName = '',
+    this.createdAt,
+    this.versionId,
+  });
+  final int id;
+  final String action;
+  final String? detail;
+  final String userName;
+  final DateTime? createdAt;
+  final int? versionId;
+
+  static List<DocLogRow> listFrom(Object? v) {
+    if (v is! List) return const [];
+    return v.whereType<Map>().map((e) {
+      final j = Map<String, dynamic>.from(e);
+      return DocLogRow(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        action: j['action']?.toString() ?? '',
+        detail: j['detail']?.toString(),
+        userName: j['userName']?.toString() ?? '',
+        createdAt: Fa.parseServerDate(j['createdAt']),
+        versionId: (j['versionId'] as num?)?.toInt(),
+      );
+    }).toList();
+  }
+
+  /// همان نگاشت `ActionName` وب
+  static String actionName(String a) => switch (a) {
+    'Create' => 'ایجاد',
+    'Update' => 'ویرایش',
+    'NewVersion' => 'ورژن جدید',
+    'Approve' => 'تایید',
+    'Approved' => 'تایید نهایی',
+    'Reject' => 'رد',
+    'Activate' => 'فعال‌سازی ورژن',
+    'Link' => 'لینک',
+    'Unlink' => 'حذف لینک',
+    'RelatedUpdate' => 'مدرک مرتبط',
+    'Deactivate' => 'غیرفعال‌سازی',
+    'Permissions' => 'دسترسی‌ها',
+    'ExpiryAlert' => 'هشدار انقضا',
+    'Delete' => 'حذف',
+    'Restore' => 'بازگردانی',
+    'Print' => 'چاپ',
+    'View' => 'بازدید',
+    'Read' => 'مطالعه',
+    _ => a,
+  };
+}
+

@@ -10,6 +10,8 @@
 //    GET    tags                   · POST tags       · PUT tags/{id} · DELETE tags/{id}
 // ============================================================
 
+import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 import '../models/doc_archive_models.dart';
 
@@ -417,6 +419,135 @@ class DocArchiveRepository {
         ? '${d['message'] ?? 'تگ با موفقیت حذف شد.'}'
         : 'تگ با موفقیت حذف شد.';
   }
+
+  // ---------------- فاز ۹-ی: نسخه، تایید، پیوست، مقایسه، جستجو ----------------
+
+  /// ثبت نسخهٔ جدید — `POST documents/versions`
+  Future<int> createVersion(DocVersionInput input) async {
+    final r = await _api.post<dynamic>('$_root/documents/versions', input.toJson());
+    final d = r.data;
+    return d is Map ? (d['id'] as num?)?.toInt() ?? 0 : 0;
+  }
+
+  /// فعال/غیرفعال کردن یک نسخه — `PUT documents/versions/{id}/active?active=`
+  Future<void> setVersionActive(int versionId, bool active) => _api.put<dynamic>(
+    '$_root/documents/versions/$versionId/active?active=$active',
+  );
+
+  /// اقدام تایید/رد — `POST documents/approval`
+  Future<void> submitApproval(DocApprovalInput input) =>
+      _api.post<dynamic>('$_root/documents/approval', input.toJson());
+
+  /// مقایسهٔ دو نسخه — `GET documents/{id}/compare?from&to`
+  Future<DocVersionCompare> compareVersions({
+    required int documentId,
+    required int from,
+    required int to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '$_root/documents/$documentId/compare',
+      query: {'from': from, 'to': to},
+    );
+    final d = r.data;
+    return d is Map
+        ? DocVersionCompare.fromJson(Map<String, dynamic>.from(d))
+        : const DocVersionCompare();
+  }
+
+  /// لینک یک مدرک مرتبط — `POST documents/links`
+  Future<void> linkDocument({
+    required int documentId,
+    required int linkedDocumentId,
+    String? note,
+  }) => _api.post<dynamic>('$_root/documents/links', {
+    'documentId': documentId,
+    'linkedDocumentId': linkedDocumentId,
+    'note': (note ?? '').trim(),
+  });
+
+  /// حذف لینک — `DELETE documents/links?documentId&linkedDocumentId`
+  Future<void> unlinkDocument({
+    required int documentId,
+    required int linkedDocumentId,
+  }) => _api.delete<dynamic>(
+    '$_root/documents/links?documentId=$documentId&linkedDocumentId=$linkedDocumentId',
+  );
+
+  // ---------------- پیوست‌های نسخه ----------------
+
+  /// فهرست پیوست‌های یک نسخه — `GET api/attachments/DocVersion/{refId}`
+  Future<List<DocAttachment>> attachments(int versionId) async {
+    final r = await _api.get<dynamic>('/api/attachments/DocVersion/$versionId');
+    final d = r.data;
+    final list = d is List
+        ? d
+        : (d is Map && d['items'] is List ? d['items'] as List : const []);
+    return list
+        .whereType<Map>()
+        .map((e) => DocAttachment.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  /// بارگذاری پیوست روی نسخه — `POST api/attachments/DocVersion/{refId}`
+  Future<void> uploadAttachment({
+    required int versionId,
+    required String fileName,
+    required List<int> bytes,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    await _api.postForm<dynamic>(
+      '/api/attachments/DocVersion/$versionId',
+      form,
+      onSendProgress: onProgress,
+    );
+  }
+
+  /// حذف پیوست — `DELETE api/attachments/{id}`
+  Future<void> deleteAttachment(int id) =>
+      _api.delete<dynamic>('/api/attachments/$id');
+
+  /// آدرس پیش‌نمایش/دانلود پیوست (توکن در هدر می‌رود؛ آدرس برای نمایش)
+  String attachmentPreviewUrl(int id) =>
+      _api.resolveUrl('/api/attachments/preview/$id');
+  String attachmentDownloadUrl(int id) =>
+      _api.resolveUrl('/api/attachments/download/$id');
+
+  /// دریافت بایت پیوست (برای پیش‌نمایش تصویر داخل برنامه)
+  Future<List<int>> attachmentBytes(int id) async {
+    final r = await _api.request<List<int>>(
+      'GET',
+      '/api/attachments/download/$id',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return r.data ?? const [];
+  }
+
+  // ---------------- جستجوی هوشمند ----------------
+
+  /// جستجوی معنایی — `POST api/doc-archive/semantic-search`
+  Future<DocSemanticResult> semanticSearch(DocSemanticRequest req) async {
+    final r = await _api.post<dynamic>('$_root/semantic-search', req.toJson());
+    final d = r.data;
+    return d is Map
+        ? DocSemanticResult.fromJson(Map<String, dynamic>.from(d))
+        : const DocSemanticResult();
+  }
+
+  /// جستجوی پیشرفته/تمام‌متن صفحه‌بندی‌شده — `POST api/doc-archive/search-page`
+  Future<DocPage<DocRow>> searchPage(DocSearchFilter filter) async {
+    final r = await _api.post<dynamic>(
+      '$_root/search-page',
+      filter.toJson(),
+    );
+    final d = r.data;
+    return d is Map
+        ? DocPage.documents(Map<String, dynamic>.from(d))
+        : const DocPage<DocRow>();
+  }
+
 }
 
 /// یک ردیف دسترسی پوشه/مدرک — `DocPermissionDto`
