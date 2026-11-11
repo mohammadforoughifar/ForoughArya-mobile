@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/jalali_picker.dart';
 import '../../shop/presentation/shop_style.dart';
 import '../data/doc_archive_repository.dart';
 import '../models/doc_archive_models.dart';
@@ -36,6 +37,19 @@ class _DocSearchPageState extends State<DocSearchPage> {
   String _status = 'active';
   String _expiryStatus = 'all';
   final Set<String> _fileTypes = {};
+  final Set<int> _tagIds = {};
+
+  // ---- فاز ۹-ک: بازه‌های تاریخ، پیوست و افراد ----
+  DateTime? _createdFrom;
+  DateTime? _createdTo;
+  DateTime? _expiryFrom;
+  DateTime? _expiryTo;
+  bool? _hasAttachment;
+  int? _approverUserId;
+  int? _createdByUserId;
+
+  List<DocLookup> _users = const [];
+  List<DocTag> _tags = const [];
 
   bool _loading = false;
   String? _error;
@@ -47,7 +61,75 @@ class _DocSearchPageState extends State<DocSearchPage> {
   void initState() {
     super.initState();
     _repo = DocArchiveRepository(context.read<ApiClient>());
+    _loadLookups();
   }
+
+  Future<void> _loadLookups() async {
+    try {
+      final lookups = await _repo.lookups();
+      final tags = await _repo.tags();
+      if (!mounted) return;
+      setState(() {
+        _users = lookups.users;
+        _tags = tags;
+      });
+    } catch (_) {}
+  }
+
+  DocSearchFilter _filter({int page = 1}) => DocSearchFilter(
+    page: page,
+    pageSize: 25,
+    search: _q.text,
+    contentSearch: _includeContent ? _q.text : null,
+    status: _status,
+    expiryStatus: _expiryStatus,
+    fileTypes: _fileTypes.toList(),
+    tagIds: _tagIds.toList(),
+    createdFrom: _createdFrom,
+    createdTo: _createdTo,
+    expiryFrom: _expiryFrom,
+    expiryTo: _expiryTo,
+    hasAttachment: _hasAttachment,
+    approverUserId: _approverUserId,
+    createdByUserId: _createdByUserId,
+  );
+
+  void _clearFilters() => setState(() {
+    _includeContent = true;
+    _fileTypes.clear();
+    _tagIds.clear();
+    _createdFrom = null;
+    _createdTo = null;
+    _expiryFrom = null;
+    _expiryTo = null;
+    _hasAttachment = null;
+    _approverUserId = null;
+    _createdByUserId = null;
+  });
+
+  Widget _dateChip(
+    String label,
+    DateTime? value,
+    void Function(DateTime?) onSet,
+    Future<void> Function() onPick,
+  ) => InkWell(
+    onTap: onPick,
+    borderRadius: BorderRadius.circular(20),
+    child: Chip(
+    avatar: Icon(
+      value == null ? Icons.event_rounded : Icons.event_available_rounded,
+      size: 13,
+      color: value == null ? ShopColors.inkFaint : ShopColors.seed,
+    ),
+    label: Text(
+      value == null ? label : '$label: ${jalaliShort(value)}',
+      style: const TextStyle(fontSize: 9),
+    ),
+    visualDensity: VisualDensity.compact,
+    onDeleted: value == null ? null : () => onSet(null),
+    deleteIcon: const Icon(Icons.close_rounded, size: 12),
+    ),
+  );
 
   @override
   void dispose() {
@@ -61,6 +143,13 @@ class _DocSearchPageState extends State<DocSearchPage> {
     if (_semanticMode && err != null) {
       setState(() => _error = err);
       return;
+    }
+    if (!_semanticMode) {
+      final dateErr = validateSearchDates(_filter());
+      if (dateErr != null) {
+        setState(() => _error = dateErr);
+        return;
+      }
     }
     setState(() {
       _loading = true;
@@ -78,17 +167,7 @@ class _DocSearchPageState extends State<DocSearchPage> {
           _loading = false;
         });
       } else {
-        final res = await _repo.searchPage(
-          DocSearchFilter(
-            page: page,
-            pageSize: 25,
-            search: _q.text,
-            contentSearch: _includeContent ? _q.text : null,
-            status: _status,
-            expiryStatus: _expiryStatus,
-            fileTypes: _fileTypes.toList(),
-          ),
-        );
+        final res = await _repo.searchPage(_filter(page: page));
         if (!mounted) return;
         setState(() {
           _page = res;
@@ -304,6 +383,138 @@ class _DocSearchPageState extends State<DocSearchPage> {
                     ],
                   ),
                 ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'فیلترهای پیشرفته',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: ShopColors.inkSoft,
+                        ),
+                      ),
+                    ),
+                    if (_filter().activeCount > 0)
+                      ShopTag(
+                        text: '${Fa.digits(_filter().activeCount)} فیلتر فعال',
+                        color: ShopColors.seed,
+                      ),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 26),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        foregroundColor: ShopColors.inkFaint,
+                      ),
+                      onPressed: _clearFilters,
+                      icon: const Icon(Icons.filter_alt_off_rounded, size: 13),
+                      label: const Text(
+                        'پاک کردن',
+                        style: TextStyle(fontSize: 9),
+                      ),
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 5,
+                  runSpacing: 5,
+                  children: [
+                    _dateChip(
+                      'ثبت از',
+                      _createdFrom,
+                      (d) => setState(() => _createdFrom = d),
+                      () => _pickDate(true, true),
+                    ),
+                    _dateChip(
+                      'ثبت تا',
+                      _createdTo,
+                      (d) => setState(() => _createdTo = d),
+                      () => _pickDate(true, false),
+                    ),
+                    _dateChip(
+                      'انقضا از',
+                      _expiryFrom,
+                      (d) => setState(() => _expiryFrom = d),
+                      () => _pickDate(false, true),
+                    ),
+                    _dateChip(
+                      'انقضا تا',
+                      _expiryTo,
+                      (d) => setState(() => _expiryTo = d),
+                      () => _pickDate(false, false),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      'پیوست:',
+                      style: TextStyle(fontSize: 9.5, color: ShopColors.inkSoft),
+                    ),
+                    ChoiceChip(
+                      label: const Text('همه', style: TextStyle(fontSize: 9)),
+                      visualDensity: VisualDensity.compact,
+                      selected: _hasAttachment == null,
+                      onSelected: (_) => setState(() => _hasAttachment = null),
+                    ),
+                    ChoiceChip(
+                      label: const Text(
+                        'دارای پیوست',
+                        style: TextStyle(fontSize: 9),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      selected: _hasAttachment == true,
+                      onSelected: (_) => setState(() => _hasAttachment = true),
+                    ),
+                    ChoiceChip(
+                      label: const Text(
+                        'بدون پیوست',
+                        style: TextStyle(fontSize: 9),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      selected: _hasAttachment == false,
+                      onSelected: (_) => setState(() => _hasAttachment = false),
+                    ),
+                  ],
+                ),
+                if (_tags.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 5,
+                    children: [
+                      for (final t in _tags)
+                        FilterChip(
+                          label: Text(
+                            t.name,
+                            style: const TextStyle(fontSize: 9),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          selected: _tagIds.contains(t.id),
+                          onSelected: (v) => setState(() {
+                            if (v) {
+                              _tagIds.add(t.id);
+                            } else {
+                              _tagIds.remove(t.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(child: _userDrop(true)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _userDrop(false)),
+                  ],
+                ),
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
@@ -530,4 +741,58 @@ class _DocSearchPageState extends State<DocSearchPage> {
         ],
       ),
   ];
+
+  Widget _userDrop(bool isApprover) => DropdownButtonFormField<int?>(
+    isDense: true,
+    initialValue: isApprover ? _approverUserId : _createdByUserId,
+    style: const TextStyle(fontSize: 10, color: ShopColors.ink),
+    decoration: InputDecoration(
+      isDense: true,
+      labelText: isApprover ? 'گردش‌دهنده' : 'ثبت‌کننده',
+      labelStyle: const TextStyle(fontSize: 9),
+      border: const OutlineInputBorder(),
+    ),
+    items: [
+      const DropdownMenuItem<int?>(value: null, child: Text('همه')),
+      for (final u in _users)
+        DropdownMenuItem<int?>(
+          value: u.id,
+          child: Text(u.name, style: const TextStyle(fontSize: 10)),
+        ),
+    ],
+    onChanged: (v) => setState(() {
+      if (isApprover) {
+        _approverUserId = v;
+      } else {
+        _createdByUserId = v;
+      }
+    }),
+  );
+
+  Future<void> _pickDate(bool isCreated, bool isFrom) async {
+    final current = isCreated
+        ? (isFrom ? _createdFrom : _createdTo)
+        : (isFrom ? _expiryFrom : _expiryTo);
+    final picked = await showJalaliDatePicker(
+      context,
+      initial: current,
+      title: isCreated ? 'تاریخ ثبت' : 'تاریخ انقضا',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isCreated) {
+        if (isFrom) {
+          _createdFrom = picked;
+        } else {
+          _createdTo = picked;
+        }
+      } else {
+        if (isFrom) {
+          _expiryFrom = picked;
+        } else {
+          _expiryTo = picked;
+        }
+      }
+    });
+  }
 }

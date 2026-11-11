@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:forough_mobile/features/it_assets/models/doc_archive_models.dart';
 
 void main() {
+  folderTreeTests();
+
   group('فاز ۱۰ — مقایسهٔ محتوای فایل‌ها', () {
     test('ردیف‌های تفاوت و شمارش', () {
       final c = DocContentCompare.fromJson({
@@ -211,6 +213,36 @@ void main() {
     test('بدنهٔ درخواست بدون فیلدهای خالی', () {
       final j = const DocDuplicateRequest(title: 'x').toJson();
       expect(j, {'title': 'x'});
+    });
+  });
+}
+
+// ─────── درخت پوشه (فاز ۱۰ — نمایش سلسله‌مراتبی) ───────
+void folderTreeTests() {
+  group('فاز ۱۰ — درخت پوشه‌ها', () {
+    List<DocFolder> all() => [
+      DocFolder.fromJson({'id': 1, 'name': 'ریشه'}),
+      DocFolder.fromJson({'id': 2, 'name': 'حقوقی', 'parentId': 1}),
+      DocFolder.fromJson({'id': 3, 'name': 'قرارداد', 'parentId': 2}),
+      DocFolder.fromJson({'id': 4, 'name': 'مالی', 'parentId': 1}),
+      DocFolder.fromJson({'id': 5, 'name': 'یتیم', 'parentId': 99}),
+    ];
+
+    test('زیرمجموعه‌ها زیر والد خود می‌آیند و عمق درست است', () {
+      final tree = buildFolderTree(all());
+      // ریشه‌ها: ۱ (ریشه) و ۵ (والد ناموجود ⇒ ریشه)
+      expect(tree.length, 2);
+      final root = tree.firstWhere((n) => n.id == 1);
+      expect(root.depth, 0);
+      expect(root.children.map((e) => e.id).toList(), [2, 4]);
+      final legal = root.children.firstWhere((n) => n.id == 2);
+      expect(legal.depth, 1);
+      expect(legal.children.single.id, 3);
+      expect(legal.children.single.depth, 2);
+    });
+
+    test('فهرست خالی درخت خالی می‌دهد', () {
+      expect(buildFolderTree(const []), isEmpty);
     });
   });
 }

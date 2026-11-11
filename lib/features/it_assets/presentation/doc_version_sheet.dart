@@ -18,6 +18,7 @@ import '../../shop/presentation/shop_style.dart';
 import '../data/doc_archive_repository.dart';
 import '../models/doc_archive_models.dart';
 import 'doc_archive_detail_page.dart' show DocVersionRow;
+import 'doc_signature_pad.dart';
 import 'system_style.dart';
 
 // ============================================================
@@ -541,6 +542,7 @@ class DocApprovalSheet extends StatefulWidget {
 class _DocApprovalSheetState extends State<DocApprovalSheet> {
   late final DocArchiveRepository _repo;
   final _comment = TextEditingController();
+  final _sigKey = GlobalKey<DocSignaturePadState>();
   bool _saving = false;
   String? _error;
 
@@ -562,11 +564,24 @@ class _DocApprovalSheetState extends State<DocApprovalSheet> {
       _error = null;
     });
     try {
+      // امضای دستی (اختیاری) — فقط در تایید گرفته می‌شود
+      String? signature;
+      if (widget.approve) {
+        final pad = _sigKey.currentState;
+        if (pad != null && !pad.isEmpty) {
+          final dataUrl = await pad.toDataUrl();
+          if (dataUrl.isNotEmpty) signature = dataUrl;
+        }
+      }
       await _repo.submitApproval(
         DocApprovalInput(
           versionId: widget.version.id,
           approve: widget.approve,
           comment: _comment.text,
+          signatureDataUrl: signature,
+          biometricVerified: false,
+          deviceInfo: kDeviceInfoFa,
+          clientTimestamp: DateTime.now(),
         ),
       );
       if (!mounted) return;
@@ -627,6 +642,10 @@ class _DocApprovalSheetState extends State<DocApprovalSheet> {
                 border: OutlineInputBorder(),
               ),
             ),
+            if (widget.approve) ...[
+              const SizedBox(height: 10),
+              DocSignaturePad(key: _sigKey),
+            ],
             if (!widget.approve) ...[
               const SizedBox(height: 8),
               const Text(

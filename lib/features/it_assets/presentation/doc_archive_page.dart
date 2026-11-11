@@ -28,6 +28,7 @@ import '../data/it_perms.dart';
 import '../models/doc_archive_models.dart';
 import 'doc_archive_cartable_page.dart';
 import 'doc_archive_detail_page.dart';
+import 'doc_import_page.dart';
 import 'doc_search_page.dart';
 import 'doc_archive_form_page.dart';
 import 'system_style.dart';
@@ -49,7 +50,10 @@ class _DocArchivePageState extends State<DocArchivePage> {
   DocTab _tab = DocTab.all;
   DocStatusFilter _status = DocStatusFilter.active;
   int? _folderId;
-  String? _expiryFilter; // expiring | expired
+  String? _expiryFilter;
+
+  /// پوشه‌های باز‌شده در درخت
+  final Set<int> _expandedFolders = {}; // expiring | expired
   bool _includeSubfolders = true;
 
   final _search = TextEditingController();
@@ -304,6 +308,15 @@ class _DocArchivePageState extends State<DocArchivePage> {
             onPressed: _manageTags,
           ),
           IconButton(
+            tooltip: 'ورود انبوه آرشیو',
+            icon: const Icon(Icons.folder_copy_rounded, size: 19),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => DocImportPage(folders: _folders),
+              ),
+            ),
+          ),
+          IconButton(
             tooltip: 'پوشه جدید',
             icon: const Icon(Icons.create_new_folder_rounded, size: 20),
             onPressed: _openNewFolder,
@@ -311,7 +324,8 @@ class _DocArchivePageState extends State<DocArchivePage> {
           IconButton(
             tooltip: 'مدرک جدید',
             icon: const Icon(Icons.add_rounded, size: 20),
-            onPressed: _openNewDoc,
+            // گیت وب: «مدرک جدید» فقط در وضعیت فعال
+            onPressed: _status == DocStatusFilter.active ? _openNewDoc : null,
           ),
         ],
       ),
@@ -741,27 +755,218 @@ class _DocArchivePageState extends State<DocArchivePage> {
             },
           ),
           const Divider(height: 12),
-          for (final f in _folders)
-            _shortcut(
-              icon: Icons.folder_rounded,
-              label: f.name,
-              count: f.documentCount,
-              color: ShopColors.seed,
-              active: _folderId == f.id,
-              level: f.levelName,
-              onTap: () {
-                setState(() {
-                  _folderId = f.id;
-                  _status = DocStatusFilter.active;
-                  _expiryFilter = null;
-                });
-                _loadDocs();
-              },
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'پوشه‌ها (سلسله‌مراتبی)',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      color: ShopColors.inkSoft,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${Fa.digits(_folders.length)} پوشه',
+                  style: const TextStyle(
+                    fontSize: 8.5,
+                    color: ShopColors.inkFaint,
+                  ),
+                ),
+              ],
             ),
+          ),
+          ..._folderTreeNodes(buildFolderTree(_folders)),
         ],
       ),
     ),
   );
+
+  /// رندر بازگشتی درخت پوشه‌ها — زیرمجموعه‌ها با تودرتویی و راهنمای خط
+  List<Widget> _folderTreeNodes(List<DocFolderNode> nodes) {
+    final out = <Widget>[];
+    for (final n in nodes) {
+      final hasKids = n.children.isNotEmpty;
+      final expanded = _expandedFolders.contains(n.id);
+      out.add(
+        Padding(
+          padding: EdgeInsets.only(right: n.depth * 14.0),
+          child: Row(
+            children: [
+              if (hasKids)
+                InkWell(
+                  onTap: () => setState(() {
+                    if (expanded) {
+                      _expandedFolders.remove(n.id);
+                    } else {
+                      _expandedFolders.add(n.id);
+                    }
+                  }),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_down_rounded
+                          : Icons.keyboard_arrow_left_rounded,
+                      size: 15,
+                      color: ShopColors.inkFaint,
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(width: 19),
+              Expanded(
+                child: _shortcut(
+                  icon: hasKids
+                      ? (expanded
+                            ? Icons.folder_open_rounded
+                            : Icons.folder_rounded)
+                      : Icons.folder_outlined,
+                  label: n.name,
+                  count: n.folder.documentCount,
+                  color: ShopColors.seed,
+                  active: _folderId == n.id,
+                  level: n.folder.levelName,
+                  onTap: () {
+                    setState(() {
+                      _folderId = n.id;
+                      _status = DocStatusFilter.active;
+                      _expiryFilter = null;
+                      if (hasKids) _expandedFolders.add(n.id);
+                    });
+                    _loadDocs();
+                  },
+                ),
+              ),
+              if (n.folder.myLevel >= DocLevel.full)
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 26,
+                    minHeight: 26,
+                  ),
+                  tooltip: 'تنظیمات پوشه',
+                  icon: const Icon(
+                    Icons.settings_rounded,
+                    size: 14,
+                    color: ShopColors.inkFaint,
+                  ),
+                  onPressed: () => _editFolderSettings(n.folder),
+                ),
+            ],
+          ),
+        ),
+      );
+      out.addAll(_folderTreeNodes(n.children));
+    }
+    return out;
+  }
+
+  Future<void> _editFolderSettings(DocFolder f) async {
+    // «چرخ‌دندهٔ پوشه» در وب فقط برای سطح «کامل» باز است
+    final name = TextEditingController(text: f.name);
+    final description = TextEditingController(text: f.description ?? '');
+    var isPublic = f.isPublic;
+    var publicCanDownload = f.publicCanDownload;
+    var busy = false;
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: Text(
+            'تنظیمات پوشه «${f.name}»',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: name,
+                  style: const TextStyle(fontSize: 11),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'نام پوشه',
+                    labelStyle: TextStyle(fontSize: 9),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: description,
+                  style: const TextStyle(fontSize: 11),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'توضیح',
+                    labelStyle: TextStyle(fontSize: 9),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: isPublic,
+                  onChanged: (v) => setLocal(() => isPublic = v),
+                  title: const Text(
+                    'نمایش برای همه',
+                    style: TextStyle(fontSize: 10.5),
+                  ),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: publicCanDownload,
+                  onChanged: isPublic
+                      ? (v) => setLocal(() => publicCanDownload = v)
+                      : null,
+                  title: const Text(
+                    'اجازهٔ دانلود برای همه',
+                    style: TextStyle(fontSize: 10.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.of(c).pop(false),
+              child: const Text('انصراف', style: TextStyle(fontSize: 11)),
+            ),
+            FilledButton(
+              onPressed: busy ? null : () => Navigator.of(c).pop(true),
+              child: const Text('ذخیره', style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (res != true) return;
+    try {
+      await _repo.updateFolder(
+        id: f.id,
+        name: name.text.trim(),
+        description: description.text.trim(),
+        isPublic: isPublic,
+        publicCanDownload: publicCanDownload,
+      );
+      _toast('تنظیمات پوشه ذخیره شد.');
+      await _bootstrap();
+    } catch (e) {
+      _toast(
+        e
+            .toString()
+            .replaceFirst('ApiException: ', '')
+            .replaceFirst('Exception: ', '')
+            .trim(),
+        error: true,
+      );
+    }
+  }
 
   Widget _shortcut({
     required IconData icon,

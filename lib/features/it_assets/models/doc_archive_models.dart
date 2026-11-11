@@ -153,6 +153,49 @@ List<DocFolder> folderPath(List<DocFolder> all, int id) {
 String folderPathText(List<DocFolder> all, int id) =>
     folderPath(all, id).map((f) => f.name).join(' / ');
 
+/// یک گرهٔ درخت پوشه (پوشه‌های زیرمجموعه به‌صورت سلسله‌مراتبی)
+class DocFolderNode {
+  const DocFolderNode({required this.folder, this.children = const [], this.depth = 0});
+
+  final DocFolder folder;
+  final List<DocFolderNode> children;
+  final int depth;
+
+  String get name => folder.name;
+  int get id => folder.id;
+}
+
+/// ساخت درخت پوشه‌ها از فهرست تخت سرور — «پوشه‌های زیرمجموعه» تودرتو
+List<DocFolderNode> buildFolderTree(List<DocFolder> all) {
+  final children = <int?, List<DocFolder>>{};
+  final ids = {for (final f in all) f.id};
+  for (final f in all) {
+    final parent = (f.parentId != null && ids.contains(f.parentId))
+        ? f.parentId
+        : null;
+    children.putIfAbsent(parent, () => []).add(f);
+  }
+  for (final list in children.values) {
+    list.sort((a, b) => a.name.compareTo(b.name));
+  }
+  List<DocFolderNode> walk(int? parent, int depth) {
+    final out = <DocFolderNode>[];
+    for (final f in children[parent] ?? const <DocFolder>[]) {
+      if (depth > 32) break;
+      out.add(
+        DocFolderNode(
+          folder: f,
+          depth: depth,
+          children: walk(f.id, depth + 1),
+        ),
+      );
+    }
+    return out;
+  }
+
+  return walk(null, 0);
+}
+
 // ============================================================
 //  برچسب — DocTagDto
 // ============================================================
