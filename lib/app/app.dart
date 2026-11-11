@@ -10,8 +10,36 @@ import '../core/notifications/push_service.dart';
 import '../features/messenger/data/upload_queue.dart';
 import '../features/auth/login_page.dart';
 import 'home_shell.dart';
-class ForoughApp extends StatelessWidget {
+
+class ForoughApp extends StatefulWidget {
   const ForoughApp({super.key});
+
+  @override
+  State<ForoughApp> createState() => _ForoughAppState();
+}
+
+class _ForoughAppState extends State<ForoughApp> with WidgetsBindingObserver {
+  /// وقتی اپ از پس‌زمینه برمی‌گردد، تایمر بررسی اعلان‌ها در پس‌زمینه متوقف
+  /// بوده است؛ یک بررسی فوری + راه‌اندازی دوبارهٔ تایمر لازم است. بدون این،
+  /// اعلان‌های دورهٔ پس‌زمینه «هستند ولی نمایش داده نمی‌شوند».
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      PushService.instance.resumePolling();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

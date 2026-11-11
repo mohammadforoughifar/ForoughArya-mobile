@@ -168,9 +168,14 @@ class NotificationItem {
     this.createdAt,
     this.entityId,
     this.entityKind,
+    this.companyId,
+    this.companyName,
   });
 
   final int id;
+
+  /// عنوان اعلان — سرور معمولاً همیشه می‌فرستد؛ اگر خالی بود [displayTitle]
+  /// جایگزین امن برمی‌گرداند تا کارت هرگز «خالی» دیده نشود.
   final String title;
   final String? body;
   final String? fromName;
@@ -185,21 +190,77 @@ class NotificationItem {
   /// نوع مقصد: wo | minutes | letter | email | null
   final String? entityKind;
 
+  /// شرکتِ اعلان (`null` = عمومی) — سرور فقط اعلان‌های شرکت فعال را می‌دهد
+  final int? companyId;
+  final String? companyName;
+
   /// مسیر وب اعلان — برای استخراج شناسه وقتی فیلد مستقیم نیامده
   String? get targetLink => link;
 
-  factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
-    id: (j['id'] as num?)?.toInt() ?? 0,
-    title: j['title']?.toString() ?? '',
-    body: j['body']?.toString(),
-    fromName: j['fromName']?.toString(),
-    formName: j['formName']?.toString(),
-    link: j['link']?.toString(),
-    isRead: j['isRead'] == true,
-    createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? ''),
-    entityId: parseEntityId(j),
-    entityKind: parseEntityKind(j),
+  /// عنوانی که همیشه چیزی برای نشان‌دادن دارد.
+  String get displayTitle {
+    final t = title.trim();
+    if (t.isNotEmpty) return t;
+    final f = (formName ?? '').trim();
+    if (f.isNotEmpty) return f;
+    final b = (body ?? '').trim();
+    if (b.isNotEmpty) return b;
+    return 'اعلان سازمانی';
+  }
+
+  /// متن دوم کارت: بدنه، و اگر نبود نام فرستنده؛ اگر هر دو خالی بود `null`
+  /// تا کارت بدون خط خالی رندر شود.
+  String? get displayBody {
+    final b = (body ?? '').trim();
+    if (b.isNotEmpty) return b;
+    final f = (fromName ?? '').trim();
+    return f.isEmpty ? null : f;
+  }
+
+  factory NotificationItem.fromJson(Map<String, dynamic> j) {
+    // سرور بعضی اعلان‌ها را با کلیدهای بزرگ (PascalCase) می‌فرستد؛ هر دو پوشش.
+    T? pick<T>(String a, String b) => (j[a] ?? j[b]) as T?;
+    return NotificationItem(
+      id: (j['id'] as num?)?.toInt() ?? (j['Id'] as num?)?.toInt() ?? 0,
+      title: (pick<String>('title', 'Title') ?? '').toString(),
+      body: pick<String>('body', 'Body')?.toString(),
+      fromName: pick<String>('fromName', 'FromName')?.toString(),
+      formName: pick<String>('formName', 'FormName')?.toString(),
+      link: pick<String>('link', 'Link')?.toString(),
+      isRead: j['isRead'] == true || j['IsRead'] == true,
+      createdAt: DateTime.tryParse(
+        (pick<String>('createdAt', 'CreatedAt') ?? '').toString(),
+      ),
+      entityId: parseEntityId(j),
+      entityKind: parseEntityKind(j),
+      companyId:
+          (j['companyId'] as num?)?.toInt() ??
+          (j['CompanyId'] as num?)?.toInt(),
+      companyName: pick<String>('companyName', 'CompanyName')?.toString(),
+    );
+  }
+
+  /// نسخهٔ «خوانده‌شده»ی همین اعلان — برای به‌روزرسانی خوش‌بینانه در فهرست.
+  NotificationItem asRead() => NotificationItem(
+    id: id,
+    title: title,
+    body: body,
+    fromName: fromName,
+    formName: formName,
+    link: link,
+    isRead: true,
+    createdAt: createdAt,
+    entityId: entityId,
+    entityKind: entityKind,
+    companyId: companyId,
+    companyName: companyName,
   );
+
+  @override
+  bool operator ==(Object other) => other is NotificationItem && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// یک ردیف ریز داخل کارت گزارش روزانه.

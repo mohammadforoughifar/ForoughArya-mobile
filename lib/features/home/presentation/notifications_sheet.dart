@@ -5,8 +5,8 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../core/notifications/push_service.dart';
 import '../../../core/utils/fa.dart';
 import '../data/home_repository.dart';
 import '../models/home_models.dart';
@@ -36,10 +36,24 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
   List<NotificationItem>? _items;
   String? _error;
 
+  /// وضعیت مجوز اعلان در سطح سیستم — اگر خاموش باشد، «نوتیفیکیشن هست ولی
+  /// چیزی نمایش داده نمی‌شود» و کاربر باید بداند چرا.
+  bool _permDenied = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _checkPermission();
+  }
+
+  Future<void> _checkPermission() async {
+    try {
+      final enabled = await PushService.instance.areNotificationsEnabled();
+      if (mounted && enabled == false) setState(() => _permDenied = true);
+    } catch (_) {
+      // پلتفرم‌های بدون پشتیبانی — نادیده
+    }
   }
 
   Future<void> _load() async {
@@ -52,25 +66,20 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
       });
     } on Exception catch (e) {
       if (!mounted) return;
+      // نه فقط ثبت خطا: کاربر باید ببیند چرا فهرست خالی است و بتواند تلاش کند
       setState(() => _error = e.toString());
+      _items ??= const [];
     }
   }
 
   Future<void> _markRead(NotificationItem n) async {
     if (n.isRead) return;
-    setState(() {
-      final i = _items!.indexOf(n);
-      _items![i] = NotificationItem(
-        id: n.id,
-        title: n.title,
-        body: n.body,
-        fromName: n.fromName,
-        formName: n.formName,
-        link: n.link,
-        isRead: true,
-        createdAt: n.createdAt,
-      );
-    });
+    final list = _items;
+    if (list == null) return;
+    final i = list.indexWhere((e) => e.id == n.id);
+    if (i >= 0) {
+      setState(() => list[i] = list[i].asRead());
+    }
     try {
       await widget.repository.markRead(n.id);
     } on Exception {
@@ -144,6 +153,13 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(behavior: SnackBarBehavior.floating, content: Text(text)),
     );
+  }
+
+  /// باز کردن سندِ متناظر؛ بعد از برگشت، اعلان «خوانده‌شده» می‌شود.
+  Future<void> _open(NotificationItem n) async {
+    await _markRead(n);
+    if (!mounted) return;
+    widget.onOpen?.call(n);
   }
 
   @override
@@ -235,11 +251,118 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
                 ],
               ),
             ),
+            if (_permDenied) const _PermissionBanner(),
+            Flexible(child: _body(items)),
           ],
         ),
       ),
     );
   }
+
+  /// بدنهٔ شیت: بارگذاری / خطا / خالی / فهرست اعلان‌ها.
+  /// (پیش‌تر فهرست هیچ‌جا رندر نمی‌شد و شیت فقط سربرگ داشت.)
+  Widget _body(List<NotificationItem>? items) {
+    if (items == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 34),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+      );
+    }
+    if (items.isEmpty) {
+      if (_error != null) {
+        return _Center(
+          icon: Icons.wifi_off_rounded,
+          text: 'اعلان‌ها خوانده نشد.\nاتصال شبکه یا آدرس سرور را بررسی کنید.',
+          action: TextButton.icon(
+            onPressed: () {
+              setState(() => _items = null);
+              _load();
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('تلاش دوباره'),
+          ),
+        );
+      }
+      return const _Center(
+        icon: Icons.notifications_off_outlined,
+        text: 'اعلان تازه‌ای ندارید.',
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 18),
+        shrinkWrap: true,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 6),
+        itemBuilder: (context, i) {
+          final n = items[i];
+          return Dismissible(
+            key: ValueKey('notif-${n.id}'),
+            direction: DismissDirection.horizontal,
+            background: const _DeleteBg(alignRight: true),
+            secondaryBackground: const _DeleteBg(alignRight: false),
+            onDismissed: (_) => _deleteOne(n),
+            child: _NotificationCard(item: n, onTap: () => _open(n)),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// نوار هشدار «مجوز اعلان گوشی خاموش است» — علت رایج دیده‌نشدن نوتیفیکیشن.
+class _PermissionBanner extends StatelessWidget {
+  const _PermissionBanner();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+    padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
+    decoration: BoxDecoration(
+      color: HomeColors.warn.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: HomeColors.warn.withValues(alpha: 0.32)),
+    ),
+    child: Row(
+      children: [
+        const Icon(
+          Icons.notifications_paused_rounded,
+          size: 17,
+          color: HomeColors.warn,
+        ),
+        const SizedBox(width: 8),
+        const Expanded(
+          child: Text(
+            'اعلان‌های این اپ در گوشی خاموش است؛ برای دیدن نوتیفیکیشن، از تنظیمات اندروید اجازهٔ اعلان را روشن کنید.',
+            style: TextStyle(
+              fontSize: 10.5,
+              height: 1.85,
+              fontWeight: FontWeight.w600,
+              color: HomeColors.ink,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => PushService.instance.openNotificationSettings(),
+          style: TextButton.styleFrom(
+            minimumSize: Size.zero,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            'تنظیمات',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              color: HomeColors.warn,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// پس‌زمینهٔ کشیدن اعلان به کنار = پاک کردن
@@ -302,6 +425,7 @@ class _NotificationCard extends StatelessWidget {
     final meta = [
       if ((item.fromName ?? '').isNotEmpty) item.fromName!,
       if ((item.formName ?? '').isNotEmpty) item.formName!,
+      if ((item.companyName ?? '').isNotEmpty) item.companyName!,
       if (item.createdAt != null) Fa.date(item.createdAt!.toIso8601String()),
     ].join('  ·  ');
 
@@ -341,7 +465,7 @@ class _NotificationCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item.title,
+                        item.displayTitle,
                         style: TextStyle(
                           fontSize: 12.5,
                           height: 1.65,
@@ -349,10 +473,10 @@ class _NotificationCard extends StatelessWidget {
                           color: HomeColors.ink,
                         ),
                       ),
-                      if ((item.body ?? '').isNotEmpty) ...[
+                      if (item.displayBody != null) ...[
                         const SizedBox(height: 3),
                         Text(
-                          item.body!,
+                          item.displayBody!,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

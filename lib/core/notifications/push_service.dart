@@ -46,6 +46,10 @@ class PushService {
   Timer? _timer;
   bool _started = false;
   int _lastSeenId = 0;
+  FlutterSecureStorage? _storage;
+
+  /// دسترسی به GET اعلان‌ها برای بازخوانی متن اعلان‌های تحویل‌نشده.
+  Future<dynamic> Function(String path, Map<String, dynamic> query)? _getApi;
 
   /// آماده‌سازی: کانال، مجوز، بارگذاری وضعیت و ثبت تسک پس‌زمینه.
   /// بعد از لاگین صدا زده می‌شود (نیاز به توکن دارد).
@@ -104,6 +108,11 @@ class PushService {
     await androidPlugin?.requestNotificationsPermission();
     await androidPlugin?.requestExactAlarmsPermission();
 
+    _storage = storage;
+    _getApi = (path, query) async {
+      final r = await api.get(path, query: query);
+      return r.data;
+    };
     _lastSeenId = await _readSeen(storage);
 
     // اولین بار: اعلان‌های موجود را «دیده‌شده» علامت می‌زنیم تا با ورود
@@ -116,12 +125,62 @@ class PushService {
       }
     }
 
+    // ریشهٔ باگ «نوتیفیکیشن هست ولی چیزی نمایش داده نمی‌شود»:
+    // اعلان‌هایی که در دورهٔ قبل ساخته شدند ولی گوشی آن‌ها را نشان نداد
+    // (مجوز خاموش، کشته‌شدن اپ، کانال مسدود) دیگر هرگز دوباره تلاش نمی‌شدند،
+    // چون «دیده‌شده» علامت خورده بودند. اینجا یک‌بار دوباره نشانده می‌شوند.
+    unawaited(_redeliverPending(storage));
+
     // بعضی گوشی‌ها (شیائومی/سامسونگ) پس‌زمینه را می‌کشند؛ راهنمای معافیت
     // از بهینه‌سازی باتری فقط یک‌بار نشان داده می‌شود.
     await _maybeAskBattery(storage);
 
     _startPolling(api, storage);
     await _registerBackground(api, storage);
+  }
+
+  /// با تغییر شرکت فعال، «آخرین شناسهٔ دیده‌شده» بی‌معنا می‌شود (شناسه‌ها
+  /// جدا هستند)؛ اگر ریست نشود، اعلان‌های شرکت جدید هرگز نشان داده نمی‌شوند.
+  Future<void> onCompanyChanged() async {
+    final storage = _storage;
+    _lastSeenId = 0;
+    if (storage != null) {
+      try {
+        await storage.delete(key: _seenKey);
+      } catch (_) {}
+    }
+    // یک بررسی فوری تا زنگوله/نوار گوشی با شرکت جدید هم‌گام شود.
+    unawaited(pollQuietly());
+  }
+
+  /// بررسی فوری اعلان‌ها — وقتی اپ از پس‌زمینه برمی‌گردد یا شرکت عوض می‌شود.
+  /// ریشهٔ باگ «نوتیفیکیشن هست ولی چیزی نمایش داده نمی‌شود»: در اندروید
+  /// تایمر ۴۵ ثانیه‌ای پس از رفتن به پس‌زمینه متوقف می‌شود و اعلان‌های دورهٔ
+  /// پس‌زمینه تا باز شدن دوبارهٔ اپ دیده نمی‌شدند.
+  Future<int> pollQuietly() async {
+    if (_getApi == null || _storage == null) return 0;
+    try {
+      final n = await _pollOnceImpl();
+      return n;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// چرخهٔ بررسی با اتصال مجدد اپ به نمایان (resumed) از بیرون صدا زده می‌شود.
+  void resumePolling() {
+    if (_getApi == null || _storage == null) return;
+    _restartTimer();
+    unawaited(pollQuietly());
+  }
+
+  void _restartTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 45), (_) async {
+      try {
+        await _pollOnceImpl();
+      } catch (_) {}
+    });
   }
 
   /// پاک کردن همهٔ اعلان‌های نوار گوشی (بعد از «پاک کردن همه» در شیت اعلان‌ها)
@@ -155,8 +214,21 @@ class PushService {
     ApiClientLike api,
     FlutterSecureStorage storage,
   ) async {
-    final r = await api.get('/api/notifications', query: {'take': 20});
-    final d = r.data;
+    _storage = storage;
+    _getApi ??= (path, query) async {
+      final r = await api.get(path, query: query);
+      return r.data;
+    };
+    return _pollOnceImpl();
+  }
+
+  Future<int> _pollOnceImpl() async {
+    final api = _getApi;
+    final storage = _storage;
+    if (api == null || storage == null) return 0;
+    final r = await api('/api/notifications', {'take': 30});
+    var d = r;
+    if (d is Map && d['items'] is List) d = d['items'];
     if (d is! List) return 0;
     final fresh = <Map<String, dynamic>>[];
     var maxId = _lastSeenId;
@@ -173,9 +245,10 @@ class PushService {
           .compareTo((b['id'] as num?)?.toInt() ?? 0),
     );
     for (final m in fresh) {
-      await showNotification(
-        id: (m['id'] as num?)?.toInt() ?? 0,
-        title: m['title']?.toString() ?? 'اعلان جدید',
+      final id = (m['id'] as num?)?.toInt() ?? 0;
+      final shown = await showNotification(
+        id: id,
+        title: m['title']?.toString() ?? 'اعلان سازمانی',
         body: [
           if ((m['fromName'] ?? '').toString().isNotEmpty)
             m['fromName'].toString(),
@@ -183,13 +256,51 @@ class PushService {
         ].join(' — '),
         payload: jsonEncode(m),
       );
+      // اگر نوار گوشی قبول نکرد (مجوز/کانال خاموش)، برای تلاش دوباره
+      // نگه می‌داریم — وگرنه اعلان برای همیشه گم می‌شد.
+      if (!shown) await _rememberUndelivered(id);
     }
     _lastSeenId = maxId;
     await _writeSeen(storage, maxId);
     return fresh.length;
   }
 
-  Future<void> showNotification({
+  /// آیا مجوز اعلان در سطح سیستم روشن است؟ (اندروید/آی‌او‌اس)
+  Future<bool> areNotificationsEnabled() async {
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android != null) {
+        return await android.areNotificationsEnabled() ?? true;
+      }
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+      if (ios != null) {
+        final opts = await ios.checkPermissions();
+        return opts?.isEnabled ?? true;
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  /// باز کردن تنظیمات اعلان‌های همین اپ در گوشی.
+  Future<void> openNotificationSettings() async {
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await android?.requestNotificationsPermission();
+    } catch (_) {}
+  }
+
+  /// ساخت (و تأیید نمایش) یک نوتیفیکیشن.
+  /// برمی‌گرداند آیا واقعاً در نوار گوشی نشست یا نه.
+  Future<bool> showNotification({
     required int id,
     required String title,
     String? body,
@@ -216,17 +327,116 @@ class PushService {
         presentSound: true,
       ),
     );
+    final safeTitle = title.trim().isEmpty ? 'اعلان سازمانی' : title.trim();
     try {
       await _plugin.show(
         id: id,
-        title: title,
+        title: safeTitle,
         body: body,
         notificationDetails: details,
         payload: payload,
       );
     } catch (e) {
       if (kDebugMode) debugPrint('push show failed: $e');
+      return false;
     }
+    // تأیید واقعی: بعضی دستگاه‌ها/رام‌ها بدون خطا «می‌بلعند»
+    // (کانال خاموش، مجوز رد‌شده). فقط اگر در فهرست فعالان دیده شد موفق است.
+    try {
+      final active = await _plugin.getActiveNotifications();
+      for (final a in active) {
+        if (a.id == id) return true;
+      }
+      if (kDebugMode) debugPrint('push show swallowed: id=$id');
+      return false;
+    } catch (_) {
+      // پلتفرمی که این API را ندارد → به فراخوانی موفق تکیه می‌کنیم.
+      return true;
+    }
+  }
+
+  /// نشاندن دوبارهٔ اعلان‌هایی که تلاش قبلی‌شان به نوار گوشی نرسیده است.
+  /// (فقط تا سقف [maxItems] و فقط یک‌بار در هر اجرای اپ.)
+  Future<int> _redeliverPending(
+    FlutterSecureStorage storage, {
+    int maxItems = 5,
+  }) async {
+    final getApi = _getApi;
+    if (getApi == null) return 0;
+    const key = 'push_undelivered_ids';
+    try {
+      final raw = await storage.read(key: key);
+      if (raw == null || raw.trim().isEmpty) return 0;
+      final ids = raw
+          .split(',')
+          .map((e) => int.tryParse(e.trim()) ?? 0)
+          .where((e) => e > 0)
+          .toList();
+      if (ids.isEmpty) {
+        await storage.delete(key: key);
+        return 0;
+      }
+      // فهرست تازه از سرور تا متن کامل اعلان‌ها را داشته باشیم.
+      final r = await getApi('/api/notifications', {'take': 30});
+      var d = r;
+      if (d is Map && d['items'] is List) d = d['items'];
+      if (d is! List) return 0;
+      final byId = <int, Map<String, dynamic>>{};
+      for (final raw in d.whereType<Map>()) {
+        final m = Map<String, dynamic>.from(raw);
+        final id = (m['id'] as num?)?.toInt() ?? 0;
+        if (id > 0) byId[id] = m;
+      }
+      var shown = 0;
+      final still = <int>[];
+      for (final id in ids.take(maxItems)) {
+        final m = byId[id];
+        if (m == null) continue; // از سرور پاک شده → دیگر تلاشی لازم نیست
+        final ok = await showNotification(
+          id: id,
+          title: m['title']?.toString() ?? 'اعلان سازمانی',
+          body: [
+            if ((m['fromName'] ?? '').toString().isNotEmpty)
+              m['fromName'].toString(),
+            if ((m['body'] ?? '').toString().isNotEmpty) m['body'].toString(),
+          ].join(' — '),
+          payload: jsonEncode(m),
+        );
+        if (ok) {
+          shown++;
+        } else {
+          still.add(id);
+        }
+      }
+      if (still.isEmpty) {
+        await storage.delete(key: key);
+      } else {
+        await storage.write(key: key, value: still.join(','));
+      }
+      return shown;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// ثبت شناسهٔ اعلانی که به نوار گوشی نرسید تا دور بعد دوباره تلاش شود.
+  Future<void> _rememberUndelivered(int id) async {
+    final storage = _storage;
+    if (storage == null || id <= 0) return;
+    const key = 'push_undelivered_ids';
+    try {
+      final raw = await storage.read(key: key) ?? '';
+      final ids = raw
+          .split(',')
+          .map((e) => int.tryParse(e.trim()) ?? 0)
+          .where((e) => e > 0)
+          .toSet()
+        ..add(id);
+      // فقط ۲۰ شناسهٔ آخر نگه داشته می‌شود
+      final list = ids.toList()..sort();
+      final keep = list.length > 20 ? list.sublist(list.length - 20) : list;
+      await storage.write(key: key, value: keep.join(','));
+    } catch (_) {}
   }
 
   /// راهنمای یک‌بارهٔ معافیت از بهینه‌سازی باتری (برای اعلان در حالت بسته).
@@ -355,14 +565,39 @@ void backgroundCallbackDispatcher() {
       const android = AndroidInitializationSettings('@mipmap/ic_launcher');
       await plugin.initialize(
         settings: const InitializationSettings(android: android),
+        // بدون این، لمس اعلان در حالت بستهٔ اپ هیچ کاری نمی‌کرد و کاربر
+        // «نوتیفیکیشن می‌دید ولی باز نمی‌شد».
+        onDidReceiveNotificationResponse: _backgroundTap,
+        onDidReceiveBackgroundNotificationResponse: _backgroundTap,
       );
+
+      // ریشهٔ باگ «نوتیفیکیشن هست ولی چیزی نمایش داده نمی‌شود» در حالت بسته:
+      // isolate پس‌زمینه کانال را نمی‌ساخت، پس `show` بی‌صدا شکست می‌خورد.
+      // حالا صریحاً همان کانال با اهمیت بالا ساخته می‌شود.
+      final androidBackground = plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await androidBackground?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _channelId,
+          _channelName,
+          description: _channelDesc,
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+      );
+      final allowed = await androidBackground?.areNotificationsEnabled() ?? true;
+      if (!allowed) return true; // مجوز خاموش → چیزی برای نشان‌دادن نیست
 
       final seen = int.tryParse(await storage.read(key: _seenKey) ?? '') ?? 0;
       final r = await dio.get<dynamic>(
         '/api/notifications',
         queryParameters: {'take': 20},
       );
-      final data = r.data;
+      var data = r.data;
+      if (data is Map && data['items'] is List) data = data['items'];
       if (data is! List) return true;
 
       var maxId = seen;
@@ -377,29 +612,39 @@ void backgroundCallbackDispatcher() {
         (a, b) => ((a['id'] as num?)?.toInt() ?? 0)
             .compareTo((b['id'] as num?)?.toInt() ?? 0),
       );
+      var allShown = true;
       for (final m in fresh) {
         final body = [
           if ((m['fromName'] ?? '').toString().isNotEmpty)
             m['fromName'].toString(),
           if ((m['body'] ?? '').toString().isNotEmpty) m['body'].toString(),
         ].join(' — ');
-        await plugin.show(
-          id: (m['id'] as num?)?.toInt() ?? 0,
-          title: m['title']?.toString() ?? 'اعلان جدید',
-          body: body,
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              _channelId,
-              _channelName,
-              channelDescription: _channelDesc,
-              importance: Importance.high,
-              priority: Priority.high,
+        final title = (m['title'] ?? '').toString().trim();
+        try {
+          await plugin.show(
+            id: (m['id'] as num?)?.toInt() ?? 0,
+            title: title.isEmpty ? 'اعلان سازمانی' : title,
+            body: body,
+            notificationDetails: const NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channelId,
+                _channelName,
+                channelDescription: _channelDesc,
+                importance: Importance.high,
+                priority: Priority.high,
+                styleInformation: BigTextStyleInformation(''),
+                category: AndroidNotificationCategory.message,
+              ),
             ),
-          ),
-          payload: jsonEncode(m),
-        );
+            payload: jsonEncode(m),
+          );
+        } catch (_) {
+          allShown = false;
+        }
       }
-      if (maxId > seen) {
+      // فقط وقتی «دیده‌شده» را جلو می‌بریم که واقعاً نمایش داده شده باشد؛
+      // در غیر این‌صورت اعلان‌ها برای همیشه گم می‌شدند (باگ گزارش‌شده).
+      if (allShown && maxId > seen) {
         await storage.write(key: _seenKey, value: maxId.toString());
       }
       return true;

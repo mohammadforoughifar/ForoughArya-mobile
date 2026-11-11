@@ -274,6 +274,15 @@ class _HomePageState extends State<HomePage> {
         activeCompanyId: c.id,
       );
     });
+    // اعلان‌ها در سرور بر اساس شرکت جدا می‌شوند؛ با تغییر شرکت باید
+    // هم شمارندهٔ زنگوله و هم «آخرین شناسهٔ دیده‌شده» از نو خوانده شوند،
+    // وگرنه اعلان شرکت جدید ساخته می‌شود ولی هرگز نمایش داده نمی‌شود.
+    await PushService.instance.onCompanyChanged();
+    if (!mounted) return;
+    try {
+      final unread = await _repo.fetchUnreadCount();
+      if (mounted) setState(() => _unread = unread);
+    } catch (_) {}
     // دادهٔ ویجت‌ها وابسته به شرکت است — دوباره خوانده می‌شود.
     await _reloadWidgets();
   }
