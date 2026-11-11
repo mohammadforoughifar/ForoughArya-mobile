@@ -20,6 +20,7 @@ import 'server_management_page.dart';
 import 'system_info_list_page.dart';
 import 'system_manual_page.dart';
 import 'system_users_page.dart';
+import 'vault_page.dart';
 import '../../shop/presentation/shop_style.dart';
 
 class ItHomePage extends StatelessWidget {
@@ -164,6 +165,16 @@ class ItHomePage extends StatelessWidget {
                   color: const Color(0xff0f766e),
                   onTap: () => _push(context, const IpamPage()),
                 ),
+              if (perms.canSeeItVault)
+                _card(
+                  context,
+                  title: 'گاوصندوق رمزها',
+                  subtitle:
+                      'رمز سرور، سوییچ، میکروتیک، فایروال و سامانه‌ها با رمزنگاری AES-256 و لاگ دسترسی',
+                  icon: Icons.shield_rounded,
+                  color: const Color(0xff0f172a),
+                  onTap: () => _push(context, const VaultPage()),
+                ),
             ],
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -187,7 +198,6 @@ class ItHomePage extends StatelessWidget {
     final parts = <String>[];
     if (perms.canSeeCctvCameras) parts.add('دوربین‌های مداربسته');
     if (perms.canSeeCctvNvrs) parts.add('دستگاه‌های NVR');
-    if (perms.canSeeItVault) parts.add('گاوصندوق رمزها');
     if (parts.isEmpty) return '';
     return 'شما مجوز مشاهدهٔ این بخش‌ها را دارید: ${parts.join('، ')}.\n'
         'صفحهٔ اختصاصی هر یک در فازهای بعدی همین ماژول اضافه می‌شود.';
