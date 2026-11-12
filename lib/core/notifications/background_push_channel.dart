@@ -36,11 +36,14 @@ class BackgroundPushChannel {
     required String token,
     String? companyId,
     int lastSeenId = 0,
+    List<String> baseUrls = const [],
   }) async {
     if (!supported) return false;
     try {
       await _channel.invokeMethod<bool>('configure', {
         'baseUrl': baseUrl,
+        // آدرس‌های جایگزین همان سرور (سوییچ شبکه در سرویس بومی)
+        'baseUrls': baseUrls.join('\n'),
         'token': token,
         'companyId': companyId ?? '',
         'lastSeenId': lastSeenId,
@@ -60,11 +63,13 @@ class BackgroundPushChannel {
     String? token,
     String? companyId,
     int? lastSeenId,
+    List<String>? baseUrls,
   }) async {
     if (!supported || !_configured) return;
     try {
       await _channel.invokeMethod<bool>('configure', {
         if (baseUrl != null) 'baseUrl': baseUrl,
+        if (baseUrls != null) 'baseUrls': baseUrls.join('\n'),
         if (token != null) 'token': token,
         if (companyId != null) 'companyId': companyId,
         if (lastSeenId != null) 'lastSeenId': lastSeenId,

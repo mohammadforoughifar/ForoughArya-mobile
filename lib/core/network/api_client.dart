@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'connection_manager.dart';
+
 class ApiException implements Exception {
   ApiException(this.message, [this.statusCode]);
   final String message;
@@ -54,16 +56,18 @@ class ApiClient {
   final FlutterSecureStorage _storage;
   late final Dio dio;
   void Function()? onUnauthorized;
+
+  /// وقتی سرور فعلی در دسترس نیست صدا زده می‌شود؛ اگر آدرس جایگزینی
+  /// پیدا شود (سوییچ شبکه)، درخواست یک‌بار با آدرس جدید تکرار می‌شود.
+  Future<String?> Function(String failedBase)? onUnreachable;
   int? _companyId;
 
   String get baseUrl => dio.options.baseUrl;
   int? get companyId => _companyId;
 
   Future<void> setBaseUrl(String value) async {
-    var url = value.trim();
-    while (url.endsWith('/')) url = url.substring(0, url.length - 1);
-    if (!url.startsWith('http://') && !url.startsWith('https://'))
-      url = 'https://$url';
+    final url = normalizeServerUrl(value);
+    if (url.isEmpty) return;
     dio.options.baseUrl = url;
     await _storage.write(key: 'api_base_url', value: url);
   }
@@ -147,10 +151,52 @@ class ApiClient {
     String? baseOverride,
   }) async {
     // درخواست به سروری جز سرور اصلی (مثل پیام‌رسان) نباید هدر شرکت را ببرد
-    final foreign = path.startsWith('http') &&
-        !path.startsWith(dio.options.baseUrl.trim());
+    final usedBase = dio.options.baseUrl.trim();
+    final foreign = path.startsWith('http') && !path.startsWith(usedBase);
     try {
-      return await dio.request<T>(
+      return await _send<T>(method, path, data, query, options, baseOverride, foreign);
+    } on DioException catch (e) {
+      // سوییچ خودکار شبکه: آدرس فعلی در دسترس نیست → آدرس جایگزین
+      if (baseOverride == null &&
+          !path.startsWith('http') &&
+          onUnreachable != null &&
+          isUnreachableError(e)) {
+        String? next;
+        try {
+          next = await onUnreachable!(usedBase);
+        } catch (_) {}
+        if (next != null && next.isNotEmpty && next != usedBase) {
+          try {
+            return await _send<T>(
+              method,
+              path,
+              data is FormData ? data.clone() : data,
+              query,
+              options,
+              null,
+              false,
+            );
+          } on DioException catch (e2) {
+            if (e2.response?.statusCode == 401) onUnauthorized?.call();
+            throw ApiException(_message(e2), e2.response?.statusCode);
+          }
+        }
+      }
+      if (e.response?.statusCode == 401) onUnauthorized?.call();
+      throw ApiException(_message(e), e.response?.statusCode);
+    }
+  }
+
+  Future<Response<T>> _send<T>(
+    String method,
+    String path,
+    dynamic data,
+    Map<String, dynamic>? query,
+    Options? options,
+    String? baseOverride,
+    bool foreign,
+  ) {
+      return dio.request<T>(
         resolveUrl(path, baseOverride: baseOverride),
         data: data,
         queryParameters: query,
@@ -161,10 +207,6 @@ class ApiClient {
         },
         onSendProgress: options?.extra?['sendProgress'] as void Function(int, int)?,
       );
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 401) onUnauthorized?.call();
-      throw ApiException(_message(e), e.response?.statusCode);
-    }
   }
 
   Future<Response<T>> get<T>(

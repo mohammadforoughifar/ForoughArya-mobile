@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_controller.dart';
-import '../../core/network/api_client.dart';
+import '../../core/network/connection_manager.dart';
+import '../../core/app_version.dart';
+import 'connections_sheet.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,50 +27,25 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    final cm = context.read<ConnectionManager>();
+    if (cm.activeEndpoint == null) {
+      await openProfileEditor(context);
+      return;
+    }
     if (!_form.currentState!.validate()) return;
     await context.read<AuthController>().login(_username.text, _password.text);
   }
 
-  Future<void> _serverSettings() async {
-    final api = context.read<ApiClient>();
-    final controller = TextEditingController(text: api.baseUrl);
-    final form = GlobalKey<FormState>();
-    await showDialog<void>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('آدرس سرور'),
-        content: Form(
-          key: form,
-          child: TextFormField(
-            controller: controller,
-            textDirection: TextDirection.ltr,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'API Base URL',
-              hintText: 'https://example.com',
-            ),
-            validator: (v) => v == null || v.trim().isEmpty
-                ? 'آدرس سرور را وارد کنید.'
-                : null,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('انصراف'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!form.currentState!.validate()) return;
-              await api.setBaseUrl(controller.text);
-              if (c.mounted) Navigator.pop(c);
-            },
-            child: const Text('ذخیره'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final cm = context.read<ConnectionManager>();
+      // وضعیت آدرس‌ها برای نمایش در کارت اتصال؛ اگر آدرس فعلی قطع بود
+      // و آدرس دیگری در دسترس است، همان‌جا سوییچ شود.
+      cm.recheck().then((_) => cm.probeAll());
+    });
   }
 
   @override
@@ -129,7 +106,9 @@ class _LoginPageState extends State<LoginPage> {
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.blueGrey.shade500),
                           ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 22),
+                          const _ConnectionCard(),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: _username,
                             textDirection: TextDirection.ltr,
@@ -201,13 +180,13 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 8),
                           TextButton.icon(
-                            onPressed: _serverSettings,
-                            icon: const Icon(Icons.dns_outlined, size: 19),
-                            label: const Text('تنظیم آدرس سرور'),
+                            onPressed: () => showConnectionsSheet(context),
+                            icon: const Icon(Icons.hub_outlined, size: 19),
+                            label: const Text('مدیریت سرورها و آدرس‌ها'),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'نسخهٔ موبایل • Android و iOS',
+                            'نسخهٔ ${toFaDigits(appVersion)} • Android و iOS',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12,
@@ -221,6 +200,86 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// کارت سرور فعال در فرم ورود — لمس برای تعویض سرور یا آدرس
+class _ConnectionCard extends StatelessWidget {
+  const _ConnectionCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cm = context.watch<ConnectionManager>();
+    final p = cm.activeProfile;
+    final e = cm.activeEndpoint;
+    final probe = e == null ? null : cm.probeOf(e.url);
+    final empty = p == null || e == null;
+    return Material(
+      color: empty ? const Color(0xfffff7e6) : const Color(0xfff3f6ff),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => empty
+            ? openProfileEditor(context)
+            : showConnectionsSheet(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  empty ? Icons.add_link_rounded : endpointIcon(e.label),
+                  color: empty ? Colors.orange.shade800 : const Color(0xff2547a8),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      empty ? 'سروری تعریف نشده' : p.displayName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      empty
+                          ? 'برای تعریف سرور و آدرس‌ها لمس کنید'
+                          : '${e.displayLabel}'
+                                '${p.endpoints.length > 1 ? '  •  ${toFaDigits(p.endpoints.length)} آدرس' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.blueGrey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (probe != null) ProbeBadge(result: probe),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.unfold_more_rounded,
+                color: Colors.blueGrey.shade400,
+                size: 20,
+              ),
+            ],
           ),
         ),
       ),

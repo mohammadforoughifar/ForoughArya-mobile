@@ -180,6 +180,24 @@ class PushPollingService : Service() {
             .build()
     }
 
+    /** حذف تگ‌ها و موجودیت‌های HTML از متن اعلان. */
+    private fun plainText(raw: String): String {
+        if (raw.isBlank()) return raw
+        val looksHtml = Regex("<\\s*/?\\s*[a-zA-Z][^<>]*>|&(#\\d+|#x[0-9a-fA-F]+|[a-zA-Z]{2,8});")
+            .containsMatchIn(raw)
+        if (!looksHtml) return raw
+        val text = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            android.text.Html.fromHtml(raw, android.text.Html.FROM_HTML_MODE_COMPACT)
+        } else {
+            @Suppress("DEPRECATION")
+            android.text.Html.fromHtml(raw)
+        }).toString()
+        return text.replace('\u00A0', ' ').replace('\uFFFC', ' ')
+            .replace(Regex("[ \\t]+"), " ")
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .trim()
+    }
+
     private fun showUserNotification(id: Int, title: String, body: String, payload: String) {
         val nm = getSystemService(NotificationManager::class.java)
         val b = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -221,18 +239,40 @@ class PushPollingService : Service() {
         val companyId = prefs.getString("company_id", null)
         val seen = prefs.getInt("push_last_seen_id", 0)
 
-        val url = URL("$base/api/notifications?take=20")
+        // آدرس فعلی + آدرس‌های جایگزین همان سرور (سوییچ خودکار با تغییر شبکه)
+        val candidates = LinkedHashSet<String>()
+        candidates.add(base)
+        (prefs.getString("api_base_urls", null) ?: "")
+            .split('\n')
+            .map { it.trim().trimEnd('/') }
+            .filter { it.isNotEmpty() }
+            .forEach { candidates.add(it) }
+
         var conn: HttpURLConnection? = null
         try {
-            conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 15000
-            conn.readTimeout = 20000
-            conn.setRequestProperty("Accept", "application/json")
-            conn.setRequestProperty("Authorization", "Bearer $token")
-            if (!companyId.isNullOrEmpty()) {
-                conn.setRequestProperty("X-Company-Id", companyId)
+            var connected: HttpURLConnection? = null
+            for (candidate in candidates) {
+                try {
+                    val c = URL("$candidate/api/notifications?take=20").openConnection() as HttpURLConnection
+                    c.requestMethod = "GET"
+                    c.connectTimeout = if (candidates.size > 1) 6000 else 15000
+                    c.readTimeout = 20000
+                    c.setRequestProperty("Accept", "application/json")
+                    c.setRequestProperty("Authorization", "Bearer $token")
+                    if (!companyId.isNullOrEmpty()) {
+                        c.setRequestProperty("X-Company-Id", companyId)
+                    }
+                    c.responseCode // اتصال واقعی اینجا برقرار می‌شود
+                    connected = c
+                    if (candidate != base) {
+                        prefs.edit().putString("api_base_url", candidate).apply()
+                    }
+                    break
+                } catch (_: java.io.IOException) {
+                    // این آدرس در این شبکه در دسترس نیست؛ بعدی
+                }
             }
+            conn = connected ?: return
             if (conn.responseCode !in 200..299) return
 
             val text = conn.inputStream.bufferedReader().use(BufferedReader::readText)
@@ -257,9 +297,10 @@ class PushPollingService : Service() {
             var allShown = true
             for (o in fresh) {
                 val id = o.optInt("id", 0)
-                val title = o.optString("title", "")
+                val title = plainText(o.optString("title", ""))
                 val from = o.optString("fromName", "")
-                val bodyText = o.optString("body", "")
+                // متن اعلان ممکن است HTML ادیتور وب باشد (مثلاً شرح دستور کار)
+                val bodyText = plainText(o.optString("body", ""))
                 val body = listOf(from, bodyText).filter { it.isNotBlank() }.joinToString(" — ")
                 val company = o.optString("companyName", "")
                 val fullTitle = if (company.isNotBlank()) "[$company] $title" else title

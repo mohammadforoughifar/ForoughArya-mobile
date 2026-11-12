@@ -8,6 +8,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/html_text.dart';
+
 /// یک شرکت مجاز برای کاربر (از `UserCompanyAccess` در سرور).
 class CompanyOption {
   const CompanyOption({
@@ -222,8 +224,8 @@ class NotificationItem {
     T? pick<T>(String a, String b) => (j[a] ?? j[b]) as T?;
     return NotificationItem(
       id: (j['id'] as num?)?.toInt() ?? (j['Id'] as num?)?.toInt() ?? 0,
-      title: (pick<String>('title', 'Title') ?? '').toString(),
-      body: pick<String>('body', 'Body')?.toString(),
+      title: htmlToText((pick<String>('title', 'Title') ?? '').toString()),
+      body: htmlToTextOrNull(pick<String>('body', 'Body')?.toString()),
       fromName: pick<String>('fromName', 'FromName')?.toString(),
       formName: pick<String>('formName', 'FormName')?.toString(),
       link: pick<String>('link', 'Link')?.toString(),

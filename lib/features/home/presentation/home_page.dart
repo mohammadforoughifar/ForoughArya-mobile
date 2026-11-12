@@ -11,6 +11,9 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+
+import '../../../core/app_version.dart';
+import '../../auth/connections_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shamsi_date/shamsi_date.dart';
@@ -454,6 +457,25 @@ class _HomePageState extends State<HomePage> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
+                leading: const Icon(Icons.hub_outlined, color: HomeColors.seed),
+                title: const Text(
+                  'سرورها و اتصال شبکه',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  [
+                    auth.connections.activeProfile?.displayName,
+                    auth.connections.activeEndpoint?.displayLabel,
+                  ].whereType<String>().join(' • '),
+                  style: const TextStyle(fontSize: 11.5),
+                ),
+                onTap: () => Navigator.pop(c, 'connections'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 leading: const Icon(
                   Icons.password_rounded,
                   color: HomeColors.seed,
@@ -478,6 +500,13 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
                 ),
                 onTap: () => Navigator.pop(c, 'logout'),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 2),
+                child: Text(
+                  'نسخهٔ ${toFaDigits(appVersion)}',
+                  style: const TextStyle(fontSize: 11, color: HomeColors.inkFaint),
+                ),
               ),
             ],
           ),
@@ -507,6 +536,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     if (action == 'password') await _changePassword();
+    if (action == 'connections' && mounted) await showConnectionsSheet(context);
   }
 
   Future<void> _changePassword() async {

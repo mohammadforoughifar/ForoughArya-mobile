@@ -25,6 +25,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: auth),
+          ChangeNotifierProvider.value(value: auth.connections),
           Provider.value(value: api),
         ],
         child: MaterialApp(

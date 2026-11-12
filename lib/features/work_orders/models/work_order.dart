@@ -1,5 +1,7 @@
 import 'package:shamsi_date/shamsi_date.dart';
 
+import '../../../core/utils/html_text.dart';
+
 class Assignee {
   Assignee.fromJson(Map<String, dynamic> j)
     : id = (j['id'] as num?)?.toInt() ?? 0,
@@ -8,9 +10,11 @@ class Assignee {
       seenAt = j['seenAt']?.toString(),
       repliedAt = j['repliedAt']?.toString(),
       done = j['done'] as bool?,
-      replyText = j['replyText']?.toString(),
+      replyText = htmlToTextOrNull(j['replyText']?.toString()),
       ownerDecision = j['ownerDecision']?.toString(),
-      ownerDecisionNote = j['ownerDecisionNote']?.toString();
+      ownerDecisionNote = htmlToTextOrNull(
+        j['ownerDecisionNote']?.toString(),
+      );
   final int id, userId;
   final String name;
   final String? seenAt, repliedAt, replyText, ownerDecisionNote;
@@ -22,8 +26,9 @@ class WorkOrder {
   WorkOrder.fromJson(Map<String, dynamic> j)
     : id = (j['id'] as num?)?.toInt() ?? 0,
       number = j['number']?.toString() ?? '',
-      title = j['title']?.toString() ?? '',
-      description = j['description']?.toString() ?? '',
+      title = htmlToText(j['title']?.toString()),
+      // شرح در وب با ادیتور غنی ذخیره می‌شود → حذف تگ‌های HTML
+      description = htmlToText(j['description']?.toString()),
       ownerUserId = (j['ownerUserId'] as num?)?.toInt() ?? 0,
       ownerName = j['ownerName']?.toString() ?? '',
       // سرور مهلت را گاهی شمسی («1404/08/20») و گاهی ISO می‌فرستد؛ همه‌جا
@@ -32,7 +37,7 @@ class WorkOrder {
         j['dueAt'] ?? j['DueAt'] ?? j['dueDate'] ?? j['deadlineAnswer'],
       ),
       status = j['status']?.toString() ?? 'Open',
-      closeNote = j['closeNote']?.toString(),
+      closeNote = htmlToTextOrNull(j['closeNote']?.toString()),
       createdAt = jalaliOrIsoToIso(j['createdAt'] ?? j['CreatedAt']),
       extensionCount = (j['extensionCount'] as num?)?.toInt() ?? 0,
       priority = (j['priority'] as num?)?.toInt() ?? 1,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/html_text.dart';
 import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
@@ -78,7 +79,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
         _title.text = widget.prefillTitle!.trim();
       }
       if ((widget.prefillDescription ?? '').trim().isNotEmpty) {
-        _description.text = widget.prefillDescription!.trim();
+        _description.text = htmlToText(widget.prefillDescription!.trim());
       }
       if (widget.prefillDue != null) _due = widget.prefillDue!;
     }
@@ -312,8 +313,8 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
 
   Future<void> _applyTemplate(Map<String, dynamic> t) async {
     setState(() {
-      _title.text = t['title']?.toString() ?? '';
-      _description.text = t['description']?.toString() ?? '';
+      _title.text = htmlToText(t['title']?.toString());
+      _description.text = htmlToText(t['description']?.toString());
       _priority = (t['priority'] as num?)?.toInt() ?? 1;
       _recurrence = (t['recurrence'] as num?)?.toInt() ?? 0;
       _targets

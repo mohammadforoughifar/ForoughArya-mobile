@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/html_text.dart';
 import '../../../core/utils/jalali_picker.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
@@ -1487,7 +1488,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                               ),
                               Expanded(
                                 child: Text(
-                                  c['text']?.toString() ?? '',
+                                  htmlToText(c['text']?.toString()),
                                   style: TextStyle(
                                     fontSize: 13,
                                     height: 1.6,
@@ -1608,7 +1609,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                               SelectableText(
                                 deleted
                                     ? 'این پیام حذف شده است.'
-                                    : c['text']?.toString() ?? '',
+                                    : htmlToText(c['text']?.toString()),
                                 style: TextStyle(
                                   fontSize: 13,
                                   height: 1.75,
@@ -1646,7 +1647,9 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                                         final t = await promptText(
                                           context,
                                           'ویرایش پیام',
-                                          initial: c['text']?.toString(),
+                                          initial: htmlToTextOrNull(
+                                            c['text']?.toString(),
+                                          ),
                                         );
                                         if (t != null && t.isNotEmpty) {
                                           _run(
@@ -1971,9 +1974,10 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                l['text']?.toString() ??
-                                    l['action']?.toString() ??
-                                    '',
+                                htmlToText(
+                                  l['text']?.toString() ??
+                                      l['action']?.toString(),
+                                ),
                                 style: const TextStyle(
                                   fontSize: 12.5,
                                   height: 1.6,

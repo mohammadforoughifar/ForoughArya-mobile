@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -25,20 +27,50 @@ class _ForoughAppState extends State<ForoughApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // شبکه ممکن است عوض شده باشد (وای‌فای شرکت ↔ اینترنت همراه)
+      final auth = context.read<AuthController>();
+      if (auth.isLoggedIn) unawaited(auth.connections.recheck());
       PushService.instance.resumePolling();
       // اگر سیستم سرویس بومی را کشته بود (باتری/ری‌استارت)، دوباره روشن شود
       PushService.instance.ensureForeground();
     }
   }
 
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
+  ValueNotifier<String?>? _switchNotice;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // اطلاع‌رسانی کوتاه وقتی اتصال خودکار به آدرس دیگری سوییچ شد
+    _switchNotice = context.read<AuthController>().connections.lastAutoSwitch
+      ..addListener(_showSwitchNotice);
+  }
+
+  void _showSwitchNotice() {
+    final msg = _switchNotice?.value;
+    if (msg == null) return;
+    _messenger.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.swap_horiz_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(msg)),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   @override
   void dispose() {
+    _switchNotice?.removeListener(_showSwitchNotice);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -50,6 +82,7 @@ class _ForoughAppState extends State<ForoughApp> with WidgetsBindingObserver {
       title: 'فروغ آریا',
       // برای باز کردن سند از روی اعلانِ گوشی (بیرون از درخت ویجت‌ها)
       navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: _messenger,
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
@@ -120,7 +153,11 @@ class _ForoughAppState extends State<ForoughApp> with WidgetsBindingObserver {
               const FlutterSecureStorage(),
             );
           });
-          return const HomeShell();
+          // با تعویض سرور، کل صفحات از نو ساخته شوند (دادهٔ سرور قبلی نماند)
+          return KeyedSubtree(
+            key: ValueKey('server-${auth.serverGeneration}'),
+            child: const HomeShell(),
+          );
         },
       ),
     );

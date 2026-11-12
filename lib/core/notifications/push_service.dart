@@ -21,6 +21,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../network/api_client.dart';
+import '../network/connection_manager.dart';
+import '../utils/html_text.dart';
 import 'background_push_channel.dart';
 import 'notification_launcher.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -152,7 +154,12 @@ class PushService {
       if (token == null || token.isEmpty) return false;
       final base = await storage.read(key: 'api_base_url');
       final company = await storage.read(key: 'company_id');
+      final alts = (await storage.read(key: 'api_base_urls') ?? '')
+          .split('\n')
+          .where((e) => e.trim().isNotEmpty)
+          .toList();
       final ok = await BackgroundPushChannel.instance.start(
+        baseUrls: alts,
         baseUrl: (base != null && base.isNotEmpty)
             ? base
             : const String.fromEnvironment(
@@ -310,7 +317,7 @@ class PushService {
         body: [
           if ((m['fromName'] ?? '').toString().isNotEmpty)
             m['fromName'].toString(),
-          if ((m['body'] ?? '').toString().isNotEmpty) m['body'].toString(),
+          if ((m['body'] ?? '').toString().isNotEmpty) htmlToText(m['body'].toString()),
         ].join(' — '),
         payload: jsonEncode(m),
       );
@@ -457,7 +464,7 @@ class PushService {
           body: [
             if ((m['fromName'] ?? '').toString().isNotEmpty)
               m['fromName'].toString(),
-            if ((m['body'] ?? '').toString().isNotEmpty) m['body'].toString(),
+            if ((m['body'] ?? '').toString().isNotEmpty) htmlToText(m['body'].toString()),
           ].join(' — '),
           payload: jsonEncode(m),
         );
@@ -651,10 +658,31 @@ void backgroundCallbackDispatcher() {
       if (!allowed) return true; // مجوز خاموش → چیزی برای نشان‌دادن نیست
 
       final seen = int.tryParse(await storage.read(key: _seenKey) ?? '') ?? 0;
-      final r = await dio.get<dynamic>(
-        '/api/notifications',
-        queryParameters: {'take': 20},
-      );
+      Response<dynamic> r;
+      try {
+        r = await dio.get<dynamic>(
+          '/api/notifications',
+          queryParameters: {'take': 20},
+        );
+      } on DioException catch (e) {
+        // شبکه عوض شده؟ آدرس‌های جایگزینِ همان سرور را امتحان کن
+        if (!isUnreachableError(e)) rethrow;
+        Response<dynamic>? ok;
+        for (final alt in await activeProfileUrls(storage)) {
+          if (alt == dio.options.baseUrl) continue;
+          try {
+            dio.options.baseUrl = alt;
+            ok = await dio.get<dynamic>(
+              '/api/notifications',
+              queryParameters: {'take': 20},
+            );
+            await storage.write(key: 'api_base_url', value: alt);
+            break;
+          } catch (_) {}
+        }
+        if (ok == null) rethrow;
+        r = ok;
+      }
       var data = r.data;
       if (data is Map && data['items'] is List) data = data['items'];
       if (data is! List) return true;
@@ -676,7 +704,7 @@ void backgroundCallbackDispatcher() {
         final body = [
           if ((m['fromName'] ?? '').toString().isNotEmpty)
             m['fromName'].toString(),
-          if ((m['body'] ?? '').toString().isNotEmpty) m['body'].toString(),
+          if ((m['body'] ?? '').toString().isNotEmpty) htmlToText(m['body'].toString()),
         ].join(' — ');
         final title = (m['title'] ?? '').toString().trim();
         try {

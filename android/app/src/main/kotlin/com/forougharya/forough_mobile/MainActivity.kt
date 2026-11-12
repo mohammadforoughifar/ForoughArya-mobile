@@ -182,6 +182,7 @@ class MainActivity : FlutterActivity() {
                         try {
                             val e = pushPrefs.edit()
                             call.argument<String>("baseUrl")?.let { e.putString("api_base_url", it) }
+                            call.argument<String>("baseUrls")?.let { e.putString("api_base_urls", it) }
                             call.argument<String>("token")?.let { e.putString("auth_token", it) }
                             call.argument<String>("companyId")?.let { e.putString("company_id", it) }
                             val seen = call.argument<Int>("lastSeenId")

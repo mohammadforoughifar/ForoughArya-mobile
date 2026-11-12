@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'app/app.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/network/api_client.dart';
+import 'core/notifications/background_push_channel.dart';
+import 'core/notifications/push_service.dart';
 import 'features/misc/data/minutes_repository.dart';
 import 'features/office_automation/data/email_draft_store.dart';
 import 'features/office_automation/data/email_repository.dart';
@@ -21,11 +23,19 @@ void main() {
     ),
   );
   final api = ApiClient(storage);
-  final auth = AuthController(api, storage)..initialize();
+  final auth = AuthController(api, storage)
+    // آدرس سرور عوض شد (دستی یا سوییچ خودکار شبکه) → سرویس اعلان بومی هم
+    ..onServerChanged = (url, alts) {
+      BackgroundPushChannel.instance.update(baseUrl: url, baseUrls: alts);
+    }
+    // تعویض سرور/سازمان → سرویس اعلانِ سرور قبلی متوقف و با سرور جدید از نو
+    ..onProfileSwitched = PushService.instance.stop
+    ..initialize();
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: auth),
+        ChangeNotifierProvider.value(value: auth.connections),
         Provider.value(value: api),
         Provider(create: (_) => WorkOrderRepository(api)),
         Provider(create: (_) => OfficeAutomationRepository(api)),
