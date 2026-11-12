@@ -28,6 +28,16 @@
 	<string>برای پیوست‌کردن تصویر به دستور کار به دوربین نیاز است.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>برای انتخاب و پیوست‌کردن تصویر به دستور کار نیاز است.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>برای ضبط پیام صوتی در پیام‌رسان به میکروفن نیاز است.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- سرورهای سازمانی اغلب روی http و IP داخلی هستند (مثلاً http://192.168.1.10:5100) -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>برای اتصال به سرور سازمان در شبکهٔ محلی نیاز است.</string>
 	<key>LSRequiresIPhoneOS</key>
