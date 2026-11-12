@@ -21,6 +21,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../network/api_client.dart';
+import 'background_push_channel.dart';
 import 'notification_launcher.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -45,6 +46,7 @@ class PushService {
   final _plugin = FlutterLocalNotificationsPlugin();
   Timer? _timer;
   bool _started = false;
+  bool _foregroundStarted = false;
   int _lastSeenId = 0;
   FlutterSecureStorage? _storage;
 
@@ -137,6 +139,53 @@ class PushService {
 
     _startPolling(api, storage);
     await _registerBackground(api, storage);
+
+    // سرویس پیش‌زمینهٔ بومی — تا پاپ‌آپ حتی وقتی اپ کاملاً بسته است بیاید
+    await _startForegroundService(storage);
+  }
+
+  /// روشن‌کردن سرویس بومی و هم‌گام‌سازی داده‌هایش (توکن/سرور/شرکت/آخرین شناسه).
+  Future<bool> _startForegroundService(FlutterSecureStorage storage) async {
+    if (!BackgroundPushChannel.instance.supported) return false;
+    try {
+      final token = await storage.read(key: 'auth_token');
+      if (token == null || token.isEmpty) return false;
+      final base = await storage.read(key: 'api_base_url');
+      final company = await storage.read(key: 'company_id');
+      final ok = await BackgroundPushChannel.instance.start(
+        baseUrl: (base != null && base.isNotEmpty)
+            ? base
+            : const String.fromEnvironment(
+                'API_BASE_URL',
+                defaultValue: 'http://localhost:5100',
+              ),
+        token: token,
+        companyId: company,
+        lastSeenId: _lastSeenId,
+      );
+      _foregroundStarted = ok;
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// آیا سرویس پیش‌زمینه در حال اجراست؟
+  bool get foregroundRunning => _foregroundStarted;
+
+  /// روشن‌کردن دوبارهٔ سرویس (اگر سیستم آن را کشته بود).
+  Future<void> ensureForeground() async {
+    if (_foregroundStarted) return;
+    final storage = _storage ?? const FlutterSecureStorage();
+    _storage = storage;
+    await _startForegroundService(storage);
+  }
+
+  /// هم‌گام‌کردن «آخرین شناسهٔ دیده‌شده» با سرویس بومی — وگرنه سرویس همان
+  /// اعلان‌هایی را که اپِ باز دیده است، دوباره پاپ‌آپ می‌کند.
+  Future<void> _syncSeenWithService(int id) async {
+    if (!BackgroundPushChannel.instance.supported) return;
+    await BackgroundPushChannel.instance.update(lastSeenId: id);
   }
 
   /// با تغییر شرکت فعال، «آخرین شناسهٔ دیده‌شده» بی‌معنا می‌شود (شناسه‌ها
@@ -149,6 +198,12 @@ class PushService {
         await storage.delete(key: _seenKey);
       } catch (_) {}
     }
+    // سرویس بومی هم باید شرکت جدید را بداند
+    final company = await storage?.read(key: 'company_id');
+    await BackgroundPushChannel.instance.update(
+      companyId: company ?? '',
+      lastSeenId: 0,
+    );
     // یک بررسی فوری تا زنگوله/نوار گوشی با شرکت جدید هم‌گام شود.
     unawaited(pollQuietly());
   }
@@ -194,6 +249,9 @@ class PushService {
     _timer?.cancel();
     _timer = null;
     _started = false;
+    _foregroundStarted = false;
+    // با خروج از حساب، سرویس بومی هم باید خاموش شود
+    unawaited(BackgroundPushChannel.instance.stop());
   }
 
   /// چرخهٔ ۴۵ ثانیه‌ای فقط وقتی اپ باز است (سبک: فقط unread-count و سپس
@@ -262,6 +320,7 @@ class PushService {
     }
     _lastSeenId = maxId;
     await _writeSeen(storage, maxId);
+    await _syncSeenWithService(maxId);
     return fresh.length;
   }
 

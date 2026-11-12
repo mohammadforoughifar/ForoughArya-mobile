@@ -173,6 +173,67 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // ---- سرویس پیش‌زمینهٔ اعلان (پاپ‌آپ حتی با اپ بسته) ----
+        val pushPrefs = getSharedPreferences("forough_push", android.content.Context.MODE_PRIVATE)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "forough/push")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "configure" -> {
+                        try {
+                            val e = pushPrefs.edit()
+                            call.argument<String>("baseUrl")?.let { e.putString("api_base_url", it) }
+                            call.argument<String>("token")?.let { e.putString("auth_token", it) }
+                            call.argument<String>("companyId")?.let { e.putString("company_id", it) }
+                            val seen = call.argument<Int>("lastSeenId")
+                            if (seen != null && seen >= 0) e.putInt("push_last_seen_id", seen)
+                            e.apply()
+                            result.success(true)
+                        } catch (ex: Exception) {
+                            result.success(false)
+                        }
+                    }
+                    "lastSeenId" -> result.success(pushPrefs.getInt("push_last_seen_id", 0))
+                    "start" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                this, Manifest.permission.POST_NOTIFICATIONS,
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (!granted) {
+                                ActivityCompat.requestPermissions(
+                                    this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4712,
+                                )
+                            }
+                        }
+                        PushPollingService.start(this)
+                        result.success(true)
+                    }
+                    "stop" -> {
+                        PushPollingService.stop(this)
+                        result.success(true)
+                    }
+                    "requestIgnoreBatteryOptimizations" -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val pm = getSystemService(android.content.Context.POWER_SERVICE)
+                                    as android.os.PowerManager
+                                if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                                    startActivity(
+                                        android.content.Intent(
+                                            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                            android.net.Uri.parse("package:$packageName"),
+                                        ),
+                                    )
+                                }
+                            }
+                            result.success(true)
+                        } catch (ex: Exception) {
+                            result.success(false)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "forough/audio")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

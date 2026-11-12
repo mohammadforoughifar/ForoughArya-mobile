@@ -26,6 +26,8 @@ class _ForoughAppState extends State<ForoughApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       PushService.instance.resumePolling();
+      // اگر سیستم سرویس بومی را کشته بود (باتری/ری‌استارت)، دوباره روشن شود
+      PushService.instance.ensureForeground();
     }
   }
 

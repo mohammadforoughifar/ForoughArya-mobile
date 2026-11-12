@@ -13,6 +13,9 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- سرویس پیش‌زمینهٔ اعلان: پاپ‌آپ حتی وقتی اپ بسته است -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <application
         android:label="فروغ آریا" android:usesCleartextTraffic="true"
         android:name="${applicationName}"
@@ -40,6 +43,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- سرویس پیش‌زمینهٔ بررسی اعلان‌ها (هر ۶۰ ثانیه، مستقل از باز بودن اپ) -->
+        <service
+            android:name=".PushPollingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
