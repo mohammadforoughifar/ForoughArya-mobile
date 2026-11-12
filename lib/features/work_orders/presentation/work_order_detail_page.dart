@@ -38,8 +38,22 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
   final _checklistText = TextEditingController();
 
   WorkOrderRepository get repo => context.read<WorkOrderRepository>();
-  int get myId => context.read<AuthController>().session?.userId ?? 0;
-  bool get isOwner => _order?.ownerUserId == myId;
+
+  /// دسترسی از سرور (`my-access`)؛ شناسهٔ نشست فقط پشتیبان است.
+  WoAccess _access = const WoAccess.empty();
+
+  int get _sessionUserId =>
+      context.read<AuthController>().session?.userId ?? 0;
+
+  int get myId => _access.userId > 0 ? _access.userId : _sessionUserId;
+
+  /// آیا من دستوردهندهٔ این دستور کار هستم؟ (شرط بستن/تمدید/بازگشایی)
+  bool get isOwner {
+    final o = _order;
+    if (o == null || o.ownerUserId <= 0) return false;
+    final me = myId;
+    return me > 0 && o.ownerUserId == me;
+  }
 
   @override
   void initState() {
@@ -68,6 +82,9 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
       _error = null;
     });
     try {
+      // دسترسی از سرور؛ بدون آن «دستوردهنده» بودن قابل تشخیص نیست.
+      final access = await repo.myAccess();
+      if (mounted) setState(() => _access = access);
       final order = await repo.detail(widget.id);
       final values = await Future.wait([
         repo.checklist(widget.id),
@@ -523,6 +540,90 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                   ],
                 ),
 
+                // ---------- عملیات دستوردهنده (مطابق وب) ----------
+                if (isOwner && o.isOpen)
+                  GlassCard(
+                    title: 'عملیات دستوردهنده',
+                    icon: Icons.admin_panel_settings_outlined,
+                    color: Colors.deepPurple,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _busy || o.extensionCount >= 5
+                                  ? null
+                                  : _extend,
+                              icon: const Icon(Icons.more_time, size: 16),
+                              label: Text(
+                                o.extensionCount >= 5
+                                    ? 'تمدید مهلت (سقف ۵ بار)'
+                                    : 'تمدید مهلت (${Fa.digits(o.extensionCount)} از ۵)',
+                                style: const TextStyle(fontSize: 11.5),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 40),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _busy ? null : _close,
+                              icon: const Icon(Icons.lock_outline, size: 16),
+                              label: const Text(
+                                'بستن دستور کار',
+                                style: TextStyle(fontSize: 11.5),
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.red.shade700,
+                                minimumSize: const Size(0, 40),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'بستن نهایی فقط توسط دستوردهنده انجام می‌شود و پس از آن پاسخ‌دهی و '
+                        'گفت‌وگو قفل می‌شود. اگر زیر-دستورِ باز وجود داشته باشد، ابتدا آن‌ها '
+                        'باید بسته شوند.',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.85,
+                          color: Colors.blueGrey.shade400,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                // ---------- بسته‌شده + بازگشایی ----------
+                if (!o.isOpen && isOwner)
+                  GlassCard(
+                    title: 'این دستور کار بسته شده است',
+                    icon: Icons.lock_outline,
+                    color: Colors.green.shade700,
+                    children: [
+                      if (o.closeNote?.isNotEmpty == true)
+                        Text(
+                          'یادداشت بستن: ${o.closeNote}',
+                          style: const TextStyle(fontSize: 11.5, height: 1.85),
+                        ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _reopen,
+                          icon: const Icon(Icons.lock_open_outlined, size: 16),
+                          label: const Text(
+                            'بازگشایی و برگشت به گردش',
+                            style: TextStyle(fontSize: 11.5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
                 // ---------- برچسب‌ها ----------
                 if (o.tags.isNotEmpty)
                   GlassCard(
@@ -936,15 +1037,62 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
       await _run(() => repo.extend(widget.id, due, note), 'مهلت تمدید شد.');
   }
 
+  /// بستن نهایی — فقط دستوردهنده (سرور: `wo.OwnerUserId != MyUserId → 403`).
+  /// دکمهٔ تایید همیشه فعال است تا «یادداشت خالی» با «انصراف» قاطی نشود
+  /// (قبلاً با promptText، یادداشت خالی دکمهٔ تایید را غیرفعال می‌کرد).
   Future<void> _close() async {
-    final note = await promptText(
-      context,
-      'بستن نهایی دستور کار',
-      hint: 'یادداشت بستن (اختیاری)',
+    final o = _order;
+    if (o == null) return;
+    final note = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('بستن نهایی دستور کار'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '«${o.number} — ${o.title}» نهایی و بسته شود؟',
+              style: const TextStyle(fontSize: 12.5, height: 1.8),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: note,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'یادداشت بستن (اختیاری)',
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'پس از بستن، پاسخ‌دهی و گفت‌وگو قفل می‌شود و همهٔ گیرندگان اعلان می‌گیرند. '
+              'اگر زیر-دستور باز وجود داشته باشد، سرور اجازهٔ بستن نمی‌دهد.',
+              style: TextStyle(fontSize: 10.5, height: 1.85, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('انصراف'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('بستن دستور کار'),
+          ),
+        ],
+      ),
     );
-    if (note != null)
-      await _run(() => repo.close(widget.id, note), 'دستور کار بسته شد.');
+    final text = note.text.trim();
+    note.dispose();
+    if (ok == true) {
+      await _run(() => repo.close(widget.id, text), 'دستور کار بسته شد.');
+    }
   }
+
 
   Future<void> _reopen() async {
     bool reset = true;

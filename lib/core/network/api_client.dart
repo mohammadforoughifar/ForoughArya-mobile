@@ -234,6 +234,12 @@ class ApiClient {
     if (d is Map) {
       if (d['message'] != null) return d['message'].toString();
       if (d['title'] != null) return d['title'].toString();
+      // 403 بدون بدنه (مثل «فقط دستوردهنده») → پیام روشن
+      final code = e.response?.statusCode;
+      if (code == 403) {
+        return 'دسترسی ندارید؛ این عملیات فقط برای دستوردهنده یا دارندهٔ مجوز است.';
+      }
+      if (code == 401) return 'نشست شما منقضی شده است؛ دوباره وارد شوید.';
       if (d['errors'] is Map)
         return (d['errors'] as Map).values
             .expand((v) => v is List ? v : [v])

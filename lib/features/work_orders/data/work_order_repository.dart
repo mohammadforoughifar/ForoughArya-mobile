@@ -54,8 +54,6 @@ class WorkOrderRepository {
 
   Future<Map<String, dynamic>> counts() async =>
       map((await _api.get('$_root/counts')).data);
-  Future<Map<String, dynamic>> myAccess() async =>
-      map((await _api.get('$_root/my-access')).data);
   Future<List<TargetUser>> targets() async =>
       rows((await _api.get('$_root/targets', query: {'take': 500})).data)
           .whereType<Map>()
@@ -139,6 +137,27 @@ class WorkOrderRepository {
     'approved': approved,
     'note': note,
   });
+  /// `GET /api/workorders/my-access` — منبع حقیقتِ «کی دستوردهنده است» و
+  /// «چه کسی می‌تواند ببندد/حذف کند» (سرور بر اساس آن ۴۰۳ می‌دهد).
+  /// قبلاً شناسهٔ کاربر از نشست خوانده می‌شد و خروجی این endpoint دور ریخته
+  /// می‌شد؛ نتیجه: دکمهٔ «بستن دستور کار» برای دستوردهنده هم دیده نمی‌شد.
+  Future<WoAccess> myAccess() async {
+    try {
+      final r = await _api.get<dynamic>('$_root/my-access');
+      final m = map(r.data);
+      if (m.isEmpty) return const WoAccess.empty();
+      return WoAccess(
+        userId: (m['userId'] as num?)?.toInt() ?? 0,
+        canView: m['canView'] == true,
+        canCreate: m['canCreate'] == true,
+        canAssignOthers: m['canAssignOthers'] == true,
+        canDelete: m['canDelete'] == true,
+      );
+    } catch (_) {
+      return const WoAccess.empty();
+    }
+  }
+
   Future<void> extend(int id, DateTime due, String note) async => _api.post(
     '$_root/$id/extend',
     {'newDueAt': due.toIso8601String(), 'note': note},
@@ -262,4 +281,32 @@ class WorkOrderRepository {
       _api.post('$_root/templates/$id/used');
   Future<void> deleteTemplate(int id) async =>
       _api.delete('$_root/templates/$id');
+}
+
+
+/// دسترسی‌های کاربر جاری در ماژول دستور کار (پاسخ `my-access`).
+class WoAccess {
+  const WoAccess({
+    required this.userId,
+    this.canView = false,
+    this.canCreate = false,
+    this.canAssignOthers = false,
+    this.canDelete = false,
+  });
+
+  const WoAccess.empty()
+    : userId = 0,
+      canView = false,
+      canCreate = false,
+      canAssignOthers = false,
+      canDelete = false;
+
+  final int userId;
+  final bool canView, canCreate, canAssignOthers, canDelete;
+
+  bool get isKnown => userId > 0;
+
+  /// آیا این کاربر «دستوردهنده»ی این دستور کار است؟
+  bool ownsOrder(int orderOwnerUserId) =>
+      orderOwnerUserId > 0 && isKnown && userId == orderOwnerUserId;
 }
