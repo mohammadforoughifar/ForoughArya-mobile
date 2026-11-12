@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:open_filex/open_filex.dart';
@@ -14,6 +15,7 @@ import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
 import 'wo_style.dart';
 import 'work_order_editor_page.dart';
+import '../../../core/utils/web_files.dart';
 
 class WorkOrderDetailPage extends StatefulWidget {
   const WorkOrderDetailPage({super.key, required this.id});
@@ -1254,13 +1256,18 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
         );
         if (x != null)
           await _run(
-            () => repo.upload(widget.id, x.path, x.name),
+            () async => repo.upload(
+              widget.id,
+              kIsWeb ? null : x.path,
+              x.name,
+              bytes: kIsWeb ? await x.readAsBytes() : null,
+            ),
             'تصویر پیوست شد.',
           );
       } else {
         final files = await FilePicker.pickFiles();
         for (final f in files) {
-          if (f.path == null) continue;
+          if (f.path == null && !kIsWeb) continue;
           if ((f.lengthSync() ?? 0) > 10 * 1024 * 1024) {
             if (mounted)
               showMessage(
@@ -1270,7 +1277,11 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
               );
             continue;
           }
-          await repo.upload(widget.id, f.path!, f.name);
+          if (kIsWeb) {
+            await repo.upload(widget.id, null, f.name, bytes: await f.readAsBytes());
+          } else {
+            await repo.upload(widget.id, f.path!, f.name);
+          }
         }
         await _load();
       }
@@ -1281,6 +1292,13 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
 
   Future<void> _download(Map<String, dynamic> a) async {
     try {
+      if (kIsWeb) {
+        await webDeliver(
+          await repo.attachmentBytes((a['id'] as num).toInt()),
+          a['fileName']?.toString() ?? 'attachment',
+        );
+        return;
+      }
       final file = await repo.downloadAttachment(
         (a['id'] as num).toInt(),
         a['fileName']?.toString() ?? 'attachment',

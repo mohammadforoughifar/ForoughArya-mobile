@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -5,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
+import '../../../core/utils/web_files.dart';
 
 class WorkOrderStatsView extends StatefulWidget {
   const WorkOrderStatsView({super.key});
@@ -248,6 +250,13 @@ class _WorkOrderPerformanceViewState extends State<WorkOrderPerformanceView>
 
   Future<void> _export(String format) async {
     try {
+      if (kIsWeb) {
+        final b = await context
+            .read<WorkOrderRepository>()
+            .exportPerformanceBytes(format, _days);
+        await webDeliver(b, 'work-order-performance.$format');
+        return;
+      }
       final f = await context.read<WorkOrderRepository>().exportPerformance(
         format,
         _days,

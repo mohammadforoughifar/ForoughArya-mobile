@@ -248,6 +248,23 @@ class ConnectionManager extends ChangeNotifier {
         await _save();
       }
     }
+    // نسخهٔ وب که روی همان سرور سازمان نصب شده: همان آدرس صفحه = سرور
+    if (_profiles.isEmpty && kIsWeb && Uri.base.scheme.startsWith('http')) {
+      final ep = ServerEndpoint(
+        id: newConnectionId(),
+        label: 'همین سرور',
+        url: Uri.base.origin,
+      );
+      final p = ConnectionProfile(
+        id: newConnectionId(),
+        name: Uri.base.host,
+        endpoints: [ep],
+      );
+      _profiles = [p];
+      _activeProfileId = p.id;
+      _activeEndpointId = ep.id;
+      await _save();
+    }
     if (activeProfile == null && _profiles.isNotEmpty) {
       _activeProfileId = _profiles.first.id;
       _activeEndpointId = null;

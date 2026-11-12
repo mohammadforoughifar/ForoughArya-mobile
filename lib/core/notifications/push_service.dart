@@ -58,6 +58,8 @@ class PushService {
   /// آماده‌سازی: کانال، مجوز، بارگذاری وضعیت و ثبت تسک پس‌زمینه.
   /// بعد از لاگین صدا زده می‌شود (نیاز به توکن دارد).
   Future<void> start(ApiClientLike api, FlutterSecureStorage storage) async {
+    // نسخهٔ وب (PWA): نوتیفیکیشن بومی/پس‌زمینه ندارد؛ زنگولهٔ داخل اپ کار می‌کند
+    if (kIsWeb) return;
     if (_started) return;
     _started = true;
 
@@ -182,6 +184,7 @@ class PushService {
 
   /// روشن‌کردن دوبارهٔ سرویس (اگر سیستم آن را کشته بود).
   Future<void> ensureForeground() async {
+    if (kIsWeb) return;
     if (_foregroundStarted) return;
     final storage = _storage ?? const FlutterSecureStorage();
     _storage = storage;
@@ -231,6 +234,7 @@ class PushService {
 
   /// چرخهٔ بررسی با اتصال مجدد اپ به نمایان (resumed) از بیرون صدا زده می‌شود.
   void resumePolling() {
+    if (kIsWeb) return;
     if (_getApi == null || _storage == null) return;
     _restartTimer();
     unawaited(pollQuietly());
@@ -247,6 +251,7 @@ class PushService {
 
   /// پاک کردن همهٔ اعلان‌های نوار گوشی (بعد از «پاک کردن همه» در شیت اعلان‌ها)
   Future<void> cancelAll() async {
+    if (kIsWeb) return;
     try {
       await _plugin.cancelAll();
     } catch (_) {}

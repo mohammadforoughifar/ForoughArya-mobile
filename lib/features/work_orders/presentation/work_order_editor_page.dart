@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -305,7 +306,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
             'حجم «${f.name}» بیش از ۱۰ مگابایت است.',
             error: true,
           );
-        } else if (f.path != null)
+        } else if (f.path != null || kIsWeb)
           _files.add(f);
       }
     });
@@ -393,7 +394,11 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
       final id = (result['id'] as num?)?.toInt() ?? widget.order?.id;
       if (id != null) {
         for (final f in _files) {
-          await repo.upload(id, f.path!, f.name);
+          if (kIsWeb) {
+            await repo.upload(id, null, f.name, bytes: await f.readAsBytes());
+          } else {
+            await repo.upload(id, f.path!, f.name);
+          }
         }
       }
       if (mounted) {

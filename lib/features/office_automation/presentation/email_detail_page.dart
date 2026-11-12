@@ -21,6 +21,7 @@ import 'email_compose_page.dart';
 import 'email_page.dart';
 import 'email_widgets.dart';
 import 'office_style.dart';
+import '../../../core/utils/web_files.dart';
 
 class EmailDetailPage extends StatefulWidget {
   const EmailDetailPage({
@@ -163,6 +164,7 @@ class _EmailDetailPageState extends State<EmailDetailPage> {
     setState(() => _downloading.add(a.id));
     try {
       final bytes = await _repo.downloadAttachment(a.id);
+      if (await webDeliver(bytes, a.name)) return;
       final dir = await getTemporaryDirectory();
       final safeName = a.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       final file = File('${dir.path}/$safeName');

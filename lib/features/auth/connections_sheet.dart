@@ -3,6 +3,7 @@
 //  — از صفحهٔ ورود و از منوی تنظیمات خانه باز می‌شود.
 // ============================================================
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -769,6 +770,18 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
                   validator: (v) =>
                       (v ?? '').trim().isEmpty ? null : validateServerUrl(v),
                 ),
+                // نسخهٔ وب روی https: مرورگر اتصال به آدرس http را مسدود می‌کند
+                if (kIsWeb &&
+                    Uri.base.scheme == 'https' &&
+                    normalizeServerUrl(d.url.text).startsWith('http://'))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'در نسخهٔ وب، مرورگر به آدرس http (بدون s) از صفحهٔ https '
+                      'وصل نمی‌شود؛ از آدرس https استفاده کنید.',
+                      style: TextStyle(fontSize: 11, color: Colors.orange.shade900),
+                    ),
+                  ),
                 Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: TextButton.icon(

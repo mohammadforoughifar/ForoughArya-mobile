@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -6,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../models/work_order.dart';
+import '../../../core/utils/html_text.dart';
 
 class WorkOrderRepository {
   WorkOrderRepository(this._api);
@@ -63,7 +65,7 @@ class WorkOrderRepository {
       WorkOrder.fromJson(map((await _api.get('$_root/$id')).data));
   Future<String> fullDescription(int id) async {
     final d = map((await _api.get('$_root/$id/description')).data);
-    return d['description']?.toString() ?? '';
+    return htmlToText(d['description']?.toString());
   }
 
   Future<WorkOrderPageData> calendar(DateTime from, DateTime to) async =>
@@ -226,6 +228,33 @@ class WorkOrderRepository {
 
   Future<List<dynamic>> logs(int id) async =>
       rows((await _api.get('$_root/$id/logs', query: {'take': 500})).data);
+
+  /// نسخهٔ وب: بایت‌های پیوست (بدون پوشهٔ موقت)
+  Future<Uint8List> attachmentBytes(int attachmentId) =>
+      _api.getBytes('$_root/attachments/$attachmentId/download');
+
+  Future<Uint8List> exportListBytes(
+    String format,
+    String tab, {
+    String? q,
+    int? priority,
+    String? tag,
+  }) => _api.getBytes(
+    '$_root/export',
+    query: {
+      'format': format,
+      'tab': tab,
+      if (q?.isNotEmpty == true) 'q': q,
+      if (priority != null) 'priority': priority,
+      if (tag?.isNotEmpty == true) 'tag': tag,
+    },
+  );
+
+  Future<Uint8List> exportPerformanceBytes(String format, int days) =>
+      _api.getBytes(
+        '$_root/performance/export',
+        query: {'format': format, 'days': days},
+      );
 
   Future<File> downloadAttachment(int attachmentId, String fileName) async {
     final dir = await getTemporaryDirectory();

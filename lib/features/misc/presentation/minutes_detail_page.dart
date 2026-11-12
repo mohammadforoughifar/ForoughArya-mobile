@@ -30,6 +30,7 @@ import '../models/minutes_models.dart';
 import 'minutes_dispatch_sheet.dart';
 import 'minutes_editor_page.dart';
 import 'misc_style.dart';
+import '../../../core/utils/web_files.dart';
 
 class MinutesDetailPage extends StatefulWidget {
   const MinutesDetailPage({super.key, required this.minutesId});
@@ -236,6 +237,7 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
     setState(() => _printing = true);
     try {
       final bytes = await _repo.downloadPrintPdf(d.id);
+      if (await webDeliver(bytes, 'minutes-${d.id}.pdf')) return;
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/minutes-${d.id}.pdf');
       await file.writeAsBytes(bytes, flush: true);
@@ -1069,8 +1071,8 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
     try {
       var uploaded = 0;
       for (final f in files) {
-        if (f.path == null) continue;
-        final bytes = await File(f.path!).readAsBytes();
+        final bytes = await pickedBytes(f);
+        if (bytes == null) continue;
         await _repo.uploadAttachment(d.id, fileName: f.name, bytes: bytes);
         uploaded++;
       }
@@ -1095,6 +1097,7 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
     setState(() => _downloadingAtt.add(a.id));
     try {
       final bytes = await _repo.downloadAttachment(a.id);
+      if (await webDeliver(bytes, a.fileName)) return;
       final dir = await getTemporaryDirectory();
       final safe = a.fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       final file = File('${dir.path}/$safe');

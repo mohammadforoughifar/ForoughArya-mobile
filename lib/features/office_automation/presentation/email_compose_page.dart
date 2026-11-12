@@ -18,6 +18,7 @@ import '../data/email_repository.dart';
 import '../models/email_models.dart';
 import 'email_page.dart';
 import 'office_style.dart';
+import '../../../core/utils/web_files.dart';
 
 class EmailComposePage extends StatefulWidget {
   const EmailComposePage({
@@ -186,8 +187,8 @@ class _EmailComposePageState extends State<EmailComposePage> {
     var runningTotal = _totalBytes;
     final added = <({String name, Uint8List bytes, String? mimeType})>[];
     for (final f in files) {
-      if (f.path == null) continue;
-      final bytes = await File(f.path!).readAsBytes();
+      final bytes = await pickedBytes(f);
+      if (bytes == null) continue;
       if (runningTotal + bytes.length > _maxAttachmentBytes) {
         if (mounted) {
           showMessage(context, 'مجموع حجم پیوست‌ها نباید بیش از ۲۰ مگابایت باشد.', error: true);

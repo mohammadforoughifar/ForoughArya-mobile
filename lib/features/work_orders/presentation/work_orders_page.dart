@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -14,6 +15,7 @@ import 'wo_style.dart';
 import 'work_order_detail_page.dart';
 import 'work_order_editor_page.dart';
 import 'work_order_reports.dart';
+import '../../../core/utils/web_files.dart';
 
 class WorkOrdersPage extends StatefulWidget {
   const WorkOrdersPage({super.key});
@@ -466,6 +468,16 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
   Future<void> _export(String format) async {
     setState(() => _exporting = true);
     try {
+      if (kIsWeb) {
+        final b = await context.read<WorkOrderRepository>().exportListBytes(
+          format,
+          widget.tab,
+          q: _search.text,
+          priority: _priority,
+        );
+        await webDeliver(b, 'work-orders.$format');
+        return;
+      }
       final f = await context.read<WorkOrderRepository>().exportList(
         format,
         widget.tab,

@@ -5,6 +5,7 @@
 // ============================================================
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -23,6 +24,7 @@ import '../models/letter_models.dart';
 import '../models/office_common.dart';
 import 'office_style.dart';
 import 'office_widgets.dart';
+import '../../../core/utils/web_files.dart';
 
 class LetterDetailPage extends StatefulWidget {
   const LetterDetailPage({
@@ -208,7 +210,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
       final picked = await FilePicker.pickFiles();
       final file = picked.isEmpty ? null : picked.first;
       final path = file?.path;
-      if (path == null) return;
+      if (file == null || (path == null && !kIsWeb)) return;
       final size = file == null ? 0 : (file.lengthSync() ?? 0);
       if (size > 20 * 1024 * 1024) {
         if (mounted) {
@@ -219,8 +221,9 @@ class _LetterDetailPageState extends State<LetterDetailPage>
       await _repo.uploadAttachment(
         widget.kind,
         widget.letterId,
-        path,
-        file?.name ?? 'attachment',
+        path ?? '',
+        file.name,
+        bytes: kIsWeb ? await file.readAsBytes() : null,
       );
       _changed = true;
       await _loadSide();
@@ -239,6 +242,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
         if (mounted) showMessage(context, 'فایل خالی است.', error: true);
         return;
       }
+      if (await webDeliver(bytes, a.fileName)) return;
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/${a.fileName}');
       await file.writeAsBytes(bytes, flush: true);
