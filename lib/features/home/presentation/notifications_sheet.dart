@@ -116,7 +116,7 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
       builder: (c) => AlertDialog(
         title: const Text('پاک کردن همهٔ اعلان‌ها'),
         content: Text(
-          'همهٔ ${Fa.digits(count)} اعلان از فهرست و از سرور پاک شود؟ '
+          'همهٔ اعلان‌های شرکت فعال و اعلان‌های عمومی از سرور پاک شود؟ '
           'این کار قابل بازگشت نیست.',
         ),
         actions: [
@@ -138,8 +138,13 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
     setState(() => _items = const []);
     try {
       await widget.repository.clearNotifications();
-      // حذف نوتیفیکیشن‌های نشان‌داده‌شده در نوار گوشی هم (یک‌جا)
-      await widget.onCleared?.call();
+      // خطای پاک‌کردن نوار گوشی، حذف موفق از سرور را برنمی‌گرداند.
+      try {
+        await widget.onCleared?.call();
+      } on Exception {
+        _toast('اعلان‌ها از سرور پاک شد، اما پاک‌کردن نوار گوشی ناموفق بود.');
+        return;
+      }
       _toast('همهٔ اعلان‌ها پاک شد.');
     } on Exception {
       if (!mounted) return;

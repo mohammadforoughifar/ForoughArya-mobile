@@ -28,8 +28,10 @@
 	<string>برای پیوست‌کردن تصویر به دستور کار به دوربین نیاز است.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>برای انتخاب و پیوست‌کردن تصویر به دستور کار نیاز است.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>برای تبدیل گفتار شما به متن در دستور کار، دسترسی به تشخیص گفتار لازم است.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>برای ضبط پیام صوتی در پیام‌رسان به میکروفن نیاز است.</string>
+	<string>برای ضبط پیام صوتی و تبدیل گفتار به متن به میکروفن نیاز است.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- سرورهای سازمانی اغلب روی http و IP داخلی هستند (مثلاً http://192.168.1.10:5100) -->

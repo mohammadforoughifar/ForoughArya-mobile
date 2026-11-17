@@ -83,24 +83,9 @@ class HomeRepository {
     throw last ?? Exception('اعلان پاک نشد.');
   }
 
-  /// پاک کردن همهٔ اعلان‌ها — `DELETE /api/notifications` یا `clear`.
+  /// حذف اعلان‌های کاربر در شرکت فعال و اعلان‌های عمومی.
   Future<void> clearNotifications() async {
-    final attempts = <Future<void> Function()>[
-      () => _api.delete<dynamic>('/api/notifications'),
-      () => _api.post<dynamic>('/api/notifications/clear'),
-      () => _api.post<dynamic>('/api/notifications/delete-all'),
-      () => _api.post<dynamic>('/api/notifications/mark-all-deleted'),
-    ];
-    Object? last;
-    for (final a in attempts) {
-      try {
-        await a();
-        return;
-      } catch (e) {
-        last = e;
-      }
-    }
-    throw last ?? Exception('اعلان‌ها پاک نشدند.');
+    await _api.delete<dynamic>('/api/notifications/clear-all');
   }
 
   /// دادهٔ یک ویجت داشبورد — `GET /api/my-dashboards/widget-data/{key}`
