@@ -15,20 +15,27 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
 import '../data/fa_num.dart';
+import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
 import '../models/shop_models.dart';
 import 'order_form_page.dart' show QuickBankSheet;
 import 'party_form_page.dart';
+import 'repairs_tabs_views.dart';
+import 'shop_phase4_prints_sheet.dart';
 import 'shop_style.dart';
 
 class RepairsPage extends StatefulWidget {
-  const RepairsPage({super.key});
+  const RepairsPage({super.key, this.initialTab = 0});
+
+  /// `0 = تعمیرات` · `1 = گارانتی` · `2 = طرح تعویض`
+  final int initialTab;
 
   @override
   State<RepairsPage> createState() => _RepairsPageState();
@@ -36,6 +43,8 @@ class RepairsPage extends StatefulWidget {
 
 class _RepairsPageState extends State<RepairsPage> {
   late final ShopRepository _repo;
+  late final ShopPerms _perms;
+  late int _activeTab;
   static const pageSize = 15;
 
   int _page = 1;
@@ -62,6 +71,8 @@ class _RepairsPageState extends State<RepairsPage> {
   void initState() {
     super.initState();
     _repo = ShopRepository(context.read<ApiClient>());
+    _perms = ShopPerms(context.read<AuthController>().session);
+    _activeTab = widget.initialTab.clamp(0, 2);
     _loadTechs();
     _load();
   }
@@ -201,7 +212,36 @@ class _RepairsPageState extends State<RepairsPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _RepairDetailsSheet(order: full ?? r),
+      builder: (_) => _RepairDetailsSheet(
+        repo: _repo,
+        order: full ?? r,
+        canManage: _perms.canManageSection('Repairs'),
+        onChanged: _load,
+      ),
+    );
+  }
+
+  Future<void> _openPrintInvoice(RepairOrder r) async {
+    RepairOrder full = r;
+    try {
+      final fetched = await _repo.repair(r.id);
+      if (fetched != null) full = fetched;
+    } catch (_) {}
+    if (!mounted) return;
+    await showRepairInvoicePrintSheet(context, repo: _repo, repair: full);
+  }
+
+  Future<void> _openPrintDelivery(RepairOrder r) async {
+    RepairOrder full = r;
+    try {
+      final fetched = await _repo.repair(r.id);
+      if (fetched != null) full = fetched;
+    } catch (_) {}
+    if (!mounted) return;
+    await showRepairDeliveryReceiptPrintSheet(
+      context,
+      repo: _repo,
+      repair: full,
     );
   }
 
@@ -272,38 +312,110 @@ class _RepairsPageState extends State<RepairsPage> {
     _ => ShopColors.danger,
   };
 
+  Widget _modeTabs() {
+    const labels = [
+      (0, 'تعمیرات', Icons.build_rounded),
+      (1, 'گارانتی', Icons.verified_user_rounded),
+      (2, 'طرح تعویض', Icons.swap_horiz_rounded),
+    ];
+    return Container(
+      color: ShopColors.surface,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          for (final t in labels) ...[
+            if (t.$1 > 0) const SizedBox(width: 6),
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(11),
+                onTap: () => setState(() => _activeTab = t.$1),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color: _activeTab == t.$1 ? ShopColors.seed : ShopColors.bg,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: _activeTab == t.$1
+                          ? ShopColors.seed
+                          : ShopColors.line,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        t.$3,
+                        size: 15,
+                        color: _activeTab == t.$1
+                            ? Colors.white
+                            : ShopColors.inkSoft,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        t.$2,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: _activeTab == t.$1
+                              ? Colors.white
+                              : ShopColors.ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ShopColors.bg,
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: ShopHeader(
-                title: 'پذیرش تعمیرات',
-                subtitle: 'ثبت دستگاه، تعمیرکار، کارها و قطعات مصرفی',
-                icon: Icons.build_rounded,
-                badge: '${Fa.number(_total)} پذیرش',
-                actions: [
-                  ShopHeaderButton(
-                    label: 'گزارش و نمودارها',
-                    icon: Icons.bar_chart_rounded,
-                    onTap: () {
-                      setState(() => _showReport = !_showReport);
-                      if (_showReport && _report == null) _loadReport();
-                    },
-                  ),
-                  ShopHeaderButton(
-                    label: 'پذیرش جدید',
-                    icon: Icons.add_rounded,
-                    filled: true,
-                    onTap: () => _openForm(),
-                  ),
-                ],
-              ),
-            ),
+      body: Column(
+        children: [
+          _modeTabs(),
+          Expanded(
+            child: _activeTab == 1
+                ? const ShopWarrantyTabView()
+                : _activeTab == 2
+                ? const ShopTradeInTabView()
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: ShopHeader(
+                            title: 'پذیرش تعمیرات',
+                            subtitle:
+                                'ثبت دستگاه، تعمیرکار، کارها و قطعات مصرفی',
+                            icon: Icons.build_rounded,
+                            badge: '${Fa.number(_total)} پذیرش',
+                            actions: [
+                              ShopHeaderButton(
+                                label: 'گزارش و نمودارها',
+                                icon: Icons.bar_chart_rounded,
+                                onTap: () {
+                                  setState(() => _showReport = !_showReport);
+                                  if (_showReport && _report == null) {
+                                    _loadReport();
+                                  }
+                                },
+                              ),
+                              ShopHeaderButton(
+                                label: 'پذیرش جدید',
+                                icon: Icons.add_rounded,
+                                filled: true,
+                                onTap: () => _openForm(),
+                              ),
+                            ],
+                          ),
+                        ),
             if (_showReport)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
@@ -501,6 +613,9 @@ class _RepairsPageState extends State<RepairsPage> {
             ],
           ],
         ),
+      ),
+          ),
+        ],
       ),
     );
   }
@@ -828,7 +943,45 @@ class _RepairsPageState extends State<RepairsPage> {
                   foregroundColor: ShopColors.inkSoft,
                 ),
               ),
-              if (!r.hasInvoice) ...[
+              TextButton.icon(
+                onPressed: () => _openPrintInvoice(r),
+                icon: const Icon(Icons.print_rounded, size: 15),
+                label: Text(
+                  r.hasInvoice ? 'چاپ فاکتور' : 'چاپ قبض',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                style: TextButton.styleFrom(foregroundColor: ShopColors.teal),
+              ),
+              if (r.status == RepairStatus.ready ||
+                  r.status == RepairStatus.delivered)
+                TextButton.icon(
+                  onPressed: () => _openPrintDelivery(r),
+                  icon: const Icon(Icons.assignment_turned_in_rounded, size: 15),
+                  label: const Text('فیش تحویل', style: TextStyle(fontSize: 11)),
+                  style: TextButton.styleFrom(foregroundColor: ShopColors.teal),
+                ),
+              if (r.warrantyProcessed && r.totalPrice > 0)
+                TextButton.icon(
+                  onPressed: () => showRepairCreditSheet(
+                    context,
+                    repo: _repo,
+                    documentId: r.id,
+                    documentNumber: r.number,
+                    isWarrantyModule: false,
+                    canManage: _perms.canManageSection('Repairs'),
+                    onChanged: _load,
+                  ),
+                  icon: const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 15,
+                  ),
+                  label: const Text(
+                    'تسویه بدهی',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  style: TextButton.styleFrom(foregroundColor: ShopColors.warn),
+                ),
+              if (!r.hasInvoice && !r.warrantyProcessed) ...[
                 TextButton.icon(
                   onPressed: () => _openForm(source: r),
                   icon: const Icon(Icons.edit_rounded, size: 15),
@@ -989,15 +1142,25 @@ class _ItemVm {
         price = '';
   int id = 0;
   int? productId;
+  bool productIsService = false;
   String description;
   String qty;
   String cost;
   String price;
+  int warrantyDecision = 0;
+  bool warrantySupplied = false;
+  bool warrantyPerformed = true;
+
+  bool get isPhysicalPart =>
+      productId != null && productId! > 0 && !productIsService;
+  bool get isDone => isPhysicalPart ? warrantySupplied : warrantyPerformed;
+  bool get priceLocked =>
+      warrantyDecision == WarrantyDecision.accepted || !isDone;
 
   double get qtyValue => parseNum(qty);
   double get costValue => parseNum(cost);
-  double get priceValue => parseNum(price);
-  double get rowCost => costValue * qtyValue;
+  double get priceValue => priceLocked ? 0 : parseNum(price);
+  double get rowCost => isDone ? costValue * qtyValue : 0;
   double get rowPrice => priceValue * qtyValue;
   double get rowProfit => rowPrice - rowCost;
 }
@@ -1098,12 +1261,16 @@ class _RepairFormPageState extends State<RepairFormPage> {
             (i) => _ItemVm()
               ..id = i.id
               ..productId = i.productId
+              ..productIsService = i.productIsService
               ..description = i.description
               ..qty = i.quantity.toString().replaceAll(RegExp(r'\.0$'), '')
               ..cost = i.cost > 0 ? formatNumText(i.cost.toStringAsFixed(0)) : ''
               ..price = i.price > 0
                   ? formatNumText(i.price.toStringAsFixed(0))
-                  : '',
+                  : ''
+              ..warrantyDecision = i.warrantyDecision
+              ..warrantySupplied = i.warrantySupplied
+              ..warrantyPerformed = i.warrantyPerformed,
           ),
         );
         if (_partyId > 0 && !_customers.any((p) => p.id == _partyId)) {
@@ -1170,6 +1337,8 @@ class _RepairFormPageState extends State<RepairFormPage> {
     if (picked == null || !mounted) return;
     setState(() {
       item.productId = picked.id;
+      item.productIsService = picked.isService;
+      if (!picked.isService) item.warrantySupplied = true;
       if (item.description.trim().isEmpty) item.description = picked.name;
       // مثل وب: قیمت فروش فعلی و بهای میانگین پیشنهاد می‌شود
       if (parseNum(item.price) <= 0 && picked.salePrice > 0) {
@@ -1254,9 +1423,13 @@ class _RepairFormPageState extends State<RepairFormPage> {
                 id: i.id,
                 description: i.description.trim(),
                 productId: i.productId,
+                productIsService: i.productIsService,
                 quantity: i.qtyValue,
                 cost: i.costValue,
                 price: i.priceValue,
+                warrantyDecision: i.warrantyDecision,
+                warrantySupplied: i.warrantySupplied,
+                warrantyPerformed: i.warrantyPerformed,
               ),
             )
             .toList(),
@@ -2022,9 +2195,11 @@ class _RepairFormPageState extends State<RepairFormPage> {
                   children: [
                     _label('دریافتی'),
                     TextField(
-                      controller: TextEditingController(text: it.price)
-                        ..selection = TextSelection.collapsed(
-                          offset: it.price.length,
+                      enabled: !it.priceLocked,
+                      controller: TextEditingController(
+                        text: it.priceLocked ? '0' : it.price,
+                      )..selection = TextSelection.collapsed(
+                          offset: (it.priceLocked ? '0' : it.price).length,
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
@@ -2036,6 +2211,77 @@ class _RepairFormPageState extends State<RepairFormPage> {
                       style: const TextStyle(fontSize: 12),
                     ),
                   ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<int>(
+                  initialValue: it.warrantyDecision,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'وضعیت گارانتی ردیف',
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 11.5, color: ShopColors.ink),
+                  items: const [
+                    DropdownMenuItem(
+                      value: WarrantyDecision.unspecified,
+                      child: Text('تعمیر عادی'),
+                    ),
+                    DropdownMenuItem(
+                      value: WarrantyDecision.accepted,
+                      child: Text('گارانتی پذیرفته (رایگان)'),
+                    ),
+                    DropdownMenuItem(
+                      value: WarrantyDecision.rejected,
+                      child: Text('گارانتی پذیرفته‌نشده'),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    it.warrantyDecision = v ?? 0;
+                    if (it.warrantyDecision == WarrantyDecision.accepted) {
+                      it.price = '0';
+                    }
+                  }),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: InkWell(
+                  onTap: () => setState(() {
+                    if (it.isPhysicalPart) {
+                      it.warrantySupplied = !it.warrantySupplied;
+                    } else {
+                      it.warrantyPerformed = !it.warrantyPerformed;
+                    }
+                  }),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: it.isDone,
+                        visualDensity: VisualDensity.compact,
+                        onChanged: (v) => setState(() {
+                          if (it.isPhysicalPart) {
+                            it.warrantySupplied = v == true;
+                          } else {
+                            it.warrantyPerformed = v == true;
+                          }
+                        }),
+                      ),
+                      Expanded(
+                        child: Text(
+                          it.isPhysicalPart ? 'مصرف شد' : 'انجام شد',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -2073,9 +2319,17 @@ class _RepairFormPageState extends State<RepairFormPage> {
 //  جزئیات پذیرش
 // ============================================================
 class _RepairDetailsSheet extends StatelessWidget {
-  const _RepairDetailsSheet({required this.order});
+  const _RepairDetailsSheet({
+    required this.repo,
+    required this.order,
+    required this.canManage,
+    required this.onChanged,
+  });
 
+  final ShopRepository repo;
   final RepairOrder order;
+  final bool canManage;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2296,6 +2550,100 @@ class _RepairDetailsSheet extends StatelessWidget {
                     color: o.profit >= 0 ? ShopColors.ok : ShopColors.danger,
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (o.smsNotifications.isNotEmpty) ...[
+              const Text(
+                'وضعیت پیامک مشتری',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 4),
+              for (final s in o.smsNotifications)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ShopColors.bg,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          s.eventTitle,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      ShopTag(
+                        text: s.statusTitle,
+                        color: s.isSuccess
+                            ? ShopColors.ok
+                            : s.isFailure
+                            ? ShopColors.danger
+                            : ShopColors.warn,
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      showRepairInvoicePrintSheet(context, repo: repo, repair: o),
+                  icon: const Icon(Icons.print_rounded, size: 16),
+                  label: Text(
+                    o.hasInvoice ? 'چاپ فاکتور تعمیر' : 'چاپ قبض پذیرش',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                ),
+                if (o.status == RepairStatus.ready ||
+                    o.status == RepairStatus.delivered)
+                  OutlinedButton.icon(
+                    onPressed: () => showRepairDeliveryReceiptPrintSheet(
+                      context,
+                      repo: repo,
+                      repair: o,
+                    ),
+                    icon: const Icon(
+                      Icons.assignment_turned_in_rounded,
+                      size: 16,
+                    ),
+                    label: const Text(
+                      'چاپ فیش تحویل',
+                      style: TextStyle(fontSize: 11.5),
+                    ),
+                  ),
+                if (o.warrantyProcessed && o.totalPrice > 0)
+                  FilledButton.tonalIcon(
+                    onPressed: () => showRepairCreditSheet(
+                      context,
+                      repo: repo,
+                      documentId: o.id,
+                      documentNumber: o.number,
+                      isWarrantyModule: false,
+                      canManage: canManage,
+                      onChanged: onChanged,
+                    ),
+                    icon: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      size: 16,
+                    ),
+                    label: const Text(
+                      'تسویه بدهی تعمیر',
+                      style: TextStyle(fontSize: 11.5),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 8),

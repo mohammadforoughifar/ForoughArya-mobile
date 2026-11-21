@@ -760,3 +760,49 @@ class VisRequestsReport {
         scopedToMe: j['scopedToMe'] == true,
       );
 }
+
+// ============================================================
+//  ۵) گزارش نقطه سفارش و کسری انبار — `ReorderItem`
+//     GET /api/reorder?warehouseId&skip&take
+// ============================================================
+
+class ReorderItem {
+  const ReorderItem({
+    this.productId = 0,
+    this.productCode = '',
+    this.productName = '',
+    this.unit = '',
+    this.category,
+    this.reorderPoint = 0,
+    this.maxStock = 0,
+    this.totalStock = 0,
+  });
+
+  final int productId;
+  final String productCode;
+  final String productName;
+  final String unit;
+  final String? category;
+  final double reorderPoint;
+  final double maxStock;
+  final double totalStock;
+
+  /// همان فرمول سرور: `(MaxStock > TotalStock ? MaxStock : ReorderPoint * 2) - TotalStock`
+  double get suggested =>
+      (maxStock > totalStock ? maxStock : reorderPoint * 2) - totalStock;
+
+  /// همان فرمول سرور: `ReorderPoint - TotalStock`
+  double get shortage => reorderPoint - totalStock;
+
+  factory ReorderItem.fromJson(Map<String, dynamic> j) => ReorderItem(
+    productId: _ki(j['productId']),
+    productCode: (j['productCode'] ?? '').toString(),
+    productName: (j['productName'] ?? '').toString(),
+    unit: (j['unit'] ?? '').toString(),
+    category: _ks(j['category']),
+    reorderPoint: _kd(j['reorderPoint']),
+    maxStock: _kd(j['maxStock']),
+    totalStock: _kd(j['totalStock']),
+  );
+}
+

@@ -1,11 +1,17 @@
 // ============================================================
-//  مدل‌های فاز ۴ «سامانه فروشگاهی» — بیجک، تعمیرات، هزینه‌ها و گزارش‌ها
+//  مدل‌های فاز ۴ «سامانه فروشگاهی» — بیجک، تعمیرات، گارانتی، طرح تعویض، هزینه‌ها و گزارش‌ها
 //  منبع: Inventory.Shared/Dtos/GoodsIssueDtos.cs
 //        Inventory.Shared/Dtos/RepairDtos.cs
+//        Inventory.Shared/Dtos/ShopWarrantyDtos.cs
+//        Inventory.Shared/Dtos/ShopTradeInDtos.cs
 //        Inventory.Shared/Dtos/OperationDtos.cs (ExpenseDto/ExpenseCategoryDto)
 //        Inventory.Shared/Dtos/OperationsReportDtos.cs
 //  ⚠️ هیچ فیلدی خارج از سرور اضافه نشده است.
 // ============================================================
+
+import 'dart:math' as math;
+
+import 'shop_models.dart';
 
 // ------------------------------------------------------------
 //  بیجک (حوالهٔ تحویل کالا) — سند «فقط مقدار»
@@ -179,6 +185,98 @@ class RepairDevice {
   };
 }
 
+/// تصمیم گارانتی (`WarrantyDecision`)
+class WarrantyDecision {
+  static const unspecified = 0;
+  static const accepted = 1;
+  static const rejected = 2;
+
+  static String label(int d) => switch (d) {
+    accepted => 'گارانتی پذیرفته (رایگان)',
+    rejected => 'گارانتی پذیرفته‌نشده',
+    _ => 'تعمیر عادی',
+  };
+
+  static String shortLabel(int d) => switch (d) {
+    accepted => 'پذیرفته',
+    rejected => 'پذیرفته‌نشده',
+    _ => 'تعیین‌نشده',
+  };
+}
+
+/// وضعیت پیامک پذیرش (`RepairSmsNotificationDto`)
+class RepairSmsNotification {
+  const RepairSmsNotification({
+    this.eventType = 1,
+    this.status = 1,
+    this.providerMessageId,
+    this.providerCode,
+    this.providerMessageStatus,
+    this.createdAtUtc,
+    this.completedAtUtc,
+  });
+
+  final int eventType;
+  final int status;
+  final int? providerMessageId;
+  final int? providerCode;
+  final int? providerMessageStatus;
+  final DateTime? createdAtUtc;
+  final DateTime? completedAtUtc;
+
+  String get eventTitle => switch (eventType) {
+    1 => 'پیامک ثبت پذیرش',
+    2 => 'پیامک آمادهٔ تحویل',
+    3 => 'پیامک تحویل نهایی',
+    _ => 'پیامک اطلاع‌رسانی',
+  };
+
+  bool get isSuccess => status == 3 || status == 4;
+  bool get isFailure =>
+      status == 5 ||
+      status == 7 ||
+      status == 8 ||
+      status == 9 ||
+      status == 10 ||
+      status == 11 ||
+      status == 12 ||
+      status == 13 ||
+      status == 14;
+
+  String get statusTitle => switch (status) {
+    1 => 'در صف ارسال',
+    2 => 'در حال ارسال',
+    3 => 'تحویل به اپراتور',
+    4 => 'تحویل به گوشی مشتری',
+    5 => 'ارسال ناموفق',
+    6 => 'وضعیت نامشخص',
+    7 => 'شماره موبایل نامعتبر',
+    8 => 'سرویس پیامک غیرفعال',
+    9 => 'تنظیم‌نشده',
+    10 => 'لغوشده',
+    11 => 'ماژول غیرفعال',
+    12 => 'نام شرکت نامعتبر',
+    13 => 'شماره پذیرش نامعتبر',
+    14 => 'نام مشتری نامعتبر',
+    _ => 'نامشخص',
+  };
+
+  factory RepairSmsNotification.fromJson(Map<String, dynamic> j) =>
+      RepairSmsNotification(
+        eventType: (j['eventType'] as num?)?.toInt() ?? 1,
+        status: (j['status'] as num?)?.toInt() ?? 1,
+        providerMessageId: (j['providerMessageId'] as num?)?.toInt(),
+        providerCode: (j['providerCode'] as num?)?.toInt(),
+        providerMessageStatus: (j['providerMessageStatus'] as num?)?.toInt(),
+        createdAtUtc: DateTime.tryParse(
+          (j['createdAtUtc'] ?? '').toString(),
+        )?.toLocal(),
+        completedAtUtc: DateTime.tryParse(
+          (j['completedAtUtc'] ?? '').toString(),
+        )?.toLocal(),
+      );
+}
+
 /// ردیف کار/قطعه — آینهٔ `RepairItemDto`
 class RepairItem {
   RepairItem({
@@ -189,6 +287,10 @@ class RepairItem {
     this.quantity = 1,
     this.cost = 0,
     this.price = 0,
+    this.warrantyDecision = WarrantyDecision.unspecified,
+    this.warrantySupplied = true,
+    this.warrantyPerformed = true,
+    this.productIsService = false,
   });
 
   final int id;
@@ -198,10 +300,35 @@ class RepairItem {
   final double quantity;
   final double cost;
   final double price;
+  final int warrantyDecision;
+  final bool warrantySupplied;
+  final bool warrantyPerformed;
+  final bool productIsService;
 
-  double get rowCost => cost * quantity;
-  double get rowPrice => price * quantity;
-  double get rowProfit => (price - cost) * quantity;
+  bool get isUnusedWarrantyPart =>
+      warrantyDecision != WarrantyDecision.unspecified &&
+      (productId ?? 0) > 0 &&
+      !productIsService &&
+      !warrantySupplied;
+
+  bool get isUnperformedWarrantyWork =>
+      warrantyDecision != WarrantyDecision.unspecified &&
+      ((productId ?? 0) <= 0 || productIsService) &&
+      !warrantyPerformed;
+
+  double get customerUnitPrice =>
+      warrantyDecision == WarrantyDecision.accepted ||
+          isUnusedWarrantyPart ||
+          isUnperformedWarrantyWork
+      ? 0
+      : price;
+
+  double get effectiveUnitCost =>
+      isUnusedWarrantyPart || isUnperformedWarrantyWork ? 0 : cost;
+
+  double get rowCost => effectiveUnitCost * quantity;
+  double get rowPrice => customerUnitPrice * quantity;
+  double get rowProfit => (customerUnitPrice - effectiveUnitCost) * quantity;
 
   factory RepairItem.fromJson(Map<String, dynamic> j) => RepairItem(
     id: (j['id'] as num?)?.toInt() ?? 0,
@@ -211,6 +338,12 @@ class RepairItem {
     quantity: _d(j['quantity']),
     cost: _d(j['cost']),
     price: _d(j['price']),
+    warrantyDecision:
+        (j['warrantyDecision'] as num?)?.toInt() ??
+        WarrantyDecision.unspecified,
+    warrantySupplied: j['warrantySupplied'] != false,
+    warrantyPerformed: j['warrantyPerformed'] != false,
+    productIsService: j['productIsService'] == true,
   );
 
   Map<String, dynamic> toJson() => {
@@ -220,6 +353,10 @@ class RepairItem {
     'quantity': quantity,
     'cost': cost,
     'price': price,
+    'warrantyDecision': warrantyDecision,
+    'warrantySupplied': warrantySupplied,
+    'warrantyPerformed': warrantyPerformed,
+    'productIsService': productIsService,
   };
 }
 
@@ -241,9 +378,12 @@ class RepairOrder {
     this.quotedPrice = 0,
     this.invoiceTransactionId,
     this.invoiceNumber,
+    this.warrantyProcessed = false,
+    this.warrantyStockTransactionId,
     this.note,
     this.devices = const [],
     this.items = const [],
+    this.smsNotifications = const [],
     this.totalPrice = 0,
     this.totalCost = 0,
     this.profit = 0,
@@ -264,14 +404,22 @@ class RepairOrder {
   final double quotedPrice;
   final int? invoiceTransactionId;
   final String? invoiceNumber;
+  final bool warrantyProcessed;
+  final int? warrantyStockTransactionId;
   final String? note;
   final List<RepairDevice> devices;
   final List<RepairItem> items;
+  final List<RepairSmsNotification> smsNotifications;
   final double totalPrice;
   final double totalCost;
   final double profit;
 
   bool get hasInvoice => (invoiceTransactionId ?? 0) > 0;
+
+  bool get hasWarrantyRows =>
+      items.any((i) => i.warrantyDecision != WarrantyDecision.unspecified);
+
+  bool get isFreeWarranty => hasWarrantyRows && totalPrice <= 0;
 
   /// خلاصهٔ دستگاه‌ها برای فهرست — همان DeviceSummary وب
   String get deviceSummary {
@@ -326,6 +474,9 @@ class RepairOrder {
     quotedPrice: _d(j['quotedPrice']),
     invoiceTransactionId: (j['invoiceTransactionId'] as num?)?.toInt(),
     invoiceNumber: _s(j['invoiceNumber']),
+    warrantyProcessed: j['warrantyProcessed'] == true,
+    warrantyStockTransactionId: (j['warrantyStockTransactionId'] as num?)
+        ?.toInt(),
     note: _s(j['note']),
     devices: (j['devices'] as List? ?? [])
         .whereType<Map>()
@@ -335,10 +486,443 @@ class RepairOrder {
         .whereType<Map>()
         .map((e) => RepairItem.fromJson(Map<String, dynamic>.from(e)))
         .toList(),
+    smsNotifications: (j['smsNotifications'] as List? ?? [])
+        .whereType<Map>()
+        .map(
+          (e) => RepairSmsNotification.fromJson(Map<String, dynamic>.from(e)),
+        )
+        .toList(),
     totalPrice: _d(j['totalPrice']),
     totalCost: _d(j['totalCost']),
     profit: _d(j['profit']),
   );
+}
+
+// ------------------------------------------------------------
+//  گارانتی فروشگاهی (`ShopWarrantyDto`)
+// ------------------------------------------------------------
+
+class ShopWarrantyDevice {
+  ShopWarrantyDevice({
+    this.id = 0,
+    this.deviceType = '',
+    this.deviceModel,
+    this.serialNumber,
+    this.problemDescription,
+    this.accessories,
+  });
+
+  int id;
+  String deviceType;
+  String? deviceModel;
+  String? serialNumber;
+  String? problemDescription;
+  String? accessories;
+
+  String get label => (deviceModel ?? '').trim().isEmpty
+      ? (deviceType.trim().isEmpty ? 'دستگاه' : deviceType.trim())
+      : '${deviceType.trim()} ${deviceModel!.trim()}'.trim();
+
+  factory ShopWarrantyDevice.fromJson(Map<String, dynamic> j) =>
+      ShopWarrantyDevice(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        deviceType: (j['deviceType'] ?? '').toString(),
+        deviceModel: _s(j['deviceModel']),
+        serialNumber: _s(j['serialNumber']),
+        problemDescription: _s(j['problemDescription']),
+        accessories: _s(j['accessories']),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'deviceType': deviceType.trim(),
+    'deviceModel': deviceModel,
+    'serialNumber': serialNumber,
+    'problemDescription': problemDescription,
+    'accessories': accessories,
+  };
+}
+
+class ShopWarrantyItem {
+  ShopWarrantyItem({
+    this.id = 0,
+    this.description = '',
+    this.productId,
+    this.productName,
+    this.quantity = 1,
+    this.unitCost = 0,
+    this.customerUnitPrice,
+    this.decision = WarrantyDecision.unspecified,
+    this.supplied = false,
+    this.performed = true,
+  });
+
+  int id;
+  String description;
+  int? productId;
+  String? productName;
+  double quantity;
+  double unitCost;
+  double? customerUnitPrice;
+  int decision;
+  bool supplied;
+  bool performed;
+
+  bool get isPart => (productId ?? 0) > 0;
+  bool get isDone => isPart ? supplied : performed;
+  bool get isChargeable => decision == WarrantyDecision.rejected && isDone;
+
+  double get customerAmount =>
+      isChargeable && customerUnitPrice != null && customerUnitPrice! > 0
+      ? (quantity * customerUnitPrice!).roundToDouble()
+      : 0;
+
+  factory ShopWarrantyItem.fromJson(Map<String, dynamic> j) => ShopWarrantyItem(
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    description: (j['description'] ?? '').toString(),
+    productId: (j['productId'] as num?)?.toInt(),
+    productName: _s(j['productName']),
+    quantity: _d(j['quantity'] ?? 1),
+    unitCost: _d(j['unitCost']),
+    customerUnitPrice: j['customerUnitPrice'] == null
+        ? null
+        : _d(j['customerUnitPrice']),
+    decision:
+        (j['decision'] as num?)?.toInt() ?? WarrantyDecision.unspecified,
+    supplied: j['supplied'] == true,
+    performed: j['performed'] != false,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'description': description.trim(),
+    'productId': isPart ? productId : null,
+    'quantity': quantity,
+    'unitCost': unitCost,
+    'customerUnitPrice': customerUnitPrice,
+    'decision': decision,
+    'supplied': supplied,
+    'performed': performed,
+  };
+}
+
+class ShopWarrantyLookups {
+  const ShopWarrantyLookups({
+    this.customers = const [],
+    this.products = const [],
+    this.warehouses = const [],
+    this.technicians = const [],
+  });
+
+  final List<ShopLookup> customers;
+  final List<ShopLookup> products;
+  final List<ShopLookup> warehouses;
+  final List<ShopLookup> technicians;
+
+  factory ShopWarrantyLookups.fromJson(Map<String, dynamic> j) {
+    List<ShopLookup> listOf(String k) => (j[k] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => ShopLookup.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    return ShopWarrantyLookups(
+      customers: listOf('customers'),
+      products: listOf('products'),
+      warehouses: listOf('warehouses'),
+      technicians: listOf('technicians'),
+    );
+  }
+}
+
+class ShopWarranty {
+  ShopWarranty({
+    this.id = 0,
+    this.operationId = '',
+    this.number = '',
+    this.partyId = 0,
+    this.partyName = '',
+    this.technicianId,
+    this.technicianName,
+    this.warehouseId = 0,
+    this.deviceType = '',
+    this.deviceModel,
+    this.serialNumber,
+    this.problemDescription,
+    this.accessories,
+    this.note,
+    this.receivedAt,
+    this.finalizedAt,
+    this.stockTransactionId,
+    this.chargePolicyVersion = 1,
+    this.chargeTransactionId,
+    this.chargeTransactionNumber,
+    this.settledAmount = 0,
+    this.devices = const [],
+    this.items = const [],
+  });
+
+  final int id;
+  final String operationId;
+  final String number;
+  final int partyId;
+  final String partyName;
+  final int? technicianId;
+  final String? technicianName;
+  final int warehouseId;
+  final String deviceType;
+  final String? deviceModel;
+  final String? serialNumber;
+  final String? problemDescription;
+  final String? accessories;
+  final String? note;
+  final DateTime? receivedAt;
+  final DateTime? finalizedAt;
+  final int? stockTransactionId;
+  final int chargePolicyVersion;
+  final int? chargeTransactionId;
+  final String? chargeTransactionNumber;
+  final double settledAmount;
+  final List<ShopWarrantyDevice> devices;
+  final List<ShopWarrantyItem> items;
+
+  bool get isFinalized => finalizedAt != null;
+  bool get hasCharge => (chargeTransactionId ?? 0) > 0;
+
+  List<ShopWarrantyDevice> get effectiveDevices => devices.isNotEmpty
+      ? devices
+      : [
+          ShopWarrantyDevice(
+            deviceType: deviceType,
+            deviceModel: deviceModel,
+            serialNumber: serialNumber,
+            problemDescription: problemDescription,
+            accessories: accessories,
+          ),
+        ];
+
+  String get deviceSummary {
+    final list = effectiveDevices;
+    if (list.isEmpty) return '—';
+    final first = list.first.label;
+    return list.length > 1 ? '$first و ${list.length - 1} دستگاه' : first;
+  }
+
+  int get acceptedCount =>
+      items.where((i) => i.decision == WarrantyDecision.accepted).length;
+  int get rejectedCount =>
+      items.where((i) => i.decision == WarrantyDecision.rejected).length;
+
+  double get internalCost => items
+      .where((i) => i.isDone)
+      .fold<double>(0, (s, i) => s + (i.quantity * i.unitCost).roundToDouble());
+
+  double get customerAmount => isFinalized && chargePolicyVersion == 0
+      ? 0
+      : items.fold<double>(0, (s, i) => s + i.customerAmount);
+
+  double get unpaidAmount =>
+      isFinalized ? math.max(0, customerAmount - settledAmount) : 0;
+
+  factory ShopWarranty.fromJson(Map<String, dynamic> j) => ShopWarranty(
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    operationId: (j['operationId'] ?? '').toString(),
+    number: (j['number'] ?? '').toString(),
+    partyId: (j['partyId'] as num?)?.toInt() ?? 0,
+    partyName: (j['partyName'] ?? '').toString(),
+    technicianId: (j['technicianId'] as num?)?.toInt(),
+    technicianName: _s(j['technicianName']),
+    warehouseId: (j['warehouseId'] as num?)?.toInt() ?? 0,
+    deviceType: (j['deviceType'] ?? '').toString(),
+    deviceModel: _s(j['deviceModel']),
+    serialNumber: _s(j['serialNumber']),
+    problemDescription: _s(j['problemDescription']),
+    accessories: _s(j['accessories']),
+    note: _s(j['note']),
+    receivedAt: DateTime.tryParse((j['receivedAt'] ?? '').toString())?.toLocal(),
+    finalizedAt: DateTime.tryParse(
+      (j['finalizedAt'] ?? '').toString(),
+    )?.toLocal(),
+    stockTransactionId: (j['stockTransactionId'] as num?)?.toInt(),
+    chargePolicyVersion: (j['chargePolicyVersion'] as num?)?.toInt() ?? 1,
+    chargeTransactionId: (j['chargeTransactionId'] as num?)?.toInt(),
+    chargeTransactionNumber: _s(j['chargeTransactionNumber']),
+    settledAmount: _d(j['settledAmount']),
+    devices: (j['devices'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => ShopWarrantyDevice.fromJson(Map<String, dynamic>.from(e)))
+        .toList(),
+    items: (j['items'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => ShopWarrantyItem.fromJson(Map<String, dynamic>.from(e)))
+        .toList(),
+  );
+
+  Map<String, dynamic> toJson() {
+    final first = effectiveDevices.isNotEmpty ? effectiveDevices.first : null;
+    return {
+      'id': id,
+      'operationId': operationId,
+      'number': number,
+      'partyId': partyId,
+      'technicianId': (technicianId ?? 0) > 0 ? technicianId : null,
+      'warehouseId': warehouseId,
+      'deviceType': first?.deviceType.trim() ?? '',
+      'deviceModel': first?.deviceModel,
+      'serialNumber': first?.serialNumber,
+      'problemDescription': first?.problemDescription,
+      'accessories': first?.accessories,
+      'note': note,
+      'receivedAt': (receivedAt ?? DateTime.now()).toIso8601String(),
+      'devices': devices.map((d) => d.toJson()).toList(),
+      'items': items.map((i) => i.toJson()).toList(),
+    };
+  }
+}
+
+// ------------------------------------------------------------
+//  طرح تعویض کالای کارکرده (`ShopTradeInDto`)
+// ------------------------------------------------------------
+
+class TradeInUseKind {
+  static const applyToSale = 1;
+  static const refund = 2;
+}
+
+class ShopTradeInUse {
+  const ShopTradeInUse({
+    this.id = 0,
+    this.kind = TradeInUseKind.applyToSale,
+    this.targetSaleId,
+    this.targetSaleNumber,
+    this.trsAccountName,
+    this.amount = 0,
+    this.date,
+    this.createdBy,
+  });
+
+  final int id;
+  final int kind;
+  final int? targetSaleId;
+  final String? targetSaleNumber;
+  final String? trsAccountName;
+  final double amount;
+  final DateTime? date;
+  final String? createdBy;
+
+  String get kindLabel =>
+      kind == TradeInUseKind.applyToSale ? 'تسویه فاکتور فروش' : 'پرداخت وجه';
+
+  String get destinationLabel =>
+      targetSaleNumber ?? trsAccountName ?? '—';
+
+  factory ShopTradeInUse.fromJson(Map<String, dynamic> j) => ShopTradeInUse(
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    kind: (j['kind'] as num?)?.toInt() ?? TradeInUseKind.applyToSale,
+    targetSaleId: (j['targetSaleId'] as num?)?.toInt(),
+    targetSaleNumber: _s(j['targetSaleNumber']),
+    trsAccountName: _s(j['trsAccountName']),
+    amount: _d(j['amount']),
+    date: DateTime.tryParse((j['date'] ?? '').toString())?.toLocal(),
+    createdBy: _s(j['createdBy']),
+  );
+}
+
+class ShopTradeInTargetSale {
+  const ShopTradeInTargetSale({
+    this.id = 0,
+    this.number = '',
+    this.date,
+    this.totalAmount = 0,
+  });
+
+  final int id;
+  final String number;
+  final DateTime? date;
+  final double totalAmount;
+
+  factory ShopTradeInTargetSale.fromJson(Map<String, dynamic> j) =>
+      ShopTradeInTargetSale(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        number: (j['number'] ?? '').toString(),
+        date: DateTime.tryParse((j['date'] ?? '').toString())?.toLocal(),
+        totalAmount: _d(j['totalAmount']),
+      );
+}
+
+class ShopTradeIn {
+  const ShopTradeIn({
+    this.id = 0,
+    this.operationId = '',
+    this.number = '',
+    this.partyId = 0,
+    this.partyName = '',
+    this.deviceType = '',
+    this.deviceModel,
+    this.serialNumber,
+    this.note,
+    this.value = 0,
+    this.receivedAt,
+    this.finalizedAt,
+    this.usedAmount = 0,
+    this.uses = const [],
+  });
+
+  final int id;
+  final String operationId;
+  final String number;
+  final int partyId;
+  final String partyName;
+  final String deviceType;
+  final String? deviceModel;
+  final String? serialNumber;
+  final String? note;
+  final double value;
+  final DateTime? receivedAt;
+  final DateTime? finalizedAt;
+  final double usedAmount;
+  final List<ShopTradeInUse> uses;
+
+  bool get isFinalized => finalizedAt != null;
+  double get availableCredit =>
+      isFinalized ? math.max(0, value - usedAmount) : 0;
+
+  String get deviceLabel => (deviceModel ?? '').trim().isEmpty
+      ? deviceType
+      : '$deviceType ${deviceModel!.trim()}'.trim();
+
+  factory ShopTradeIn.fromJson(Map<String, dynamic> j) => ShopTradeIn(
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    operationId: (j['operationId'] ?? '').toString(),
+    number: (j['number'] ?? '').toString(),
+    partyId: (j['partyId'] as num?)?.toInt() ?? 0,
+    partyName: (j['partyName'] ?? '').toString(),
+    deviceType: (j['deviceType'] ?? '').toString(),
+    deviceModel: _s(j['deviceModel']),
+    serialNumber: _s(j['serialNumber']),
+    note: _s(j['note']),
+    value: _d(j['value']),
+    receivedAt: DateTime.tryParse((j['receivedAt'] ?? '').toString())?.toLocal(),
+    finalizedAt: DateTime.tryParse(
+      (j['finalizedAt'] ?? '').toString(),
+    )?.toLocal(),
+    usedAmount: _d(j['usedAmount']),
+    uses: (j['uses'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => ShopTradeInUse.fromJson(Map<String, dynamic>.from(e)))
+        .toList(),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'operationId': operationId,
+    'number': number,
+    'partyId': partyId,
+    'deviceType': deviceType.trim(),
+    'deviceModel': deviceModel,
+    'serialNumber': serialNumber,
+    'note': note,
+    'value': value,
+    'receivedAt': (receivedAt ?? DateTime.now()).toIso8601String(),
+  };
 }
 
 // ------------------------------------------------------------

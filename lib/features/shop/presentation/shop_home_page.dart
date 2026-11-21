@@ -33,6 +33,7 @@ import 'products_page.dart';
 import 'referrer_panel_pages.dart';
 import 'referrer_wallets_page.dart';
 import 'referrers_page.dart';
+import 'reorder_report_page.dart';
 import 'repairs_page.dart';
 import 'sale_orders_page.dart';
 import 'shop_credit_page.dart';
@@ -527,17 +528,38 @@ class _ShopHomePageState extends State<ShopHomePage> {
           keywords: 'بیجک حواله خروج ارسال بار',
           builder: (_) => const GoodsIssuesPage(),
         ),
-      if (perms.canSeeRepairs)
+      if (perms.canSeeRepairs) ...[
         _DeskTool(
           id: 'repairs',
           title: 'کارگاه تعمیرات',
-          subtitle: 'پذیرش دستگاه، کارها و قطعات، گارانتی و تبدیل به فروش',
+          subtitle: 'پذیرش دستگاه، کارها و قطعات، چاپ قبض/تحویل و تبدیل به فروش',
           icon: Icons.build_rounded,
           color: ShopColors.indigo,
           category: _DeskCat.ops,
-          keywords: 'تعمیر پذیرش دستگاه گارانتی تکنسین',
+          keywords: 'تعمیر پذیرش دستگاه تکنسین فیش تحویل قبض',
           builder: (_) => const RepairsPage(),
         ),
+        _DeskTool(
+          id: 'warranty',
+          title: 'پذیرش گارانتی',
+          subtitle: 'بررسی گارانتی، ردیف‌های رایگان/ردشده و تسویه بدهی گارانتی',
+          icon: Icons.verified_user_rounded,
+          color: ShopColors.teal,
+          category: _DeskCat.ops,
+          keywords: 'گارانتی پذیرش گارانتی تصمیم گارانتی تسویه',
+          builder: (_) => const RepairsPage(initialTab: 1),
+        ),
+        _DeskTool(
+          id: 'trade-in',
+          title: 'طرح تعویض کالا',
+          subtitle: 'پذیرش کالای کارکرده، ثبت اعتبار مشتری و مصرف در فاکتور فروش',
+          icon: Icons.swap_horizontal_circle_rounded,
+          color: ShopColors.accent,
+          category: _DeskCat.ops,
+          keywords: 'طرح تعویض کالای کارکرده اعتبار مشتری دست دوم',
+          builder: (_) => const RepairsPage(initialTab: 2),
+        ),
+      ],
       if (perms.canSeeExpenses)
         _DeskTool(
           id: 'expenses',
@@ -741,6 +763,17 @@ class _ShopHomePageState extends State<ShopHomePage> {
           category: _DeskCat.reports,
           keywords: 'تاخیر تادیه سود چک کارمزد چک',
           builder: (_) => const ChequeIncomeReportPage(),
+        ),
+      if (perms.canSeeReorder)
+        _DeskTool(
+          id: 'reorder',
+          title: 'نقطه سفارش و کسری کالا',
+          subtitle: 'کالاهای زیر نقطه سفارش، مقدار کسری و پیشنهاد خرید مجدد',
+          icon: Icons.production_quantity_limits_rounded,
+          color: ShopColors.warn,
+          category: _DeskCat.reports,
+          keywords: 'نقطه سفارش کسری موجودی خرید مجدد حداقل موجودی',
+          builder: (_) => const ReorderReportPage(),
         ),
       if (perms.canSeeKardex) ...[
         _DeskTool(

@@ -2,7 +2,7 @@ name: forough_mobile
 description: "Forough Arya mobile client for authentication and work orders."
 publish_to: 'none'
 
-version: 1.63.0+69
+version: 1.64.0+70
 
 environment:
   sdk: ^3.13.7

@@ -22,6 +22,7 @@ import '../data/shop_repository.dart';
 import '../models/ops_models.dart';
 import '../models/shop_models.dart';
 import 'party_form_page.dart';
+import 'shop_phase4_prints_sheet.dart';
 import 'shop_style.dart';
 
 class GoodsIssuesPage extends StatefulWidget {
@@ -419,6 +420,26 @@ class _GoodsIssuesPageState extends State<GoodsIssuesPage> {
                 () => _openForm(source: g, viewOnly: true),
               ),
               _act(
+                'چاپ',
+                Icons.print_rounded,
+                ShopColors.teal,
+                () async {
+                  var doc = g;
+                  if (doc.lines.isEmpty && doc.id > 0) {
+                    try {
+                      final fetched = await _repo.goodsIssue(doc.id);
+                    if (fetched != null) doc = fetched;
+                    } catch (_) {}
+                  }
+                  if (!mounted) return;
+                  await showGoodsIssuePrintSheet(
+                    context,
+                    repo: _repo,
+                    issue: doc,
+                  );
+                },
+              ),
+              _act(
                 'ویرایش',
                 Icons.edit_rounded,
                 ShopColors.seed,
@@ -685,6 +706,18 @@ class _GoodsIssueFormPageState extends State<_GoodsIssueFormPage> {
               : 'حواله تحویل کالای جدید',
           style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          if (widget.source != null && widget.source!.id > 0)
+            IconButton(
+              tooltip: 'چاپ بیجک (A4 / A5)',
+              onPressed: () => showGoodsIssuePrintSheet(
+                context,
+                repo: widget.repo,
+                issue: widget.source!,
+              ),
+              icon: const Icon(Icons.print_rounded, size: 20),
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),

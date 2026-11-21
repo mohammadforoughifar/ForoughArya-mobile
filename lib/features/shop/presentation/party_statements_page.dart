@@ -25,6 +25,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
 import '../data/shop_repository.dart';
+import 'shop_phase4_prints_sheet.dart';
 import 'shop_style.dart';
 
 class PartyStatementsPage extends StatefulWidget {
@@ -469,6 +470,17 @@ class _PartyStatementsPageState extends State<PartyStatementsPage> {
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
         ),
         actions: [
+          IconButton(
+            tooltip: 'چاپ رسمی صورت‌حساب',
+            onPressed: () => showCustomerStatementPrintSheet(
+              context,
+              repo: _repo,
+              statement: d,
+              from: _from,
+              to: _to,
+            ),
+            icon: const Icon(Icons.print_rounded, size: 20),
+          ),
           TextButton(
             onPressed: () => setState(() => _detail = null),
             child: const Text(

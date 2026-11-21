@@ -481,4 +481,17 @@ class ShopPerms {
   /// عنوان صفحه مثل وب: اگر فقط تأمین‌کننده می‌بیند → «تأمین‌کنندگان»
   String get partyPageTitle =>
       canSeeSuppliers && !canSeeCustomers ? 'تأمین‌کنندگان' : 'طرف حساب‌ها';
+
+  // ---------------- فاز ۴: نقطه سفارش و تسویه طرح تعویض ----------------
+  bool get canSeeReorder =>
+      isAdmin ||
+      hasDirect('ReportPages.Reorder') ||
+      canSeeSection('Kardex') ||
+      canSeeSection('Products');
+
+  bool get canSettleTradeIn =>
+      isAdmin ||
+      hasDirect('Orders.Update') ||
+      canManageSection('Sale') ||
+      canManageSection('Installments');
 }

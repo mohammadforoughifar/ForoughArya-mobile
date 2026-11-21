@@ -2043,4 +2043,234 @@ class ShopRepository {
         ? VisRequestsReport.fromJson(Map<String, dynamic>.from(d))
         : const VisRequestsReport();
   }
+
+  // ------------------------------------------------------------
+  //  فاز ۴ — تعمیرات تکمیلی، گارانتی، طرح تعویض و نقطه سفارش
+  // ------------------------------------------------------------
+
+  /// `GET /api/repairs/accounts`
+  Future<List<TreasuryAccount>> repairAccounts() async {
+    final r = await _api.get<dynamic>('/api/repairs/accounts');
+    return ShopPage.parse(r.data, TreasuryAccount.fromJson).items;
+  }
+
+  /// `GET /api/repairs/{id}/invoice-detail`
+  Future<ShopOrder?> repairLinkedInvoice(int id) async {
+    try {
+      final r = await _api.get<dynamic>('/api/repairs/$id/invoice-detail');
+      final d = r.data;
+      return d is Map
+          ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+          : null;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /api/repairs/{id}/warranty-credit`
+  Future<ShopOrderCreditState> repairWarrantyCreditState(int id) async {
+    final r = await _api.get<dynamic>('/api/repairs/$id/warranty-credit');
+    final d = r.data;
+    return d is Map
+        ? ShopOrderCreditState.fromJson(Map<String, dynamic>.from(d))
+        : const ShopOrderCreditState();
+  }
+
+  /// `POST /api/repairs/{id}/warranty-credit-receipts`
+  Future<void> receiveRepairWarrantyCredit(
+    int id, {
+    required double amount,
+    required int trsAccountId,
+    required DateTime date,
+    String? operationId,
+  }) async {
+    await _api.post<dynamic>('/api/repairs/$id/warranty-credit-receipts', {
+      'operationId': operationId ?? newOperationId(),
+      'trsAccountId': trsAccountId,
+      'amount': amount,
+      'date': _dateOnly(date),
+    });
+  }
+
+  /// `POST /api/repairs/{id}/warranty-credit-receipts/{receiptId}/reverse`
+  Future<void> reverseRepairWarrantyCredit(
+    int id,
+    int receiptId, {
+    required DateTime date,
+    String? operationId,
+  }) async {
+    await _api.post<dynamic>(
+      '/api/repairs/$id/warranty-credit-receipts/$receiptId/reverse',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'date': _dateOnly(date),
+      },
+    );
+  }
+
+  // ---------- گارانتی فروشگاهی (`/api/shop-warranties`) ----------
+
+  /// `GET /api/shop-warranties`
+  Future<List<ShopWarranty>> shopWarranties() async {
+    final r = await _api.get<dynamic>('/api/shop-warranties');
+    return ShopPage.parse(r.data, ShopWarranty.fromJson).items;
+  }
+
+  /// `GET /api/shop-warranties/lookups`
+  Future<ShopWarrantyLookups> shopWarrantyLookups() async {
+    final r = await _api.get<dynamic>('/api/shop-warranties/lookups');
+    final d = r.data;
+    return d is Map
+        ? ShopWarrantyLookups.fromJson(Map<String, dynamic>.from(d))
+        : const ShopWarrantyLookups();
+  }
+
+  /// `POST /api/shop-warranties`
+  Future<ShopWarranty> saveShopWarranty(ShopWarranty dto) async {
+    final payload = dto.toJson();
+    if ((payload['operationId']?.toString() ?? '').trim().isEmpty) {
+      payload['operationId'] = newOperationId();
+    }
+    final r = await _api.post<dynamic>('/api/shop-warranties', payload);
+    return ShopWarranty.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/shop-warranties/{id}/finalize`
+  Future<ShopWarranty> finalizeShopWarranty(int id) async {
+    final r = await _api.post<dynamic>('/api/shop-warranties/$id/finalize', {});
+    return ShopWarranty.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `GET /api/shop-warranties/accounts`
+  Future<List<TreasuryAccount>> shopWarrantyAccounts() async {
+    final r = await _api.get<dynamic>('/api/shop-warranties/accounts');
+    return ShopPage.parse(r.data, TreasuryAccount.fromJson).items;
+  }
+
+  /// `GET /api/shop-warranties/{id}/credit`
+  Future<ShopOrderCreditState> shopWarrantyCreditState(int id) async {
+    final r = await _api.get<dynamic>('/api/shop-warranties/$id/credit');
+    final d = r.data;
+    return d is Map
+        ? ShopOrderCreditState.fromJson(Map<String, dynamic>.from(d))
+        : const ShopOrderCreditState();
+  }
+
+  /// `POST /api/shop-warranties/{id}/credit-receipts`
+  Future<void> receiveShopWarrantyCredit(
+    int id, {
+    required double amount,
+    required int trsAccountId,
+    required DateTime date,
+    String? operationId,
+  }) async {
+    await _api.post<dynamic>('/api/shop-warranties/$id/credit-receipts', {
+      'operationId': operationId ?? newOperationId(),
+      'trsAccountId': trsAccountId,
+      'amount': amount,
+      'date': _dateOnly(date),
+    });
+  }
+
+  /// `POST /api/shop-warranties/{id}/credit-receipts/{receiptId}/reverse`
+  Future<void> reverseShopWarrantyCredit(
+    int id,
+    int receiptId, {
+    required DateTime date,
+    String? operationId,
+  }) async {
+    await _api.post<dynamic>(
+      '/api/shop-warranties/$id/credit-receipts/$receiptId/reverse',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'date': _dateOnly(date),
+      },
+    );
+  }
+
+  // ---------- طرح تعویض (`/api/shop-trade-ins`) ----------
+
+  /// `GET /api/shop-trade-ins`
+  Future<List<ShopTradeIn>> shopTradeIns() async {
+    final r = await _api.get<dynamic>('/api/shop-trade-ins');
+    return ShopPage.parse(r.data, ShopTradeIn.fromJson).items;
+  }
+
+  /// `GET /api/shop-trade-ins/customers`
+  Future<List<ShopLookup>> shopTradeInCustomers() async {
+    final r = await _api.get<dynamic>('/api/shop-trade-ins/customers');
+    return ShopPage.parse(r.data, ShopLookup.fromJson).items;
+  }
+
+  /// `GET /api/shop-trade-ins/target-sales/{partyId}`
+  Future<List<ShopTradeInTargetSale>> shopTradeInTargetSales(
+    int partyId,
+  ) async {
+    final r = await _api.get<dynamic>(
+      '/api/shop-trade-ins/target-sales/$partyId',
+    );
+    return ShopPage.parse(r.data, ShopTradeInTargetSale.fromJson).items;
+  }
+
+  /// `POST /api/shop-trade-ins`
+  Future<ShopTradeIn> saveShopTradeIn(ShopTradeIn dto) async {
+    final payload = dto.toJson();
+    if ((payload['operationId']?.toString() ?? '').trim().isEmpty) {
+      payload['operationId'] = newOperationId();
+    }
+    final r = await _api.post<dynamic>('/api/shop-trade-ins', payload);
+    return ShopTradeIn.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/shop-trade-ins/{id}/finalize`
+  Future<ShopTradeIn> finalizeShopTradeIn(int id, {DateTime? date}) async {
+    final r = await _api.post<dynamic>('/api/shop-trade-ins/$id/finalize', {
+      'date': _dateOnly(date ?? DateTime.now()),
+    });
+    return ShopTradeIn.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  /// `POST /api/shop-trade-ins/{id}/use`
+  Future<void> useShopTradeIn(
+    int id, {
+    required int kind,
+    required double amount,
+    required DateTime date,
+    int? targetSaleId,
+    int? trsAccountId,
+    String? note,
+    String? operationId,
+  }) async {
+    await _api.post<dynamic>('/api/shop-trade-ins/$id/use', {
+      'operationId': operationId ?? newOperationId(),
+      'kind': kind,
+      'amount': amount,
+      'date': _dateOnly(date),
+      if (targetSaleId != null && targetSaleId > 0)
+        'targetSaleId': targetSaleId,
+      if (trsAccountId != null && trsAccountId > 0)
+        'trsAccountId': trsAccountId,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
+  // ---------- گزارش نقطه سفارش (`/api/reorder`) ----------
+
+  /// `GET /api/reorder?warehouseId&skip&take`
+  Future<ShopPage<ReorderItem>> reorderItems({
+    int? warehouseId,
+    int skip = 0,
+    int take = 20,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/reorder',
+      query: {
+        'skip': skip,
+        'take': take,
+        if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+      },
+    );
+    return ShopPage.parse(r.data, ReorderItem.fromJson);
+  }
 }
