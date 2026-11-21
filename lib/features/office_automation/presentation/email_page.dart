@@ -59,7 +59,7 @@ class EmailPage extends StatefulWidget {
   final EmailScope initialScope;
 
   /// وقتی داخل `OfficeAutomationPage` قرار می‌گیرد، هدر گرادیانی تکراری رسم نمی‌شود
-  /// و دقیقاً مانند `OfficeArchivePage` با نوار تب یکپارچه نمایش داده می‌شود.
+  /// و با نوار تب یکپارچه نمایش داده می‌شود.
   final bool embedded;
 
   @override

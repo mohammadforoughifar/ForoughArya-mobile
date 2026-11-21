@@ -29,16 +29,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.forougharya.forough_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
@@ -67,6 +60,36 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            ndk {
+                // حذف معماری شبیه‌ساز x86_64 از نسخهٔ نهایی (~۱۵ تا ۲۵ مگابایت کاهش حجم APK یونیورسال)
+                // هر دو معماری گوشی‌های واقعی (arm64-v8a و armeabi-v7a) حفظ می‌شوند و با --split-per-abi سازگار است
+                abiFilters.remove("x86_64")
+                // حذف جدول سمبل‌های دیباگ بومی از فایل‌های .so
+                debugSymbolLevel = "NONE"
+            }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // فشرده‌سازی کتابخانه‌های بومی (libflutter.so / libapp.so) داخل فایل APK:
+            // در minSdk>=23 پیش‌فرض جدید اندروید ذخیره‌سازی بدون فشرده‌سازی است که حجم فایل APK را ۲ برابر می‌کند!
+            useLegacyPackaging = true
+        }
+        resources {
+            excludes += setOf(
+                "META-INF/*.version",
+                "META-INF/androidx.*",
+                "META-INF/*.kotlin_module",
+                "META-INF/kotlin-project-structure-metadata.json",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
+            )
         }
     }
 

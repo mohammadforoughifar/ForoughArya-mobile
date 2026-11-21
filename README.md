@@ -1,16 +1,17 @@
-# ForoughArya Mobile
+# ForoughArya Mobile (فروغ آریا)
 
-Flutter client for ForoughArya business workflows.
+کلاینت Flutter سامانهٔ سازمانی فروغ آریا (Android / iOS / Web PWA).
 
-## Included in this snapshot
-- Work orders
-- Authentication and API client
-- Interactive Office Automation design preview
+## ساخت نسخهٔ کم‌حجم (Release)
 
-> This repository preserves the currently available Flutter source snapshot and the approved design preview.
+اسکریپت آماده برای ساخت کوچک‌ترین خروجی ممکن (حذف آیکن‌های بی‌استفاده، جداسازی جدول سمبل‌های دیباگ، مبهم‌سازی و تفکیک معماری):
 
-## Preview
-Open `previews/automation-workspace.html` in a browser. It is offline and RTL.
+```bash
+# لینوکس / سرور / مک:
+bash scripts/build-slim.sh
 
-## Full capability and status preview
-Open `previews/current-capabilities-status.html` for an interactive, honest overview of implemented Work Order features, authentication, approved Automation design, and current source limitations.
+# ویندوز (PowerShell):
+powershell -ExecutionPolicy Bypass -File scripts/build-slim.ps1
+```
+
+جزئیات کامل بهینه‌سازی‌های حجم در فایل [`SIZE-REDUCTION-FA.md`](SIZE-REDUCTION-FA.md) مستند شده است.

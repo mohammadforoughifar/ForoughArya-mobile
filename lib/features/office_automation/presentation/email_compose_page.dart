@@ -9,10 +9,10 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/uuid_v4.dart';
 import '../../../core/widgets/common.dart';
 import '../data/email_repository.dart';
 import '../models/email_models.dart';
@@ -209,7 +209,7 @@ class _EmailComposePageState extends State<EmailComposePage> {
   }
 
   EmailDraft _buildDraft() => EmailDraft(
-    localId: widget.draft?.localId ?? const Uuid().v4(),
+    localId: widget.draft?.localId ?? generateUuidV4(),
     accountId: _accountId ?? 0,
     to: _toCtrl.text.trim(),
     cc: _ccCtrl.text.trim(),

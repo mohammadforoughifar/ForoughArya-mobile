@@ -3,11 +3,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/html_text.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/uuid_v4.dart';
 import '../../../core/widgets/common.dart';
 import '../data/work_order_repository.dart';
 import '../models/work_order.dart';
@@ -68,7 +68,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   final List<PlatformFile> _files = [];
   bool _sms = false, _loading = true, _saving = false;
   String? _error;
-  final _requestId = const Uuid().v4();
+  final _requestId = generateUuidV4();
 
   bool get editing => widget.order != null;
 
