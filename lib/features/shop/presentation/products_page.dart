@@ -25,9 +25,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/shop_models.dart';
 import 'shop_style.dart';
@@ -43,6 +45,9 @@ class _ProductsPageState extends State<ProductsPage> {
   late final ShopRepository _repo =
       Provider.of<ShopRepository?>(context, listen: false) ??
       ShopRepository(context.read<ApiClient>());
+  late final ShopPerms _perms = ShopPerms(
+    context.read<AuthController>().session,
+  );
 
   static const int pageSize = 12;
 
@@ -52,7 +57,12 @@ class _ProductsPageState extends State<ProductsPage> {
   int _total = 0;
   List<Product> _items = const [];
   bool _loading = true;
+  bool _exporting = false;
   String? _error;
+
+  bool get _canManage => _perms.canManageProducts;
+  bool get _canManagePricing => _perms.canManagePricing;
+  bool get _canDelete => _perms.canDeleteProduct;
 
   @override
   void initState() {
@@ -113,13 +123,76 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   Future<void> _openForm([Product? source]) async {
+    if (!_canManage) return;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ProductFormSheet(repo: _repo, source: source),
+      builder: (_) => _ProductFormSheet(
+        repo: _repo,
+        source: source,
+        canManagePricing: _canManagePricing,
+      ),
     );
     if (saved == true) _load();
+  }
+
+  Future<void> _exportList(String format) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final q = <String, dynamic>{
+        if (_searchCtrl.text.trim().isNotEmpty)
+          'search': _searchCtrl.text.trim(),
+        if (_below) 'lowStock': 'true',
+      };
+      final bytes = await _repo.exportReportBytes(
+        'inv-products',
+        format: format,
+        query: q,
+      );
+      if (bytes.isEmpty) {
+        _toast('فایل خروجی خالی برگشت.');
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final ext = format == 'pdf' ? 'pdf' : 'xlsx';
+      final file = File('${dir.path}/inv-products.$ext');
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      final share = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text(
+            format == 'pdf' ? 'خروجی PDF کالاها' : 'خروجی اکسل کالاها',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          ),
+          content: const Text(
+            'فایل خروجی آماده شد. مایلید باز شود یا به اشتراک گذاشته شود؟',
+            style: TextStyle(fontSize: 12, height: 1.7),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('باز کردن'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('اشتراک‌گذاری'),
+            ),
+          ],
+        ),
+      );
+      if (share == true) {
+        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+      } else if (share == false) {
+        await OpenFilex.open(file.path);
+      }
+    } catch (e) {
+      if (mounted) _toast(e.toString());
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _delete(Product p) async {
@@ -175,23 +248,69 @@ class _ProductsPageState extends State<ProductsPage> {
           slivers: [
             SliverToBoxAdapter(
               child: ShopHeader(
-                title: 'کالاها',
-                subtitle: 'تعریف کالا، قیمت و نقطه سفارش',
+                title: 'کالاها و خدمات',
+                subtitle: 'تعریف کالا، ارزش افزوده، ورود اکسل و نقطه سفارش',
                 icon: Icons.inventory_2_rounded,
                 badge: '${Fa.number(_total)} کالا',
                 actions: [
                   ShopHeaderButton(
-                    label: 'ورود از اکسل',
-                    icon: Icons.upload_file_rounded,
-                    onTap: _openImport,
+                    label: _exporting ? 'در حال خروجی…' : 'خروجی',
+                    icon: Icons.download_rounded,
+                    onTap: _exporting
+                        ? () {}
+                        : () async {
+                            final fmt = await showModalBottomSheet<String>(
+                              context: context,
+                              builder: (c) => SafeArea(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      leading: const Icon(
+                                        Icons.table_view_rounded,
+                                        color: ShopColors.ok,
+                                      ),
+                                      title: const Text(
+                                        'خروجی اکسل (XLSX)',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      onTap: () => Navigator.pop(c, 'xlsx'),
+                                    ),
+                                    ListTile(
+                                      leading: const Icon(
+                                        Icons.picture_as_pdf_rounded,
+                                        color: ShopColors.danger,
+                                      ),
+                                      title: const Text(
+                                        'خروجی PDF قابل چاپ',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      onTap: () => Navigator.pop(c, 'pdf'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                            if (fmt != null) _exportList(fmt);
+                          },
                   ),
-                  const SizedBox(width: 8),
-                  ShopHeaderButton(
-                    label: 'کالای جدید',
-                    icon: Icons.add_rounded,
-                    filled: true,
-                    onTap: () => _openForm(),
-                  ),
+                  if (_canManage && _canManagePricing) ...[
+                    const SizedBox(width: 6),
+                    ShopHeaderButton(
+                      label: 'ورود اکسل',
+                      icon: Icons.upload_file_rounded,
+                      onTap: _openImport,
+                    ),
+                  ],
+                  if (_canManage) ...[
+                    const SizedBox(width: 6),
+                    ShopHeaderButton(
+                      label: 'جدید',
+                      icon: Icons.add_rounded,
+                      filled: true,
+                      onTap: () => _openForm(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -314,6 +433,8 @@ class _ProductsPageState extends State<ProductsPage> {
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (_, i) => _ProductCard(
                     product: _items[i],
+                    canEdit: _canManage,
+                    canDelete: _canDelete,
                     onEdit: () => _openForm(_items[i]),
                     onDelete: () => _delete(_items[i]),
                   ),
@@ -382,11 +503,15 @@ class _ProductsPageState extends State<ProductsPage> {
 class _ProductCard extends StatelessWidget {
   const _ProductCard({
     required this.product,
+    required this.canEdit,
+    required this.canDelete,
     required this.onEdit,
     required this.onDelete,
   });
 
   final Product product;
+  final bool canEdit;
+  final bool canDelete;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -578,6 +703,15 @@ class _ProductCard extends StatelessWidget {
                   color: ShopColors.ok,
                   icon: Icons.check_rounded,
                 ),
+              if ((p.invoiceVatValue ?? 0) > 0) ...[
+                const SizedBox(width: 6),
+                ShopTag(
+                  text: p.invoiceVatValue! <= 100
+                      ? 'ارزش افزوده: ${Fa.number(p.invoiceVatValue!)}٪'
+                      : 'ارزش افزوده: ${Fa.number(p.invoiceVatValue!)} ریال',
+                  color: ShopColors.teal,
+                ),
+              ],
               const Spacer(),
               if (p.createdAt != null)
                 Text(
@@ -589,14 +723,28 @@ class _ProductCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _action('ویرایش', Icons.edit_outlined, ShopColors.seed, onEdit),
-              const SizedBox(width: 8),
-              _action('حذف', Icons.delete_outline_rounded, ShopColors.danger, onDelete),
-            ],
-          ),
+          if (canEdit || canDelete) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (canEdit)
+                  _action(
+                    'ویرایش',
+                    Icons.edit_outlined,
+                    ShopColors.seed,
+                    onEdit,
+                  ),
+                if (canEdit && canDelete) const SizedBox(width: 8),
+                if (canDelete)
+                  _action(
+                    'حذف',
+                    Icons.delete_outline_rounded,
+                    ShopColors.danger,
+                    onDelete,
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -658,10 +806,15 @@ class _ProductCard extends StatelessWidget {
 //  فرم کالا/خدمت — همان فیلدهای مودال وب
 // ============================================================
 class _ProductFormSheet extends StatefulWidget {
-  const _ProductFormSheet({required this.repo, this.source});
+  const _ProductFormSheet({
+    required this.repo,
+    this.source,
+    this.canManagePricing = true,
+  });
 
   final ShopRepository repo;
   final Product? source;
+  final bool canManagePricing;
 
   @override
   State<_ProductFormSheet> createState() => _ProductFormSheetState();
@@ -680,6 +833,11 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   );
   late final _purchase = TextEditingController(
     text: widget.source == null ? '' : Fa.number(widget.source!.purchasePrice),
+  );
+  late final _invoiceVat = TextEditingController(
+    text: (widget.source?.invoiceVatValue ?? 0) <= 0
+        ? ''
+        : Fa.number(widget.source!.invoiceVatValue!),
   );
   late final _reorder = TextEditingController(
     text: widget.source == null
@@ -724,6 +882,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       _description,
       _sale,
       _purchase,
+      _invoiceVat,
       _reorder,
       _maxStock,
     ]) {
@@ -816,14 +975,23 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       _toast(_isService ? 'نام خدمت را وارد کنید.' : 'نام کالا را وارد کنید.');
       return;
     }
-    double sale = _parse(_sale.text);
+    double sale = widget.canManagePricing
+        ? _parse(_sale.text)
+        : (widget.source?.salePrice ?? 0);
     double purchase = _parse(_purchase.text);
+    final rawVat = _invoiceVat.text.trim();
+    final double? vatVal = rawVat.isEmpty ? null : _parse(rawVat);
     double reorder = _parse(_reorder.text);
     double maxStock = _parse(_maxStock.text);
 
+    if (vatVal != null && vatVal < 0) {
+      _toast('مقدار ارزش افزوده نمی‌تواند منفی باشد.');
+      return;
+    }
+
     if (_isService) {
       // خدمات: فقط نام، کد و قیمت — بقیه پاک می‌شوند (عیناً مثل وب)
-      if (sale <= 0) {
+      if (widget.canManagePricing && sale <= 0) {
         _toast('قیمت خدمات را وارد کنید.');
         return;
       }
@@ -843,6 +1011,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       taxCode: _taxCode.text,
       salePrice: sale,
       purchasePrice: purchase,
+      invoiceVatValue: vatVal,
       reorderPoint: reorder,
       maxStock: maxStock,
       description: _description.text,
@@ -1029,8 +1198,12 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     ),
                     ShopField(
                       label: 'قیمت فروش (ریال)',
+                      hint: widget.canManagePricing
+                          ? null
+                          : 'تغییر قیمت فروش نیازمند مجوز «قیمت‌گذاری و حداقل سود» است.',
                       child: TextField(
                         controller: _sale,
+                        enabled: widget.canManagePricing,
                         keyboardType: TextInputType.number,
                         textDirection: TextDirection.ltr,
                         decoration: _dec('۰'),
@@ -1039,6 +1212,30 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                           final f = _formatMoney(v);
                           if (f != v) {
                             _sale.value = TextEditingValue(
+                              text: f,
+                              selection: TextSelection.collapsed(
+                                offset: f.length,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    ShopField(
+                      label: 'ارزش افزوده پیش‌فرض فاکتور',
+                      hint: 'تا ۱۰۰ = درصد (مثلاً ۱۰ برای ۱۰٪) · بالاتر از ۱۰۰ = مبلغ ریالی',
+                      child: TextField(
+                        controller: _invoiceVat,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        textDirection: TextDirection.ltr,
+                        decoration: _dec('خالی = بدون ارزش افزوده پیش‌فرض'),
+                        style: const TextStyle(fontSize: 13),
+                        onChanged: (v) {
+                          final f = _formatMoney(v);
+                          if (f != v) {
+                            _invoiceVat.value = TextEditingValue(
                               text: f,
                               selection: TextSelection.collapsed(
                                 offset: f.length,
@@ -1090,12 +1287,16 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                         },
                       ),
                     ),
-                  ] else
+                  ] else ...[
                     ShopField(
                       label: 'قیمت خدمات (ریال)',
                       required: true,
+                      hint: widget.canManagePricing
+                          ? null
+                          : 'تغییر قیمت خدمات نیازمند مجوز «قیمت‌گذاری و حداقل سود» است.',
                       child: TextField(
                         controller: _sale,
+                        enabled: widget.canManagePricing,
                         keyboardType: TextInputType.number,
                         textDirection: TextDirection.ltr,
                         decoration: _dec('۰'),
@@ -1113,6 +1314,31 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                         },
                       ),
                     ),
+                    ShopField(
+                      label: 'ارزش افزوده پیش‌فرض فاکتور',
+                      hint: 'تا ۱۰۰ = درصد (مثلاً ۱۰ برای ۱۰٪) · بالاتر از ۱۰۰ = مبلغ ریالی',
+                      child: TextField(
+                        controller: _invoiceVat,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        textDirection: TextDirection.ltr,
+                        decoration: _dec('خالی = بدون ارزش افزوده پیش‌فرض'),
+                        style: const TextStyle(fontSize: 13),
+                        onChanged: (v) {
+                          final f = _formatMoney(v);
+                          if (f != v) {
+                            _invoiceVat.value = TextEditingValue(
+                              text: f,
+                              selection: TextSelection.collapsed(
+                                offset: f.length,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                   ShopField(
                     label: _isService ? 'شناسه مالیاتی خدمت' : 'شناسه مالیاتی کالا',
                     hint:
@@ -1294,12 +1520,15 @@ class _ImportSheet extends StatefulWidget {
 
 class _ImportSheetState extends State<_ImportSheet> {
   List<Warehouse> _warehouses = const [];
+  int _kind = ProductImportKind.goods;
   int _warehouseId = 0;
   File? _file;
   bool _importing = false;
   bool _downloadingTemplate = false;
   Map<String, dynamic>? _result;
   String? _error;
+
+  bool get _isServices => _kind == ProductImportKind.services;
 
   @override
   void initState() {
@@ -1318,22 +1547,24 @@ class _ImportSheetState extends State<_ImportSheet> {
   Future<void> _downloadTemplate() async {
     setState(() => _downloadingTemplate = true);
     try {
-      final bytes = await widget.repo.productTemplate();
+      final bytes = await widget.repo.productTemplate(kind: _kind);
       if (bytes.isEmpty) {
         _toast('فایل نمونه خالی برگشت.');
         return;
       }
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/Products-Template.xlsx');
+      final name = _isServices
+          ? 'Services-Template.xlsx'
+          : 'Products-Template.xlsx';
+      final file = File('${dir.path}/$name');
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
-      // در موبایل، «دانلود» یعنی ذخیره و باز کردن/اشتراک فایل با اکسل
       final share = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text(
-            'فایل نمونهٔ اکسل',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          title: Text(
+            _isServices ? 'فایل نمونهٔ اکسل خدمات' : 'فایل نمونهٔ اکسل کالاها',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
           ),
           content: const Text(
             'فایل نمونه ذخیره شد. آن را با اکسل باز کنید یا برای رایانه بفرستید.',
@@ -1353,7 +1584,7 @@ class _ImportSheetState extends State<_ImportSheet> {
       );
       if (share == true) {
         await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
-      } else {
+      } else if (share == false) {
         await OpenFilex.open(file.path);
       }
       if (mounted) _toast('فایل نمونهٔ اکسل آماده شد.', ok: true);
@@ -1384,10 +1615,9 @@ class _ImportSheetState extends State<_ImportSheet> {
   }
 
   Future<void> _doImport() async {
-    // همان دو پیام دقیق وب
-    if (_warehouseId <= 0) {
+    if (!_isServices && _warehouseId <= 0) {
       _toast(
-        'لطفاً ابتدا انبار موردنظر را انتخاب کنید. ورود اکسل بدون انتخاب انبار امکان‌پذیر نیست.',
+        'لطفاً ابتدا انبار موردنظر را انتخاب کنید. ورود اکسل کالا بدون انتخاب انبار امکان‌پذیر نیست.',
       );
       return;
     }
@@ -1404,7 +1634,8 @@ class _ImportSheetState extends State<_ImportSheet> {
       final res = await widget.repo.importProducts(
         bytes,
         _file!.uri.pathSegments.last,
-        warehouseId: _warehouseId,
+        warehouseId: _isServices ? null : _warehouseId,
+        kind: _kind,
       );
       if (!mounted) return;
       setState(() => _result = res);
@@ -1450,10 +1681,13 @@ class _ImportSheetState extends State<_ImportSheet> {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'ورود کالا از اکسل',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                    _isServices ? 'ورود خدمات از اکسل' : 'ورود کالا از اکسل',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1461,6 +1695,20 @@ class _ImportSheetState extends State<_ImportSheet> {
                   icon: const Icon(Icons.close_rounded, size: 20),
                 ),
               ],
+            ),
+            ShopField(
+              label: 'نوع ورود اکسل',
+              child: ShopSegmented(
+                labels: const ['کالاها (نیازمند انبار)', 'خدمات (بدون انبار)'],
+                index: _isServices ? 1 : 0,
+                onChanged: (i) => setState(() {
+                  _kind = i == 1
+                      ? ProductImportKind.services
+                      : ProductImportKind.goods;
+                  _result = null;
+                  _error = null;
+                }),
+              ),
             ),
             Container(
               padding: const EdgeInsets.all(10),
@@ -1471,9 +1719,11 @@ class _ImportSheetState extends State<_ImportSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'ابتدا فایل اکسل نمونه را بگیرید، کالاها را مطابق آن وارد کرده و سپس فایل را بارگذاری نمایید. گروه یا واحد جدید به‌صورت خودکار در اطلاعات پایه ساخته می‌شود.',
-                    style: TextStyle(
+                  Text(
+                    _isServices
+                        ? 'ابتدا فایل اکسل نمونهٔ خدمات را دریافت کنید، خدمات و قیمت آن‌ها را وارد کرده و سپس بارگذاری نمایید.'
+                        : 'ابتدا فایل اکسل نمونهٔ کالا را بگیرید، کالاها را مطابق آن وارد کرده و سپس فایل را بارگذاری نمایید. گروه یا واحد جدید به‌صورت خودکار ساخته می‌شود.',
+                    style: const TextStyle(
                       fontSize: 11,
                       height: 1.8,
                       color: ShopColors.inkSoft,
@@ -1486,7 +1736,9 @@ class _ImportSheetState extends State<_ImportSheet> {
                     label: Text(
                       _downloadingTemplate
                           ? 'در حال دریافت…'
-                          : 'دریافت فایل اکسل نمونه',
+                          : (_isServices
+                                ? 'دریافت فایل نمونهٔ خدمات'
+                                : 'دریافت فایل نمونهٔ کالاها'),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -1494,43 +1746,45 @@ class _ImportSheetState extends State<_ImportSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            ShopField(
-              label: 'انبار مقصد',
-              required: true,
-              child: DropdownButtonFormField<int>(
-                initialValue: _warehouseId == 0 ? null : _warehouseId,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: _warehouseId == 0
-                          ? ShopColors.danger
-                          : ShopColors.line,
+            if (!_isServices) ...[
+              ShopField(
+                label: 'انبار مقصد',
+                required: true,
+                child: DropdownButtonFormField<int>(
+                  initialValue: _warehouseId == 0 ? null : _warehouseId,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: _warehouseId == 0
+                            ? ShopColors.danger
+                            : ShopColors.line,
+                      ),
                     ),
                   ),
-                ),
-                hint: const Text(
-                  'انتخاب انبار جهت ورود کالاها (الزامی)',
-                  style: TextStyle(fontSize: 11.5),
-                ),
-                style: const TextStyle(fontSize: 12.5, color: ShopColors.ink),
-                items: [
-                  for (final w in _warehouses)
-                    DropdownMenuItem<int>(value: w.id, child: Text(w.name)),
-                ],
-                onChanged: (v) => setState(() => _warehouseId = v ?? 0),
-              ),
-            ),
-            if (_warehouseId == 0)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'انتخاب انبار برای ورود اکسل الزامی است تا کالاها به تفکیک انبار مدیریت شوند.',
-                  style: TextStyle(fontSize: 10, color: ShopColors.danger),
+                  hint: const Text(
+                    'انتخاب انبار جهت ورود کالاها (الزامی)',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
+                  style: const TextStyle(fontSize: 12.5, color: ShopColors.ink),
+                  items: [
+                    for (final w in _warehouses)
+                      DropdownMenuItem<int>(value: w.id, child: Text(w.name)),
+                  ],
+                  onChanged: (v) => setState(() => _warehouseId = v ?? 0),
                 ),
               ),
+              if (_warehouseId == 0)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'انتخاب انبار برای ورود اکسل کالا الزامی است تا کالاها به تفکیک انبار مدیریت شوند.',
+                    style: TextStyle(fontSize: 10, color: ShopColors.danger),
+                  ),
+                ),
+            ],
             ShopField(
               label: 'فایل اکسل (xlsx)',
               required: true,

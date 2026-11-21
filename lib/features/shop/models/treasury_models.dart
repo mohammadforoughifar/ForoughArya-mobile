@@ -129,6 +129,8 @@ class TrsChequeState {
 class TreasuryAccount {
   TreasuryAccount({
     this.id = 0,
+    this.companyId,
+    this.companyName,
     this.code = '',
     this.name = '',
     this.kind = 0,
@@ -153,6 +155,8 @@ class TreasuryAccount {
   });
 
   final int id;
+  final int? companyId;
+  final String? companyName;
   final String code;
   final String name;
   final int kind;
@@ -197,6 +201,8 @@ class TreasuryAccount {
 
   factory TreasuryAccount.fromJson(Map<String, dynamic> j) => TreasuryAccount(
     id: (j['id'] as num?)?.toInt() ?? 0,
+    companyId: (j['companyId'] as num?)?.toInt(),
+    companyName: _s(j['companyName']),
     code: (j['code'] ?? '').toString(),
     name: (j['name'] ?? '').toString(),
     kind: (j['kind'] as num?)?.toInt() ?? 0,
@@ -223,6 +229,7 @@ class TreasuryAccount {
   /// همهٔ فیلدهای `TrsAccount` سرور (حتی محاسباتی‌ها، تا مثل وب کامل باشد)
   Map<String, dynamic> toJson() => {
     'id': id,
+    if (companyId != null && companyId! > 0) 'companyId': companyId,
     'code': code.trim(),
     'name': name.trim(),
     'kind': kind,

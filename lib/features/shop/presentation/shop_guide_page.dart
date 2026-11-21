@@ -22,7 +22,7 @@ class ShopGuidePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final perms = ShopPerms(context.read<AuthController>().session);
-    final canSee = perms.has('ShopGuide') || perms.canSeeModule('ShopGuide');
+    final canSee = perms.canSeeGuide;
 
     return Scaffold(
       backgroundColor: ShopColors.bg,

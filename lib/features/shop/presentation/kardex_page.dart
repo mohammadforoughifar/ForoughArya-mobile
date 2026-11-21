@@ -155,9 +155,8 @@ class _KardexPageState extends State<KardexPage> {
 
   @override
   Widget build(BuildContext context) {
-    // همان پیام و گیت وب
-    if (!_perms.has('ReportPages.Kardex') &&
-        !_perms.canSeeModule('ReportPages')) {
+    // همان پیام و گیت وب (`Shop.Kardex.View` یا `ReportPages.Kardex`)
+    if (!_perms.canSeeKardex) {
       return Scaffold(
         backgroundColor: ShopColors.bg,
         appBar: AppBar(

@@ -52,8 +52,7 @@ class _OpsDashboardPageState extends State<OpsDashboardPage> {
     _load();
   }
 
-  bool get _canOpen =>
-      _perms.canSeeModule('Orders') || _perms.canSeeModule('Repairs');
+  bool get _canOpen => _perms.canSeeDashboard;
 
   static String _clean(Object e) => e
       .toString()
@@ -258,8 +257,9 @@ class _OpsDashboardPageState extends State<OpsDashboardPage> {
   );
 
   List<Widget> _body(OpsDashboard d) {
-    final showOrders = _perms.canSeeModule('Orders');
-    final showRepairs = _perms.canSeeModule('Repairs');
+    final showOrders =
+        _perms.canSeeDashboard || _perms.canSeePurchase || _perms.canSeeSale;
+    final showRepairs = _perms.canSeeDashboard || _perms.canSeeRepairs;
     final maxTrend = d.trend.fold<double>(0, (m, p) {
       final x = [p.purchase, p.sale, p.repairRevenue];
       final mx = x.reduce((a, b) => a > b ? a : b);

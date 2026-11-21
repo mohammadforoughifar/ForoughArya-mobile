@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../data/fa_num.dart';
+import '../data/shop_identifier_rules.dart';
 import '../data/shop_repository.dart';
 import '../models/visit_models.dart';
 import 'shop_style.dart';
@@ -587,16 +588,29 @@ class _ReferrerSheetState extends State<_ReferrerSheet> {
       _toast('نام معرف را وارد کنید.');
       return;
     }
+    final phoneErr = ShopIdentifierRules.validatePhone(_phone.text, 'تلفن معرف');
+    if (phoneErr != null) {
+      _toast(phoneErr);
+      return;
+    }
+    final bankErr = ShopIdentifierRules.validateBank(
+      cardNumber: _card.text,
+      iban: _iban.text,
+    );
+    if (bankErr != null) {
+      _toast(bankErr);
+      return;
+    }
     final cap = parseNum(_cap.text).clamp(0, 100).toDouble();
     final r = ShopReferrer(
       id: widget.referrer?.id ?? 0,
       name: _name.text.trim(),
       companyName: _company.text.trim().isEmpty ? null : _company.text.trim(),
-      phone: _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+      phone: ShopIdentifierRules.normalizePhone(_phone.text),
       goodsCommissionPercent: parseNum(_goods.text),
       serviceCommissionPercent: parseNum(_service.text),
-      cardNumber: _card.text.trim().isEmpty ? null : _card.text.trim(),
-      iban: _iban.text.trim().isEmpty ? null : _iban.text.trim(),
+      cardNumber: ShopIdentifierRules.normalize(_card.text),
+      iban: ShopIdentifierRules.normalizeIban(_iban.text),
       canViewProducts: _canViewProducts,
       maxDiscountPercent: cap,
       isActive: _isActive,

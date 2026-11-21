@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
+import '../data/shop_identifier_rules.dart';
 import '../data/shop_repository.dart';
 import '../models/shop_models.dart';
 import 'shop_style.dart';
@@ -100,19 +101,28 @@ class _PartyFormPageState extends State<PartyFormPage> {
       _toast('نام را وارد کنید.');
       return;
     }
+    final idErr = ShopIdentifierRules.validateParty(
+      phone: _phone.text,
+      mobile: _mobile.text,
+      taxId: _taxId.text,
+      postalCode: _postal.text,
+      isCustomer: widget.type == PartyType.customer,
+    );
+    if (idErr != null) {
+      _toast(idErr);
+      return;
+    }
     if (_saving) return;
     setState(() => _saving = true);
-    final base =
-        widget.source ??
-        Party(type: widget.type);
+    final base = widget.source ?? Party(type: widget.type);
     final payload = base.copyWith(
       type: widget.type,
       name: _name.text,
-      phone: _phone.text,
-      mobile: _mobile.text,
+      phone: ShopIdentifierRules.normalizePhone(_phone.text) ?? '',
+      mobile: ShopIdentifierRules.normalizePhone(_mobile.text) ?? '',
       address: _address.text,
-      taxId: _taxId.text,
-      postalCode: _postal.text,
+      taxId: ShopIdentifierRules.normalize(_taxId.text) ?? '',
+      postalCode: ShopIdentifierRules.normalize(_postal.text) ?? '',
       note: _note.text,
       isActive: _active,
       referrerId: _referrerId,
@@ -229,22 +239,29 @@ class _PartyFormPageState extends State<PartyFormPage> {
                   ),
                 ),
                 ShopField(
-                  label: 'شناسه ملی خریدار',
-                  hint: 'برای صورتحساب رسمی',
+                  label: isSupplier
+                      ? 'شناسه ملی / کد اقتصادی تأمین‌کننده'
+                      : 'کد ملی / شناسه ملی خریدار',
+                  hint: '۱۰، ۱۱، ۱۲ یا ۱۴ رقم (برای صورتحساب رسمی)',
                   child: TextField(
                     controller: _taxId,
+                    keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
-                    decoration: _dec('شناسه ملی / کد اقتصادی'),
+                    decoration: _dec('شناسه ملی / کد ملی / کد اقتصادی'),
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
                 ShopField(
-                  label: 'کد پستی خریدار',
+                  label: isSupplier
+                      ? 'کد پستی تأمین‌کننده'
+                      : 'کد پستی خریدار',
+                  hint: '۱۰ رقم بدون خط تیره',
                   child: TextField(
                     controller: _postal,
                     keyboardType: TextInputType.number,
+                    maxLength: 10,
                     textDirection: TextDirection.ltr,
-                    decoration: _dec('کد پستی ۱۰ رقمی'),
+                    decoration: _dec('کد پستی ۱۰ رقمی').copyWith(counterText: ''),
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),

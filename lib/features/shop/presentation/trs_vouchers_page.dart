@@ -193,11 +193,13 @@ class _TrsVouchersPageState extends State<TrsVouchersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canCreate =
-        _perms.has('TrsVouchers.Create') || _perms.hasModule('TrsVouchers');
-    final canConfirm = _perms.has('TrsVouchers.Confirm');
-    final canCancel = _perms.has('TrsVouchers.Cancel');
-    final canDelete = _perms.has('TrsVouchers.Delete');
+    final canCreate = _perms.canManageSettlement;
+    final canConfirm =
+        _perms.canManageSettlement || _perms.has('TrsVouchers.Confirm');
+    final canCancel =
+        _perms.canManageSettlement || _perms.has('TrsVouchers.Cancel');
+    final canDelete =
+        _perms.canManageSettlement || _perms.has('TrsVouchers.Delete');
     return Scaffold(
       backgroundColor: ShopColors.bg,
       body: RefreshIndicator(

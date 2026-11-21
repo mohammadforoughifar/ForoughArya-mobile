@@ -211,26 +211,42 @@ class ShopRepository {
 
   Future<void> deleteProduct(int id) => _api.delete<dynamic>('/api/products/$id');
 
-  /// `GET /api/products/import/template` — فایل اکسل نمونه
-  Future<Uint8List> productTemplate() =>
-      _api.getBytes('/api/products/import/template');
+  /// `GET /api/products/import/template?kind=…` — فایل اکسل نمونه (کالا یا خدمات)
+  Future<Uint8List> productTemplate({
+    int kind = ProductImportKind.goods,
+  }) => _api.getBytes('/api/products/import/template', query: {'kind': kind});
 
-  /// `POST /api/products/import?warehouseId=…` با فایل xlsx
+  /// `POST /api/products/import?warehouseId=…&kind=…` با فایل xlsx
   Future<Map<String, dynamic>> importProducts(
     Uint8List bytes,
     String fileName, {
-    required int warehouseId,
+    int? warehouseId,
+    int kind = ProductImportKind.goods,
   }) async {
     final form = FormData.fromMap({
       'file': MultipartFile.fromBytes(bytes, filename: fileName),
     });
+    final qs = <String>['kind=$kind'];
+    if (warehouseId != null && warehouseId > 0) {
+      qs.add('warehouseId=$warehouseId');
+    }
     final r = await _api.postForm<dynamic>(
-      '/api/products/import?warehouseId=$warehouseId',
+      '/api/products/import?${qs.join('&')}',
       form,
     );
     final d = r.data;
     return d is Map ? Map<String, dynamic>.from(d) : const {};
   }
+
+  /// خروجی اکسل/PDF گزارش‌ها — همان `GET /api/exp/report/{reportKey}?format=…`
+  Future<Uint8List> exportReportBytes(
+    String reportKey, {
+    required String format,
+    Map<String, dynamic>? query,
+  }) => _api.getBytes(
+    '/api/exp/report/$reportKey',
+    query: {'format': format, ...?query},
+  );
 
   /// `GET /api/categories?activeOnly`
   Future<List<ProductCategory>> categories({bool activeOnly = false}) async {
@@ -653,13 +669,35 @@ class ShopRepository {
     return ShopPage.parse(r.data, TreasuryAccount.fromJson).items;
   }
 
-  /// `POST /api/trs/accounts`
+  /// `POST /api/trs/accounts/shop` — مسیر اختصاصی فروشگاهی (با اعتبارسنجی کارت/شبا و مجوز `Shop.Banks.Manage`)
   Future<TreasuryAccount> saveTreasuryAccount(TreasuryAccount a) async {
-    final r = await _api.post<dynamic>('/api/trs/accounts', a.toJson());
+    final r = await _api.post<dynamic>('/api/trs/accounts/shop', a.toJson());
     final d = r.data;
     return d is Map
         ? TreasuryAccount.fromJson(Map<String, dynamic>.from(d))
         : a;
+  }
+
+  /// فهرست شرکت‌های مجاز کاربر از `GET /api/company-context` (برای انتخاب مالک حساب خزانه در چندشرکتی)
+  Future<({List<ShopLookup> companies, int? activeCompanyId})>
+  shopCompanies() async {
+    try {
+      final r = await _api.get<dynamic>('/api/company-context');
+      final d = r.data;
+      if (d is Map) {
+        final active = (d['activeCompanyId'] as num?)?.toInt();
+        final raw = d['companies'];
+        final list = raw is List
+            ? raw
+                  .whereType<Map>()
+                  .where((e) => e['isActive'] != false)
+                  .map((e) => ShopLookup.fromJson(Map<String, dynamic>.from(e)))
+                  .toList()
+            : const <ShopLookup>[];
+        return (companies: list, activeCompanyId: active);
+      }
+    } catch (_) {}
+    return (companies: const <ShopLookup>[], activeCompanyId: null);
   }
 
   /// `DELETE /api/trs/accounts/{id}`
@@ -1288,4 +1326,126 @@ class ShopRepository {
   /// `DELETE /api/referrers/payments/{id}`
   Future<void> deleteReferrerPayment(int id) =>
       _api.delete<dynamic>('/api/referrers/payments/$id');
+
+  // ------------------------------------------------------------
+  //  تنظیمات فروشگاه (`/api/shop-print-settings` و `/api/company-profile`)
+  // ------------------------------------------------------------
+
+  Future<ShopCompanyProfile> companyProfile() async {
+    final r = await _api.get<dynamic>('/api/company-profile');
+    final d = r.data;
+    return d is Map
+        ? ShopCompanyProfile.fromJson(Map<String, dynamic>.from(d))
+        : const ShopCompanyProfile();
+  }
+
+  Future<ShopPrintSettings> shopPrintSettings() async {
+    final r = await _api.get<dynamic>('/api/shop-print-settings');
+    final d = r.data;
+    return d is Map
+        ? ShopPrintSettings.fromJson(Map<String, dynamic>.from(d))
+        : const ShopPrintSettings();
+  }
+
+  Future<ShopPrintSettings> saveShopPrintSettings(
+    ShopPrintSettings settings,
+  ) async {
+    final r = await _api.put<dynamic>(
+      '/api/shop-print-settings',
+      settings.toJson(),
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopPrintSettings.fromJson(Map<String, dynamic>.from(d))
+        : settings;
+  }
+
+  Future<List<ShopVisitorDiscount>> shopVisitorDiscounts() async {
+    final r = await _api.get<dynamic>('/api/shop-print-settings/visitors');
+    return ShopPage.parse(r.data, ShopVisitorDiscount.fromJson).items;
+  }
+
+  Future<ShopVisitorDiscount> saveShopVisitorDiscount(
+    ShopVisitorDiscount visitor,
+  ) async {
+    final r = await _api.put<dynamic>(
+      '/api/shop-print-settings/visitors/${visitor.userId}',
+      visitor.toJson(),
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopVisitorDiscount.fromJson(Map<String, dynamic>.from(d))
+        : visitor;
+  }
+
+  // ------------------------------------------------------------
+  //  قیمت‌گذاری و حداقل سود (`/api/shop-pricing`)
+  // ------------------------------------------------------------
+
+  Future<ShopPricingPolicy> pricingPolicy() async {
+    final r = await _api.get<dynamic>('/api/shop-pricing/policy');
+    final d = r.data;
+    return d is Map
+        ? ShopPricingPolicy.fromJson(Map<String, dynamic>.from(d))
+        : ShopPricingPolicy();
+  }
+
+  Future<ShopPricingPolicy> savePricingPolicy(ShopPricingPolicy policy) async {
+    final r = await _api.put<dynamic>(
+      '/api/shop-pricing/policy',
+      policy.toJson(),
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopPricingPolicy.fromJson(Map<String, dynamic>.from(d))
+        : policy;
+  }
+
+  Future<List<ShopLookup>> pricingCategories() async {
+    final r = await _api.get<dynamic>('/api/shop-pricing/categories');
+    return ShopPage.parse(r.data, ShopLookup.fromJson).items;
+  }
+
+  Future<ShopPriceAdjustmentPreview> previewPriceAdjustment(
+    ShopPriceAdjustmentRequest request,
+  ) async {
+    final r = await _api.post<dynamic>(
+      '/api/shop-pricing/preview',
+      request.toJson(),
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopPriceAdjustmentPreview.fromJson(Map<String, dynamic>.from(d))
+        : const ShopPriceAdjustmentPreview();
+  }
+
+  Future<ShopPriceAdjustmentPreview> applyPriceAdjustment(
+    ShopPriceAdjustmentRequest request, {
+    required String previewHash,
+    required String operationId,
+  }) async {
+    final r = await _api.post<dynamic>('/api/shop-pricing/apply', {
+      ...request.toJson(),
+      'previewHash': previewHash,
+      'operationId': operationId,
+    });
+    final d = r.data;
+    return d is Map
+        ? ShopPriceAdjustmentPreview.fromJson(Map<String, dynamic>.from(d))
+        : const ShopPriceAdjustmentPreview();
+  }
+
+  Future<List<ShopPriceHistoryItem>> pricingHistory({
+    int? productId,
+    int take = 200,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/shop-pricing/history',
+      query: {
+        'take': take,
+        if (productId != null && productId > 0) 'productId': productId,
+      },
+    );
+    return ShopPage.parse(r.data, ShopPriceHistoryItem.fromJson).items;
+  }
 }

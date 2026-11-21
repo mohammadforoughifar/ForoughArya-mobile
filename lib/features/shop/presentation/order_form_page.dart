@@ -87,7 +87,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
   bool get _isSale => widget.type == TxnType.sale;
   bool get _isEdit => (widget.source?.id ?? 0) > 0;
-  bool get _canSeeProfit => _perms.has('Orders.ViewProfit');
+  bool get _canSeeProfit => _perms.canViewProfit;
 
   final _descCtrl = TextEditingController();
 

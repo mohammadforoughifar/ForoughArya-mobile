@@ -54,8 +54,9 @@ class _GoodsIssuesPageState extends State<GoodsIssuesPage> {
   DateTime? _to;
   final _search = TextEditingController();
 
-  /// حذف حواله نیازمند مجوز مستقل است (مثل وب)
-  bool get _canDelete => _perms.has('GoodsIssues.Delete');
+  /// حذف حواله با `Shop.GoodsIssue.Manage` یا `GoodsIssues.Delete`
+  bool get _canDelete =>
+      _perms.canManageGoodsIssue || _perms.has('GoodsIssues.Delete');
 
   @override
   void initState() {

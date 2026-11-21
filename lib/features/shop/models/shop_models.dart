@@ -203,6 +203,12 @@ class ShopLookup {
   );
 }
 
+/// نوع ورود اکسل اطلاعات پایه — آینهٔ `ProductImportKind`
+class ProductImportKind {
+  static const goods = 0;
+  static const services = 1;
+}
+
 /// کالا / خدمت — آینهٔ DTO «Product» (CatalogDtos.cs)
 class Product {
   Product({
@@ -215,6 +221,7 @@ class Product {
     this.taxCode,
     this.salePrice = 0,
     this.purchasePrice = 0,
+    this.invoiceVatValue,
     this.reorderPoint = 0,
     this.maxStock = 0,
     this.description,
@@ -236,6 +243,9 @@ class Product {
   final String? taxCode;
   final double salePrice;
   final double purchasePrice;
+
+  /// ارزش افزوده پیش‌فرض فاکتور: تا ۱۰۰ = درصد، بالاتر = مبلغ ریالی
+  final double? invoiceVatValue;
   final double reorderPoint;
   final double maxStock;
   final String? description;
@@ -260,6 +270,7 @@ class Product {
     taxCode: _str(j['taxCode']),
     salePrice: _dbl(j['salePrice']),
     purchasePrice: _dbl(j['purchasePrice']),
+    invoiceVatValue: (j['invoiceVatValue'] as num?)?.toDouble(),
     reorderPoint: _dbl(j['reorderPoint']),
     maxStock: _dbl(j['maxStock']),
     description: _str(j['description']),
@@ -282,6 +293,7 @@ class Product {
     'taxCode': _nullIfEmpty(taxCode),
     'salePrice': salePrice,
     'purchasePrice': purchasePrice,
+    'invoiceVatValue': invoiceVatValue,
     'reorderPoint': reorderPoint,
     'maxStock': maxStock,
     'description': _nullIfEmpty(description),
@@ -453,6 +465,285 @@ class StockItem {
     maxStock: _dbl(j['maxStock']),
     category: _str(j['category']),
   );
+}
+
+// ---------------- تنظیمات فروشگاه (ShopPrintSettingsDto / ShopVisitorDiscountDto) ----------------
+
+class ShopPrintBank {
+  const ShopPrintBank({this.card = '', this.iban = ''});
+
+  final String card;
+  final String iban;
+
+  factory ShopPrintBank.fromJson(Map<String, dynamic> j) => ShopPrintBank(
+    card: (j['card'] ?? '').toString(),
+    iban: (j['iban'] ?? '').toString(),
+  );
+
+  Map<String, dynamic> toJson() => {'card': card, 'iban': iban};
+}
+
+class ShopPrintSettings {
+  const ShopPrintSettings({this.banks = const []});
+
+  final List<ShopPrintBank> banks;
+
+  factory ShopPrintSettings.fromJson(Map<String, dynamic> j) {
+    final raw = j['banks'];
+    final list = raw is List
+        ? raw
+              .whereType<Map>()
+              .map((e) => ShopPrintBank.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : const <ShopPrintBank>[];
+    return ShopPrintSettings(banks: list);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'banks': banks.map((b) => b.toJson()).toList(),
+  };
+}
+
+class ShopVisitorDiscount {
+  ShopVisitorDiscount({
+    required this.companyId,
+    required this.userId,
+    required this.userName,
+    required this.maxDiscountPercent,
+  });
+
+  final int companyId;
+  final int userId;
+  final String userName;
+  double maxDiscountPercent;
+
+  factory ShopVisitorDiscount.fromJson(Map<String, dynamic> j) =>
+      ShopVisitorDiscount(
+        companyId: _int(j['companyId']),
+        userId: _int(j['userId']),
+        userName: (j['userName'] ?? '').toString(),
+        maxDiscountPercent: _dbl(j['maxDiscountPercent']),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'companyId': companyId,
+    'userId': userId,
+    'userName': userName,
+    'maxDiscountPercent': maxDiscountPercent,
+  };
+}
+
+/// پروفایل شرکت فعال برای پیش‌نمایش چاپ — آینهٔ `CompanyProfileDto`
+class ShopCompanyProfile {
+  const ShopCompanyProfile({
+    this.id = 0,
+    this.name = '',
+    this.phone,
+    this.address,
+    this.logoDataUrl,
+  });
+
+  final int id;
+  final String name;
+  final String? phone;
+  final String? address;
+  final String? logoDataUrl;
+
+  factory ShopCompanyProfile.fromJson(Map<String, dynamic> j) =>
+      ShopCompanyProfile(
+        id: _int(j['id']),
+        name: (j['name'] ?? '').toString(),
+        phone: _str(j['phone']),
+        address: _str(j['address']),
+        logoDataUrl: _str(j['logoDataUrl']),
+      );
+}
+
+// ---------------- قیمت‌گذاری و حداقل سود (ShopPricingDtos.cs) ----------------
+
+class ShopPricingPolicy {
+  ShopPricingPolicy({
+    this.minimumProfitEnabled = false,
+    this.minimumMarkupPercent = 0,
+    this.updatedAt,
+    this.updatedBy,
+  });
+
+  bool minimumProfitEnabled;
+  double minimumMarkupPercent;
+  final DateTime? updatedAt;
+  final String? updatedBy;
+
+  factory ShopPricingPolicy.fromJson(Map<String, dynamic> j) =>
+      ShopPricingPolicy(
+        minimumProfitEnabled: j['minimumProfitEnabled'] == true,
+        minimumMarkupPercent: _dbl(j['minimumMarkupPercent']),
+        updatedAt: DateTime.tryParse(
+          (j['updatedAt'] ?? '').toString(),
+        )?.toLocal(),
+        updatedBy: _str(j['updatedBy']),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'minimumProfitEnabled': minimumProfitEnabled,
+    'minimumMarkupPercent': minimumMarkupPercent,
+  };
+}
+
+class ShopPriceAdjustmentRequest {
+  const ShopPriceAdjustmentRequest({
+    required this.categoryId,
+    required this.includeDescendants,
+    required this.increase,
+    required this.percent,
+    required this.effectiveDate,
+  });
+
+  final int categoryId;
+  final bool includeDescendants;
+  final bool increase;
+  final double percent;
+  final DateTime effectiveDate;
+
+  String get _dateOnly =>
+      '${effectiveDate.year.toString().padLeft(4, '0')}-'
+      '${effectiveDate.month.toString().padLeft(2, '0')}-'
+      '${effectiveDate.day.toString().padLeft(2, '0')}';
+
+  Map<String, dynamic> toJson() => {
+    'categoryId': categoryId,
+    'includeDescendants': includeDescendants,
+    'increase': increase,
+    'percent': percent,
+    'effectiveDate': _dateOnly,
+  };
+
+  bool sameAs(ShopPriceAdjustmentRequest other) =>
+      categoryId == other.categoryId &&
+      includeDescendants == other.includeDescendants &&
+      increase == other.increase &&
+      percent == other.percent &&
+      _dateOnly == other._dateOnly;
+}
+
+class ShopPriceAdjustmentRow {
+  const ShopPriceAdjustmentRow({
+    required this.productId,
+    required this.code,
+    required this.name,
+    required this.isActive,
+    this.previousPrice,
+    this.newPrice,
+    this.reason,
+  });
+
+  final int productId;
+  final String code;
+  final String name;
+  final bool isActive;
+  final double? previousPrice;
+  final double? newPrice;
+  final String? reason;
+
+  factory ShopPriceAdjustmentRow.fromJson(Map<String, dynamic> j) =>
+      ShopPriceAdjustmentRow(
+        productId: _int(j['productId']),
+        code: (j['code'] ?? '').toString(),
+        name: (j['name'] ?? '').toString(),
+        isActive: j['isActive'] != false,
+        previousPrice: (j['previousPrice'] as num?)?.toDouble(),
+        newPrice: (j['newPrice'] as num?)?.toDouble(),
+        reason: _str(j['reason']),
+      );
+}
+
+class ShopPriceAdjustmentPreview {
+  const ShopPriceAdjustmentPreview({
+    this.rows = const [],
+    this.previewHash = '',
+  });
+
+  final List<ShopPriceAdjustmentRow> rows;
+  final String previewHash;
+
+  int get changeableCount => rows.where((r) => r.newPrice != null).length;
+
+  factory ShopPriceAdjustmentPreview.fromJson(Map<String, dynamic> j) {
+    final raw = j['rows'];
+    final list = raw is List
+        ? raw
+              .whereType<Map>()
+              .map(
+                (e) => ShopPriceAdjustmentRow.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
+        : const <ShopPriceAdjustmentRow>[];
+    return ShopPriceAdjustmentPreview(
+      rows: list,
+      previewHash: (j['previewHash'] ?? '').toString(),
+    );
+  }
+}
+
+class ShopPriceHistoryItem {
+  const ShopPriceHistoryItem({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.productCode,
+    this.effectiveDate,
+    required this.price,
+    this.previousPrice,
+    required this.source,
+    this.purchaseTransactionId,
+    this.createdAt,
+    this.createdBy,
+  });
+
+  final int id;
+  final int productId;
+  final String productName;
+  final String productCode;
+  final DateTime? effectiveDate;
+  final double price;
+  final double? previousPrice;
+  final String source;
+  final int? purchaseTransactionId;
+  final DateTime? createdAt;
+  final String? createdBy;
+
+  /// همان `SourceTitle` وب در `Pricing.razor`
+  String get sourceTitle => switch (source) {
+    'baseline' => 'مبنای اولیه',
+    'catalog' => 'ویرایش کالا',
+    'purchase' =>
+      purchaseTransactionId != null
+          ? 'فاکتور خرید #$purchaseTransactionId'
+          : 'خرید',
+    'group' => 'تغییر گروهی',
+    _ => source,
+  };
+
+  factory ShopPriceHistoryItem.fromJson(Map<String, dynamic> j) =>
+      ShopPriceHistoryItem(
+        id: _int(j['id']),
+        productId: _int(j['productId']),
+        productName: (j['productName'] ?? '').toString(),
+        productCode: (j['productCode'] ?? '').toString(),
+        effectiveDate: DateTime.tryParse(
+          (j['effectiveDate'] ?? '').toString(),
+        )?.toLocal(),
+        price: _dbl(j['price']),
+        previousPrice: (j['previousPrice'] as num?)?.toDouble(),
+        source: (j['source'] ?? '').toString(),
+        purchaseTransactionId: _intOrNull(j['purchaseTransactionId']),
+        createdAt: DateTime.tryParse(
+          (j['createdAt'] ?? '').toString(),
+        )?.toLocal(),
+        createdBy: _str(j['createdBy']),
+      );
 }
 
 // ---------------- کمکی ----------------

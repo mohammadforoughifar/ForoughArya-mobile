@@ -243,21 +243,53 @@ class _PartiesPageState extends State<PartiesPage> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
                 sliver: SliverToBoxAdapter(
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Text(
-                          'فهرست ${_type == PartyType.customer ? 'مشتریان' : 'تأمین‌کنندگان'}',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
-                            color: ShopColors.ink,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ShopKpi(
+                              title: _type == PartyType.customer
+                                  ? 'کل مشتریان'
+                                  : 'کل تأمین‌کنندگان',
+                              value: Fa.number(_total),
+                              unit: 'طرف حساب ثبت‌شده',
+                              icon: Icons.people_alt_rounded,
+                              color: ShopColors.seed,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ShopKpi(
+                              title: 'فعال در صفحه',
+                              value: Fa.number(
+                                _items.where((p) => p.isActive).length,
+                              ),
+                              unit: 'از ${Fa.number(_items.length)} ردیف جاری',
+                              icon: Icons.verified_user_rounded,
+                              color: ShopColors.ok,
+                            ),
+                          ),
+                        ],
                       ),
-                      ShopTag(
-                        text: '${Fa.number(_total)} طرف حساب',
-                        icon: Icons.people_outline_rounded,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'فهرست ${_type == PartyType.customer ? 'مشتریان' : 'تأمین‌کنندگان'}',
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: ShopColors.ink,
+                              ),
+                            ),
+                          ),
+                          ShopTag(
+                            text: '${Fa.number(_total)} طرف حساب',
+                            icon: Icons.people_outline_rounded,
+                          ),
+                        ],
                       ),
                     ],
                   ),

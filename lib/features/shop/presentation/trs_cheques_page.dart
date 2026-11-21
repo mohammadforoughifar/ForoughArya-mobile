@@ -219,9 +219,13 @@ class _TrsChequesPageState extends State<TrsChequesPage> {
   @override
   Widget build(BuildContext context) {
     final canWrite =
-        _perms.has('TrsCheques.Create') || _perms.hasModule('TrsCheques');
-    final canDelete = _perms.has('TrsCheques.Delete');
-    final canAction = _perms.has('TrsCheques.Confirm');
+        _perms.canManageInstallments ||
+        _perms.has('TrsCheques.Create') ||
+        _perms.hasModule('TrsCheques');
+    final canDelete =
+        _perms.canManageInstallments || _perms.has('TrsCheques.Delete');
+    final canAction =
+        _perms.canManageInstallments || _perms.has('TrsCheques.Confirm');
     return Scaffold(
       backgroundColor: ShopColors.bg,
       body: RefreshIndicator(

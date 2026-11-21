@@ -124,8 +124,8 @@ class _OrderReportPageState extends State<OrderReportPage> {
 
   @override
   Widget build(BuildContext context) {
-    // همان پیام و گیت وب
-    if (!_perms.canSeeModule('Orders')) {
+    // همان پیام و گیت وب (`Shop.OrderReports.View` یا `Orders.Read`)
+    if (!_perms.canSeeOrderReports) {
       return Scaffold(
         backgroundColor: ShopColors.bg,
         appBar: AppBar(

@@ -17,8 +17,10 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../data/fa_num.dart';
+import '../data/shop_identifier_rules.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
+import '../models/shop_models.dart';
 import '../models/treasury_models.dart';
 import 'shop_style.dart';
 import 'trs_flow_page.dart';
@@ -121,9 +123,9 @@ class _TrsAccountsPageState extends State<TrsAccountsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canWrite =
-        _perms.has('TrsAccounts.Create') || _perms.hasModule('TrsAccounts');
-    final canDelete = _perms.has('TrsAccounts.Delete');
+    final canWrite = _perms.canManageBanks;
+    final canDelete =
+        _perms.canManageBanks || _perms.has('TrsAccounts.Delete');
     return Scaffold(
       backgroundColor: ShopColors.bg,
       body: RefreshIndicator(
@@ -362,7 +364,8 @@ class _TrsAccountsPageState extends State<TrsAccountsPage> {
               ],
             ),
           ),
-          if ((a.bankName ?? '').isNotEmpty ||
+          if ((a.companyName ?? '').isNotEmpty ||
+              (a.bankName ?? '').isNotEmpty ||
               (a.accountNumber ?? '').isNotEmpty ||
               (a.iban ?? '').isNotEmpty ||
               (a.cardNumber ?? '').isNotEmpty) ...[
@@ -371,13 +374,21 @@ class _TrsAccountsPageState extends State<TrsAccountsPage> {
               spacing: 12,
               runSpacing: 4,
               children: [
+                if ((a.companyName ?? '').isNotEmpty)
+                  _kv('شرکت مالک', a.companyName!),
                 if ((a.bankName ?? '').isNotEmpty)
                   _kv('بانک', a.bankName!),
                 if ((a.branchName ?? '').isNotEmpty)
                   _kv('شعبه', a.branchName!),
                 if ((a.accountNumber ?? '').isNotEmpty)
                   _kv('حساب', a.accountNumber!),
-                if ((a.iban ?? '').isNotEmpty) _kv('شبا', 'IR${a.iban}'),
+                if ((a.iban ?? '').isNotEmpty)
+                  _kv(
+                    'شبا',
+                    a.iban!.toUpperCase().startsWith('IR')
+                        ? a.iban!
+                        : 'IR${a.iban}',
+                  ),
                 if ((a.cardNumber ?? '').isNotEmpty)
                   _kv('کارت', a.cardNumber!),
               ],
@@ -518,12 +529,14 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
   final _desc = TextEditingController();
 
   int _kind = 0;
+  int? _companyId;
   int? _accountId;
   String? _accountName;
   bool _isActive = true;
   bool _isDefault = false;
   bool _saving = false;
   List<AccLookup> _accLookups = const [];
+  List<ShopLookup> _companies = const [];
 
   bool get _isEdit => (widget.account?.id ?? 0) > 0;
 
@@ -533,6 +546,7 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
     _repo = ShopRepository(context.read<ApiClient>());
     final a = widget.account;
     if (a != null) {
+      _companyId = a.companyId;
       _name.text = a.name;
       _code.text = a.code;
       _sort.text = a.sortOrder == 0 ? '' : a.sortOrder.toString();
@@ -540,7 +554,7 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
       _branch.text = a.branchName ?? '';
       _branchCode.text = a.branchCode ?? '';
       _accountNumber.text = a.accountNumber ?? '';
-      _iban.text = a.iban ?? '';
+      _iban.text = (a.iban ?? '').toUpperCase().replaceFirst(RegExp(r'^IR'), '');
       _card.text = a.cardNumber ?? '';
       _opening.text = a.openingBalance == 0
           ? ''
@@ -558,6 +572,15 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
   }
 
   Future<void> _loadLookups() async {
+    try {
+      final ctx = await _repo.shopCompanies();
+      if (mounted) {
+        setState(() {
+          _companies = ctx.companies;
+          _companyId ??= ctx.activeCompanyId;
+        });
+      }
+    } catch (_) {}
     try {
       final list = await _repo.accAccountLookups();
       if (!mounted) return;
@@ -591,20 +614,31 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
       _toast('برای حساب بانکی، نام بانک الزامی است.');
       return;
     }
+    final bankErr = ShopIdentifierRules.validateBank(
+      cardNumber: _card.text,
+      iban: _iban.text,
+      accountNumber: _accountNumber.text,
+      branchCode: _branchCode.text,
+    );
+    if (bankErr != null) {
+      _toast(bankErr);
+      return;
+    }
     setState(() => _saving = true);
     try {
       final a = TreasuryAccount(
         id: widget.account?.id ?? 0,
+        companyId: _companyId,
         code: _code.text.trim(),
         name: _name.text.trim(),
         kind: _kind,
         accountId: _accountId,
         bankName: _bank.text.trim(),
         branchName: _branch.text.trim(),
-        branchCode: _branchCode.text.trim(),
-        accountNumber: _accountNumber.text.trim(),
-        iban: _iban.text.trim(),
-        cardNumber: _card.text.trim(),
+        branchCode: ShopIdentifierRules.normalize(_branchCode.text),
+        accountNumber: ShopIdentifierRules.normalize(_accountNumber.text),
+        iban: ShopIdentifierRules.normalizeIban(_iban.text),
+        cardNumber: ShopIdentifierRules.normalize(_card.text),
         openingBalance: parseNum(_opening.text),
         isDefault: _isDefault,
         isActive: _isActive,
@@ -670,6 +704,25 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
         children: [
           _formCard([
+            if (_companies.length > 1)
+              ShopField(
+                label: 'شرکت مالک حساب',
+                required: true,
+                hint: 'مشخص می‌کند این حساب خزانه متعلق به کدام شرکت است',
+                child: DropdownButtonFormField<int>(
+                  initialValue: _companies.any((c) => c.id == _companyId)
+                      ? _companyId
+                      : null,
+                  isExpanded: true,
+                  decoration: const InputDecoration(isDense: true),
+                  style: const TextStyle(fontSize: 12.5, color: ShopColors.ink),
+                  items: [
+                    for (final c in _companies)
+                      DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  ],
+                  onChanged: (v) => setState(() => _companyId = v),
+                ),
+              ),
             ShopField(
               label: 'نوع',
               required: true,

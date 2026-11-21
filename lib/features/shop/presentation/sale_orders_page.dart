@@ -60,8 +60,8 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
 
   bool get _isPurchase => widget.type == TxnType.purchase;
 
-  /// همان گیت وب: Orders.ViewProfit
-  bool get _canSeeProfit => _perms.has('Orders.ViewProfit');
+  /// همان گیت وب: Orders.ViewProfit (فقط مستقیم یا Admin)
+  bool get _canSeeProfit => _perms.canViewProfit;
 
   int get _pageCount => _total <= 0 ? 1 : ((_total + pageSize - 1) ~/ pageSize);
 
