@@ -81,16 +81,21 @@ class ShopIdentifierRules {
         : '$label باید دقیقاً ۱۰ رقم باشد.';
   }
 
-  /// تلفن/موبایل اختیاری است؛ در صورت ورود باید دقیقاً ۱۱ رقم با صفر آغازین باشد.
+  /// تلفن/موبایل اختیاری است؛ در صورت ورود باید ۳ تا ۱۵ رقم معتبر باشد
+  /// (و اگر با ۰۹ شروع می‌شود دقیقاً ۱۱ رقم باشد، مطابق `ShopIdentifierRules.cs` سرور).
   static String? validatePhone(
     String? value, {
     String label = 'شماره تلفن',
   }) {
     final phone = normalizePhone(value);
     if (phone == null) return null;
-    return (phone.length == 11 && isDigits(phone) && phone.startsWith('0'))
-        ? null
-        : '$label باید دقیقاً ۱۱ رقم با صفر آغازین باشد.';
+    if (!isDigits(phone) || phone.length < 3 || phone.length > 15) {
+      return '$label معتبر نیست.';
+    }
+    if (phone.startsWith('09') && phone.length != 11) {
+      return '$label باید دقیقاً ۱۱ رقم با صفر آغازین باشد.';
+    }
+    return null;
   }
 
   /// شناسه ملی / اقتصادی / مالیاتی طرف حساب: ۱۰، ۱۱، ۱۲ یا ۱۴ رقم
@@ -113,30 +118,46 @@ class ShopIdentifierRules {
     String? taxId,
     String? postalCode,
     bool isSupplier = false,
+    bool? isCustomer,
   }) {
+    final supplier = isCustomer != null ? !isCustomer : isSupplier;
     return validatePhone(mobile, label: 'شماره موبایل') ??
         validatePhone(phone, label: 'تلفن ثابت') ??
         validateTaxId(
           taxId,
-          label: isSupplier
+          label: supplier
               ? 'شناسه ملی/اقتصادی تأمین‌کننده'
               : 'شناسه ملی خریدار',
         ) ??
         validatePostalCode(
           postalCode,
-          label: isSupplier ? 'کد پستی تأمین‌کننده' : 'کد پستی خریدار',
+          label: supplier ? 'کد پستی تأمین‌کننده' : 'کد پستی خریدار',
         );
   }
 
-  /// اعتبارسنجی شماره کارت (۱۶ رقم) و شماره شبا (۲۴ رقم بدون IR)
-  static String? validateBank({String? cardNumber, String? iban}) {
+  /// اعتبارسنجی شماره کارت (۱۶ رقم)، شماره شبا (۲۴ رقم بدون IR)، شماره حساب و کد شعبه
+  static String? validateBank({
+    String? cardNumber,
+    String? iban,
+    String? accountNumber,
+    String? branchCode,
+  }) {
     final card = normalize(cardNumber);
     final normIban = normalizeIban(iban);
+    final acc = normalize(accountNumber);
+    final branch = normalize(branchCode);
     if (card != null && (card.length != 16 || !isDigits(card))) {
       return 'شماره کارت باید دقیقاً ۱۶ رقم باشد.';
     }
     if (normIban != null && (normIban.length != 24 || !isDigits(normIban))) {
       return 'شماره شبا باید دقیقاً ۲۴ رقم بدون IR (یا ۲۶ کاراکتر با IR) باشد.';
+    }
+    if (acc != null &&
+        (acc.length < 3 || acc.length > 30 || !isDigits(acc))) {
+      return 'شماره حساب بانکی باید فقط شامل ۳ تا ۳۰ رقم باشد.';
+    }
+    if (branch != null && (branch.length > 10 || !isDigits(branch))) {
+      return 'کد شعبه باید فقط شامل ارقام (حداکثر ۱۰ رقم) باشد.';
     }
     return null;
   }

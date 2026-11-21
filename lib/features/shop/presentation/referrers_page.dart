@@ -588,7 +588,10 @@ class _ReferrerSheetState extends State<_ReferrerSheet> {
       _toast('نام معرف را وارد کنید.');
       return;
     }
-    final phoneErr = ShopIdentifierRules.validatePhone(_phone.text, 'تلفن معرف');
+    final phoneErr = ShopIdentifierRules.validatePhone(
+      _phone.text,
+      label: 'تلفن معرف',
+    );
     if (phoneErr != null) {
       _toast(phoneErr);
       return;

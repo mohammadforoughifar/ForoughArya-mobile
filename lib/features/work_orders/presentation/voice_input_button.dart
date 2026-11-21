@@ -91,7 +91,10 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
           final suffix = end < existing.length && !RegExp(r'\s').hasMatch(existing[end]) ? ' ' : '';
           var text = existing.replaceRange(start, end, '$prefix$words$suffix');
           if (widget.maxLength != null) {
-            text = LengthLimitingTextInputFormatter.truncate(text, widget.maxLength!);
+            text = LengthLimitingTextInputFormatter.truncate(
+              TextEditingValue(text: text),
+              widget.maxLength!,
+            ).text;
           }
           final cursor = (start + prefix.length + words.length + suffix.length).clamp(0, text.length);
           controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
