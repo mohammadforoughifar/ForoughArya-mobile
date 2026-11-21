@@ -13,6 +13,7 @@
 //  هیچ دور زدنی ندارد و فقط خطای ۴۰۳ سرور را فارسی نشان می‌دهد.
 // ============================================================
 
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -415,10 +416,350 @@ class ShopRepository {
     return d is Map ? ShopOrder.fromJson(Map<String, dynamic>.from(d)) : null;
   }
 
+  // ---------- لوکاپ‌های اختصاصی فاکتور و قیمت‌گذاری تاریخ‌دار ----------
+
+  /// `GET /api/orders/invoice-warehouses`
+  Future<List<Warehouse>> invoiceWarehouses() async {
+    final r = await _api.get<dynamic>('/api/orders/invoice-warehouses');
+    return ShopPage.parse(r.data, Warehouse.fromJson).items;
+  }
+
+  /// `GET /api/orders/invoice-parties?type=`
+  Future<List<Party>> invoiceParties({int? type}) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/invoice-parties',
+      query: {if (type != null) 'type': type},
+    );
+    return ShopPage.parse(r.data, Party.fromJson).items;
+  }
+
+  /// `GET /api/orders/invoice-products`
+  Future<List<Product>> invoiceProducts() async {
+    final r = await _api.get<dynamic>('/api/orders/invoice-products');
+    return ShopPage.parse(r.data, Product.fromJson).items;
+  }
+
+  /// `GET /api/orders/profit-access`
+  Future<bool> orderProfitAccess() async {
+    try {
+      final r = await _api.get<dynamic>('/api/orders/profit-access');
+      final d = r.data;
+      return d is Map && d['canViewProfit'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// `GET /api/orders/pricing-access`
+  Future<bool> orderPricingAccess() async {
+    try {
+      final r = await _api.get<dynamic>('/api/orders/pricing-access');
+      final d = r.data;
+      return d is Map && d['canUpdateSalePrice'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// `GET /api/orders/warehouse-stock?warehouseId=&asOf=`
+  Future<List<InvoiceStockItem>> invoiceWarehouseStock(
+    int warehouseId,
+    DateTime asOf,
+  ) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/warehouse-stock',
+      query: {
+        'warehouseId': warehouseId,
+        'asOf': asOf.toIso8601String(),
+      },
+    );
+    return ShopPage.parse(r.data, InvoiceStockItem.fromJson).items;
+  }
+
+  /// `GET /api/orders/dated-sale-price?productId=&date=`
+  Future<DatedSalePrice> datedSalePrice(int productId, DateTime date) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/dated-sale-price',
+      query: {
+        'productId': productId,
+        'date': date.toIso8601String(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? DatedSalePrice.fromJson(Map<String, dynamic>.from(d))
+        : const DatedSalePrice();
+  }
+
+  /// `GET /api/orders/minimum-profit-basis?productId=&date=&saleId=`
+  Future<MinimumProfitBasis> minimumProfitBasis(
+    int productId,
+    DateTime date, {
+    int? saleId,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/minimum-profit-basis',
+      query: {
+        'productId': productId,
+        'date': date.toIso8601String(),
+        if (saleId != null && saleId > 0) 'saleId': saleId,
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? MinimumProfitBasis.fromJson(Map<String, dynamic>.from(d))
+        : const MinimumProfitBasis();
+  }
+
+  // ---------- پیش‌فاکتورهای فروش (`api/orders/proformas`) ----------
+
+  /// `GET /api/orders/proformas?from=&to=&partyId=&warehouseId=`
+  Future<List<SalesProforma>> proformas({
+    DateTime? from,
+    DateTime? to,
+    int? partyId,
+    int? warehouseId,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/proformas',
+      query: {
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+        if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+      },
+    );
+    return ShopPage.parse(r.data, SalesProforma.fromJson).items;
+  }
+
+  /// `POST /api/orders/proformas`
+  Future<SalesProforma> createProforma(SalesProformaCommand cmd) async {
+    final r = await _api.post<dynamic>('/api/orders/proformas', cmd.toJson());
+    final d = r.data;
+    return d is Map
+        ? SalesProforma.fromJson(Map<String, dynamic>.from(d))
+        : SalesProforma(
+            id: '',
+            number: '',
+            partyName: '',
+            warehouseName: '',
+            document: cmd,
+          );
+  }
+
+  /// `POST /api/orders/proformas/{id}/convert`
+  Future<ShopOrder> convertProforma(String id, Map<String, dynamic> cmd) async {
+    final r = await _api.post<dynamic>('/api/orders/proformas/$id/convert', cmd);
+    final d = r.data;
+    return d is Map
+        ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+        : ShopOrder();
+  }
+
+  // ---------- نسیه، برگشت فاکتور چکی، تعیین‌تکلیف بستانکاری و ابطال ----------
+
+  static String newOperationId() {
+    final rnd = math.Random.secure();
+    final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String h(int b) => b.toRadixString(16).padLeft(2, '0');
+    return '${h(bytes[0])}${h(bytes[1])}${h(bytes[2])}${h(bytes[3])}-'
+        '${h(bytes[4])}${h(bytes[5])}-'
+        '${h(bytes[6])}${h(bytes[7])}-'
+        '${h(bytes[8])}${h(bytes[9])}-'
+        '${h(bytes[10])}${h(bytes[11])}${h(bytes[12])}${h(bytes[13])}${h(bytes[14])}${h(bytes[15])}';
+  }
+
+  /// `GET /api/orders/{id}/credit-receipts`
+  Future<ShopOrderCreditState> orderCreditState(int orderId) async {
+    final r = await _api.get<dynamic>('/api/orders/$orderId/credit-receipts');
+    final d = r.data;
+    return d is Map
+        ? ShopOrderCreditState.fromJson(Map<String, dynamic>.from(d))
+        : const ShopOrderCreditState();
+  }
+
+  /// `POST /api/orders/{id}/credit-receipts`
+  Future<ShopOrderCreditState> addOrderCreditReceipt(
+    int orderId, {
+    required double amount,
+    required int trsAccountId,
+    required DateTime date,
+    String? operationId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/credit-receipts',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'amount': amount,
+        'trsAccountId': trsAccountId,
+        'date': date.toIso8601String(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopOrderCreditState.fromJson(Map<String, dynamic>.from(d))
+        : const ShopOrderCreditState();
+  }
+
+  /// `POST /api/orders/{id}/credit-receipts/{receiptId}/reversal`
+  Future<ShopOrderCreditState> reverseOrderCreditReceipt(
+    int orderId,
+    int receiptId, {
+    required DateTime date,
+    String? operationId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/credit-receipts/$receiptId/reversal',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'date': date.toIso8601String(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopOrderCreditState.fromJson(Map<String, dynamic>.from(d))
+        : const ShopOrderCreditState();
+  }
+
+  /// `POST /api/orders/{id}/cheque-return-preview`
+  Future<SaleChequeReturnPreview> previewChequeReturn(
+    int orderId, {
+    required DateTime date,
+    required List<Map<String, dynamic>> lines,
+    int decision = ChequeReturnDecision.none,
+    OrderCheque? replacementCheque,
+    String? note,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/cheque-return-preview',
+      {
+        'date': date.toIso8601String(),
+        'lines': lines,
+        'decision': decision,
+        if (replacementCheque != null)
+          'replacementCheque': replacementCheque.toJson(),
+        if ((note ?? '').trim().isNotEmpty) 'note': note!.trim(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? SaleChequeReturnPreview.fromJson(Map<String, dynamic>.from(d))
+        : const SaleChequeReturnPreview();
+  }
+
+  /// `POST /api/orders/{id}/cheque-return`
+  Future<ShopOrder> submitChequeReturn(
+    int orderId, {
+    required DateTime date,
+    required List<Map<String, dynamic>> lines,
+    int decision = ChequeReturnDecision.none,
+    OrderCheque? replacementCheque,
+    String? note,
+    String? operationId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/cheque-return',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'date': date.toIso8601String(),
+        'lines': lines,
+        'decision': decision,
+        if (replacementCheque != null)
+          'replacementCheque': replacementCheque.toJson(),
+        if ((note ?? '').trim().isNotEmpty) 'note': note!.trim(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+        : ShopOrder();
+  }
+
+  /// `POST /api/orders/{id}/cheque-cancel`
+  Future<ShopOrder> cancelChequeOrder(
+    int orderId, {
+    required DateTime date,
+    String? note,
+    String? operationId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/cheque-cancel',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'date': date.toIso8601String(),
+        if ((note ?? '').trim().isNotEmpty) 'note': note!.trim(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+        : ShopOrder();
+  }
+
+  /// `POST /api/orders/{id}/credit-refund`
+  Future<ShopOrder> refundCustomerCredit(
+    int orderId, {
+    required double amount,
+    required int trsAccountId,
+    required DateTime date,
+    String? note,
+    String? operationId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/credit-refund',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'amount': amount,
+        'trsAccountId': trsAccountId,
+        'date': date.toIso8601String(),
+        if ((note ?? '').trim().isNotEmpty) 'note': note!.trim(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+        : ShopOrder();
+  }
+
+  /// `POST /api/orders/{id}/credit-allocation`
+  Future<ShopOrder> allocateCustomerCredit(
+    int orderId, {
+    required int targetOrderId,
+    required double amount,
+    required DateTime date,
+    String? note,
+    String? operationId,
+  }) async {
+    final r = await _api.post<dynamic>(
+      '/api/orders/$orderId/credit-allocation',
+      {
+        'operationId': operationId ?? newOperationId(),
+        'targetOrderId': targetOrderId,
+        'amount': amount,
+        'date': date.toIso8601String(),
+        if ((note ?? '').trim().isNotEmpty) 'note': note!.trim(),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+        : ShopOrder();
+  }
+
   // ---------- حساب‌های خزانه (برای بخش پرداخت سند) ----------
 
-  /// `GET /api/trs/accounts?activeOnly`
+  /// `GET /api/orders/active-treasury-accounts` با fallback به `GET /api/trs/accounts`
   Future<List<TrsAccount>> trsAccounts({bool activeOnly = true}) async {
+    if (activeOnly) {
+      try {
+        final r = await _api.get<dynamic>(
+          '/api/orders/active-treasury-accounts',
+        );
+        return ShopPage.parse(r.data, TrsAccount.fromJson).items;
+      } catch (_) {}
+    }
     final r = await _api.get<dynamic>(
       '/api/trs/accounts',
       query: {'activeOnly': activeOnly, 'withBalances': false},
@@ -426,9 +767,9 @@ class ShopRepository {
     return ShopPage.parse(r.data, TrsAccount.fromJson).items;
   }
 
-  /// `POST /api/trs/accounts` — تعریف سریع بانک/صندوق از داخل فرم سند
+  /// `POST /api/trs/accounts/shop` — تعریف سریع بانک/صندوق از داخل فرم سند
   Future<TrsAccount> saveTrsAccount(TrsAccount a) async {
-    final r = await _api.post<dynamic>('/api/trs/accounts', a.toJson());
+    final r = await _api.post<dynamic>('/api/trs/accounts/shop', a.toJson());
     final d = r.data;
     return d is Map ? TrsAccount.fromJson(Map<String, dynamic>.from(d)) : a;
   }

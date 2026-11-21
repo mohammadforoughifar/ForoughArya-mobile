@@ -28,13 +28,24 @@ import '../data/shop_repository.dart';
 import '../models/order_models.dart';
 import '../models/shop_models.dart';
 import 'party_form_page.dart';
+import 'shop_invoice_print_sheet.dart';
 import 'shop_style.dart';
 
 class OrderFormPage extends StatefulWidget {
-  const OrderFormPage({super.key, required this.type, this.source});
+  const OrderFormPage({
+    super.key,
+    required this.type,
+    this.source,
+    this.copyTemplate,
+    this.isProforma = false,
+    this.convertingProforma,
+  });
 
   final int type;
   final ShopOrder? source;
+  final ShopOrder? copyTemplate;
+  final bool isProforma;
+  final SalesProforma? convertingProforma;
 
   @override
   State<OrderFormPage> createState() => _OrderFormPageState();
@@ -42,22 +53,31 @@ class OrderFormPage extends StatefulWidget {
 
 /// سطر قابل ویرایش فرم
 class _Line {
-  _Line() : qty = '1', price = '', discount = '';
+  _Line() : qty = '1', price = '', discount = '', vat = '', newSalePrice = '';
   int id = 0;
   int productId = 0;
   double? originalQty;
   String qty;
   String price;
   String discount;
+  String vat;
+  String newSalePrice;
   String unit = '';
   double discountPercent = 0;
   double discountAmount = 0;
   bool discountIsAmount = false;
+  bool manualPrice = false;
+  String? priceSource;
+  MinimumProfitBasis? minProfit;
 
   double get qtyValue => parseNum(qty);
   double get priceValue => parseNum(price);
-  double get gross => qtyValue * priceValue;
-  double get total => (gross - discountAmount) < 0 ? 0 : gross - discountAmount;
+  double get vatValue => parseNum(vat).clamp(0, OrderLineAmounts.maxVatValue).toDouble();
+  double get newSalePriceValue => parseNum(newSalePrice);
+  double get gross => OrderLineAmounts.gross(qtyValue, priceValue);
+  double get afterDiscount => (gross - discountAmount) < 0 ? 0 : gross - discountAmount;
+  double get vatAmount => OrderLineAmounts.vat(afterDiscount, vatValue);
+  double get total => afterDiscount + vatAmount;
 }
 
 /// چک فرم
@@ -87,9 +107,15 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
   bool get _isSale => widget.type == TxnType.sale;
   bool get _isEdit => (widget.source?.id ?? 0) > 0;
-  bool get _canSeeProfit => _perms.canViewProfit;
+  bool get _isProforma => widget.isProforma;
+  bool get _isConvertingProforma => widget.convertingProforma != null;
+  bool _serverProfitAccess = false;
+  bool _canUpdateSalePrice = false;
+  bool get _canSeeProfit => _perms.canViewProfit || _serverProfitAccess;
 
   final _descCtrl = TextEditingController();
+  final _barcodeCtrl = TextEditingController();
+  final _cashTrackingCtrl = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
@@ -104,6 +130,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
   List<Referrer> _referrers = const [];
   List<Product> _products = const [];
   Map<int, double> _warehouseStocks = {};
+  Map<int, double> _sellableStocks = {};
 
   final List<_Line> _lines = [_Line()];
 
@@ -114,6 +141,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
   int? _trsAccountId;
   DateTime? _creditDue;
   List<TrsAccount> _accounts = const [];
+  SaleChequeChargeInput? _chequeCharge;
 
   final List<_ChequeRow> _cheques = [];
   final List<_InstRow> _insts = [];
@@ -133,6 +161,8 @@ class _OrderFormPageState extends State<OrderFormPage> {
   @override
   void dispose() {
     _descCtrl.dispose();
+    _barcodeCtrl.dispose();
+    _cashTrackingCtrl.dispose();
     _cashAmountCtrl.dispose();
     super.dispose();
   }
@@ -190,9 +220,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
   double _lineProfit(_Line l) {
     final p = _productOf(l.productId);
     if (p == null) return 0;
-    if (p.isService) return l.total;
+    if (p.isService) return l.afterDiscount;
     final cost = p.avgCost > 0 ? p.avgCost : p.purchasePrice;
-    return l.total - cost * l.qtyValue;
+    return l.afterDiscount - cost * l.qtyValue;
   }
 
   double _lineCommission(_Line l) {
@@ -201,11 +231,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
     if (r == null) return 0;
     final p = _productOf(l.productId);
     if (p == null) return 0;
-    // نرخ پورسانت از پاسخ سرور نمی‌آید؛ وب هم از Referrer استفاده می‌کند.
-    // برای همین مقدار تخمینی فقط وقتی محاسبه می‌شود که نرخ در دسترس باشد.
     final percent = p.isService ? r.serviceCommissionPercent : r.goodsCommissionPercent;
     if (percent <= 0) return 0;
-    if (p.isService) return (l.total * percent / 100).roundToDouble();
+    if (p.isService) return (l.afterDiscount * percent / 100).roundToDouble();
     final profit = _lineProfit(l);
     return profit > 0 ? (profit * percent / 100).roundToDouble() : 0;
   }
@@ -232,28 +260,51 @@ class _OrderFormPageState extends State<OrderFormPage> {
       List<TrsAccount> accounts = const [];
       List<Referrer> referrers = const [];
       List<Product> products = const [];
+      bool profitAccess = false;
+      bool pricingAccess = false;
+
       try {
-        whs = (await _repo.warehouses()).items.where((w) => w.isActive).toList();
-      } catch (_) {}
+        whs = (await _repo.invoiceWarehouses()).where((w) => w.isActive).toList();
+      } catch (_) {
+        try {
+          whs = (await _repo.warehouses()).items.where((w) => w.isActive).toList();
+        } catch (_) {}
+      }
       try {
-        // وب: فقط طرف حساب‌های فعال؛ برای فروش همهٔ مشتری‌ها با برچسب معرف
-        parties = (await _repo.parties(
+        parties = await _repo.invoiceParties(
           type: _isSale ? PartyType.customer : PartyType.supplier,
-          take: 1000,
-        )).items;
-      } catch (_) {}
+        );
+      } catch (_) {
+        try {
+          parties = (await _repo.parties(
+            type: _isSale ? PartyType.customer : PartyType.supplier,
+            take: 1000,
+          )).items;
+        } catch (_) {}
+      }
       try {
-        products = (await _repo.products(pageSize: 10000)).items
+        products = (await _repo.invoiceProducts())
             .where((p) => p.isActive && (_isSale || !p.isService))
             .toList();
-      } catch (_) {}
-      try {
-        accounts = await _repo.trsAccounts();
-      } catch (_) {}
+      } catch (_) {
+        try {
+          products = (await _repo.products(pageSize: 10000)).items
+              .where((p) => p.isActive && (_isSale || !p.isService))
+              .toList();
+        } catch (_) {}
+      }
+      if (!_isProforma) {
+        try {
+          accounts = await _repo.trsAccounts();
+        } catch (_) {}
+      }
       if (_isSale) {
+        profitAccess = await _repo.orderProfitAccess();
         try {
           referrers = await _repo.referrers();
         } catch (_) {}
+      } else {
+        pricingAccess = await _repo.orderPricingAccess();
       }
 
       if (!mounted) return;
@@ -263,19 +314,24 @@ class _OrderFormPageState extends State<OrderFormPage> {
         _products = products;
         _accounts = accounts;
         _referrers = referrers;
+        _serverProfitAccess = profitAccess;
+        _canUpdateSalePrice = pricingAccess;
       });
 
       final src = widget.source;
+      final tpl = widget.copyTemplate ?? widget.convertingProforma?.toOrder();
       if (src != null) {
-        // ---- پر کردن فرم از سند موجود (مثل وب) ----
+        // ---- پر کردن فرم از سند موجود (ویرایش) ----
         _warehouseId = src.warehouseId;
         _partyId = src.partyId;
         _referrerId = src.referrerId ?? 0;
         _date = src.date ?? DateTime.now();
         _descCtrl.text = src.description;
         _cashType = (src.cashType ?? 0).toString();
+        _cashTrackingCtrl.text = src.cashTrackingNumber ?? '';
         _trsAccountId = src.trsAccountId;
         _creditDue = src.dueDate;
+        _chequeCharge = src.chequeChargeSnapshot;
         _useCheque =
             src.cheques.isNotEmpty || src.paymentMethod == PayMethod.cheque;
         _useInst = src.installments.isNotEmpty ||
@@ -324,56 +380,22 @@ class _OrderFormPageState extends State<OrderFormPage> {
             return r;
           }));
         _instCount = _insts.isEmpty ? 3 : _insts.length;
-        _lines.clear();
-        for (final l in src.lines) {
-          final vm = _Line()
-            ..id = l.id
-            ..productId = l.productId
-            ..originalQty = l.quantity
-            ..qty = l.quantity.toString().replaceAll(RegExp(r'\.0$'), '')
-            ..price = formatNumText(l.price.toStringAsFixed(0))
-            ..unit = l.unit
-            ..discountPercent = l.discountPercent
-            ..discountAmount = l.discountAmount
-            ..discountIsAmount = l.discountIsAmount;
-          vm.discount = vm.discountIsAmount
-              ? (vm.discountAmount > 0
-                    ? formatNumText(vm.discountAmount.toStringAsFixed(0))
-                    : '')
-              : (vm.discountPercent > 0
-                    ? vm.discountPercent.toStringAsFixed(
-                        vm.discountPercent % 1 == 0 ? 0 : 2,
-                      )
-                    : '');
-          _lines.add(vm);
-        }
-        if (_lines.isEmpty) _lines.add(_Line());
-        // اگر کالا/انبار/طرف حساب غیرفعال شده، برای حفظ انتخاب به فهرست اضافه شود
-        if (_warehouseId > 0 && !_warehouses.any((w) => w.id == _warehouseId)) {
-          _warehouses = [
-            ..._warehouses,
-            Warehouse(id: _warehouseId, name: src.warehouseName ?? 'انبار'),
-          ];
-        }
-        if (_partyId > 0 && !_parties.any((p) => p.id == _partyId)) {
-          _parties = [
-            ..._parties,
-            Party(id: _partyId, name: src.partyName ?? 'طرف حساب'),
-          ];
-        }
-        for (final l in src.lines) {
-          if (!_products.any((p) => p.id == l.productId)) {
-            _products = [
-              ..._products,
-              Product(
-                id: l.productId,
-                name: l.productName,
-                unit: l.unit,
-                isService: l.isService,
-              ),
-            ];
-          }
-        }
+        _populateLinesFrom(src.lines, keepLineId: true);
+        _ensureInactiveLookups(src);
+      } else if (tpl != null) {
+        // ---- کپی از فاکتور قبلی یا تبدیل پیش‌فاکتور به فروش ----
+        _warehouseId = tpl.warehouseId;
+        _partyId = tpl.partyId;
+        _referrerId = tpl.referrerId ?? 0;
+        _date = widget.convertingProforma != null
+            ? (tpl.date ?? DateTime.now())
+            : DateTime.now();
+        _descCtrl.text = tpl.description;
+        final def = _accounts.where((a) => a.isDefault).firstOrNull ??
+            _accounts.firstOrNull;
+        _trsAccountId = def?.id;
+        _populateLinesFrom(tpl.lines, keepLineId: false);
+        _ensureInactiveLookups(tpl);
       } else {
         _date = DateTime.now();
         final def = _accounts.where((a) => a.isDefault).firstOrNull ??
@@ -381,6 +403,11 @@ class _OrderFormPageState extends State<OrderFormPage> {
         _trsAccountId = def?.id;
       }
       await _loadWarehouseStocks();
+      if (_isSale) {
+        for (final l in _lines.where((x) => x.productId > 0)) {
+          _refreshLinePricingHints(l, updatePriceIfAuto: false);
+        }
+      }
     } catch (e) {
       _toast(e.toString());
     } finally {
@@ -388,18 +415,90 @@ class _OrderFormPageState extends State<OrderFormPage> {
     }
   }
 
+  void _populateLinesFrom(List<OrderLine> sourceLines, {required bool keepLineId}) {
+    _lines.clear();
+    for (final l in sourceLines) {
+      final vm = _Line()
+        ..id = keepLineId ? l.id : 0
+        ..productId = l.productId
+        ..originalQty = keepLineId ? l.quantity : null
+        ..qty = l.quantity.toString().replaceAll(RegExp(r'\.0$'), '')
+        ..price = formatNumText(l.price.toStringAsFixed(0))
+        ..manualPrice = true
+        ..unit = l.unit
+        ..discountPercent = l.discountPercent
+        ..discountAmount = l.discountAmount
+        ..discountIsAmount = l.discountIsAmount
+        ..vat = l.vatValue > 0
+            ? (l.vatValue <= 100
+                  ? l.vatValue.toStringAsFixed(l.vatValue % 1 == 0 ? 0 : 2)
+                  : formatNumText(l.vatValue.toStringAsFixed(0)))
+            : '';
+      vm.discount = vm.discountIsAmount
+          ? (vm.discountAmount > 0
+                ? formatNumText(vm.discountAmount.toStringAsFixed(0))
+                : '')
+          : (vm.discountPercent > 0
+                ? vm.discountPercent.toStringAsFixed(
+                    vm.discountPercent % 1 == 0 ? 0 : 2,
+                  )
+                : '');
+      _lines.add(vm);
+    }
+    if (_lines.isEmpty) _lines.add(_Line());
+  }
+
+  void _ensureInactiveLookups(ShopOrder src) {
+    if (_warehouseId > 0 && !_warehouses.any((w) => w.id == _warehouseId)) {
+      _warehouses = [
+        ..._warehouses,
+        Warehouse(id: _warehouseId, name: src.warehouseName ?? 'انبار'),
+      ];
+    }
+    if (_partyId > 0 && !_parties.any((p) => p.id == _partyId)) {
+      _parties = [
+        ..._parties,
+        Party(id: _partyId, name: src.partyName ?? 'طرف حساب'),
+      ];
+    }
+    for (final l in src.lines) {
+      if (!_products.any((p) => p.id == l.productId)) {
+        _products = [
+          ..._products,
+          Product(
+            id: l.productId,
+            name: l.productName,
+            unit: l.unit,
+            isService: l.isService,
+          ),
+        ];
+      }
+    }
+  }
+
   Future<void> _loadWarehouseStocks() async {
     _warehouseStocks = {};
+    _sellableStocks = {};
     if (_warehouseId <= 0) return;
+    try {
+      final items = await _repo.invoiceWarehouseStock(
+        _warehouseId,
+        _date ?? DateTime.now(),
+      );
+      _warehouseStocks = {for (final s in items) s.productId: s.quantity};
+      _sellableStocks = {
+        for (final s in items) s.productId: s.sellableQuantity,
+      };
+      return;
+    } catch (_) {}
     try {
       final res = await _repo.stock(
         warehouseId: _warehouseId,
         page: 1,
         pageSize: 10000,
       );
-      _warehouseStocks = {
-        for (final s in res.items) s.productId: s.quantity,
-      };
+      _warehouseStocks = {for (final s in res.items) s.productId: s.quantity};
+      _sellableStocks = Map<int, double>.from(_warehouseStocks);
     } catch (_) {}
   }
 
@@ -489,6 +588,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
       if (l.productId != id) {
         l.originalQty = null;
         l.id = 0;
+        l.manualPrice = false;
       }
       l.productId = id;
       final p = _productOf(id);
@@ -496,9 +596,97 @@ class _OrderFormPageState extends State<OrderFormPage> {
         l.unit = p.unit;
         final price = _isSale ? p.salePrice : p.purchasePrice;
         if (price > 0) l.price = formatNumText(price.toStringAsFixed(0));
+        if (!_isSale && _canUpdateSalePrice && p.salePrice > 0) {
+          l.newSalePrice = formatNumText(p.salePrice.toStringAsFixed(0));
+        }
+        final defVat = p.invoiceVatValue ?? 0;
+        l.vat = defVat > 0
+            ? (defVat <= 100
+                  ? defVat.toStringAsFixed(defVat % 1 == 0 ? 0 : 2)
+                  : formatNumText(defVat.toStringAsFixed(0)))
+            : '';
       }
       _recalcDiscount(l);
     });
+    if (_isSale && id > 0) {
+      _refreshLinePricingHints(l, updatePriceIfAuto: true);
+    }
+  }
+
+  Future<void> _refreshLinePricingHints(
+    _Line l, {
+    required bool updatePriceIfAuto,
+  }) async {
+    final pid = l.productId;
+    final dt = _date ?? DateTime.now();
+    if (!_isSale || pid <= 0) return;
+    final p = _productOf(pid);
+    try {
+      final dated = await _repo.datedSalePrice(pid, dt);
+      if (!mounted || l.productId != pid) return;
+      setState(() {
+        l.priceSource = dated.source;
+        if (updatePriceIfAuto && !l.manualPrice && (dated.price ?? 0) > 0) {
+          l.price = formatNumText(dated.price!.toStringAsFixed(0));
+          _recalcDiscount(l);
+        }
+      });
+    } catch (_) {}
+
+    if (p != null && !p.isService) {
+      try {
+        final basis = await _repo.minimumProfitBasis(
+          pid,
+          dt,
+          saleId: _isEdit ? widget.source?.id : null,
+        );
+        if (!mounted || l.productId != pid) return;
+        setState(() => l.minProfit = basis);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _onInvoiceDateChanged(DateTime d) async {
+    setState(() => _date = d);
+    await _loadWarehouseStocks();
+    if (_isSale) {
+      for (final l in _lines.where((x) => x.productId > 0)) {
+        _refreshLinePricingHints(l, updatePriceIfAuto: !l.manualPrice);
+      }
+    }
+  }
+
+  void _addByBarcode([String? rawInput]) {
+    final code = toEnDigits((rawInput ?? _barcodeCtrl.text).trim()).toLowerCase();
+    if (code.isEmpty) return;
+    final pool = _selectableProducts;
+    final match = pool.where((p) {
+      final bc = toEnDigits((p.barcode ?? '').trim()).toLowerCase();
+      final pc = toEnDigits(p.code.trim()).toLowerCase();
+      return (bc.isNotEmpty && bc == code) || (pc.isNotEmpty && pc == code);
+    }).firstOrNull;
+    if (match == null) {
+      _toast('کالایی با بارکد یا کد «$code» در این انبار یافت نشد.');
+      return;
+    }
+    _barcodeCtrl.clear();
+    final existing = _lines.where((l) => l.productId == match.id).firstOrNull;
+    if (existing != null) {
+      setState(() {
+        final nextQty = existing.qtyValue + 1;
+        existing.qty = nextQty.toString().replaceAll(RegExp(r'\.0$'), '');
+        _recalcDiscount(existing);
+      });
+      return;
+    }
+    final emptyLine = _lines.where((l) => l.productId == 0).firstOrNull;
+    if (emptyLine != null) {
+      _onProductPicked(emptyLine, match.id);
+    } else {
+      final nl = _Line();
+      setState(() => _lines.add(nl));
+      _onProductPicked(nl, match.id);
+    }
   }
 
   // ---------------- اجزای پرداخت ----------------
@@ -513,6 +701,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
     setState(() {
       _useCheque = !_useCheque;
       if (_useCheque && _cheques.isEmpty) _addCheque();
+      if (!_useCheque) _chequeCharge = null;
     });
   }
 
@@ -578,13 +767,20 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
   int get _declaredMethod {
     if (!_hasNonCash) return PayMethod.cash;
+    final activeParts = [
+      if (_cashPart > 0) 1,
+      if (_useCheque) 1,
+      if (_useInst) 1,
+      if (_useCredit) 1,
+    ].length;
+    if (activeParts > 1) return PayMethod.mixed;
     if (_useCheque) return PayMethod.cheque;
     if (_useInst) return PayMethod.installment;
     return PayMethod.credit;
   }
 
   // ---------------- ذخیره ----------------
-  Future<void> _save() async {
+  Future<void> _save({bool printAfter = false}) async {
     // همان اعتبارسنجی‌های وب، با همان متن‌ها
     if (_warehouseId == 0) {
       _toast('انبار را انتخاب کنید.');
@@ -613,6 +809,52 @@ class _OrderFormPageState extends State<OrderFormPage> {
       }
     }
 
+    // ---------- حالت ثبت پیش‌فاکتور فروش ----------
+    if (_isProforma) {
+      final proformaCmd = SalesProformaCommand(
+        warehouseId: _warehouseId,
+        partyId: _partyId,
+        date: _date!,
+        description: _descCtrl.text.trim(),
+        referrerId: _referrerId > 0 ? _referrerId : null,
+        lines: [
+          for (final l in validLines)
+            SalesProformaLine(
+              productId: l.productId,
+              productName: _productOf(l.productId)?.name ?? '',
+              unit: l.unit,
+              isService: _productOf(l.productId)?.isService ?? false,
+              quantity: l.qtyValue,
+              price: l.priceValue,
+              discountPercent: l.discountPercent,
+              discountAmount: l.discountAmount,
+              discountIsAmount: l.discountIsAmount,
+              vatValue: l.vatValue,
+            ),
+        ],
+      );
+      setState(() => _saving = true);
+      try {
+        final created = await _repo.createProforma(proformaCmd);
+        if (!mounted) return;
+        if (printAfter) {
+          await showShopInvoicePrintSheet(
+            context,
+            repo: _repo,
+            order: created.toOrder(),
+            isProforma: true,
+          );
+        }
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        _toast(e.toString());
+      }
+      return;
+    }
+
     final cmd = <String, dynamic>{
       'warehouseId': _warehouseId,
       'partyId': _partyId,
@@ -627,9 +869,12 @@ class _OrderFormPageState extends State<OrderFormPage> {
             'productId': l.productId,
             'quantity': l.qtyValue,
             'price': l.priceValue,
+            if (!_isSale && _canUpdateSalePrice && l.newSalePriceValue > 0)
+              'newSalePrice': l.newSalePriceValue,
             'discountPercent': l.discountPercent,
             'discountAmount': l.discountAmount,
             'discountIsAmount': l.discountIsAmount,
+            'vatValue': l.vatValue,
           },
       ],
     };
@@ -643,8 +888,20 @@ class _OrderFormPageState extends State<OrderFormPage> {
     }
     final cash = _hasNonCash ? _cashPart : _grandTotal;
 
+    if (_isSale &&
+        cash > 0 &&
+        _cashKind == CashKind.cardTransfer &&
+        _cashTrackingCtrl.text.trim().isEmpty) {
+      _toast('کد رهگیری کارت به کارت را وارد کنید.');
+      return;
+    }
+
     cmd['paymentMethod'] = _declaredMethod;
     cmd['cashType'] = _cashKind;
+    if (_cashKind == CashKind.cardTransfer &&
+        _cashTrackingCtrl.text.trim().isNotEmpty) {
+      cmd['cashTrackingNumber'] = _cashTrackingCtrl.text.trim();
+    }
     if (_trsAccountId != null && _trsAccountId! > 0) {
       cmd['trsAccountId'] = _trsAccountId;
     }
@@ -711,6 +968,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
     cmd['cheques'] = chequeList;
     cmd['installments'] = instList;
+    if (_isSale && _useCheque && _chequeCharge != null) {
+      cmd['chequeCharge'] = _chequeCharge!.toJson();
+    }
 
     final paid = cash +
         chequeList.fold<double>(0, (s, c) => s + (c['amount'] as double)) +
@@ -729,10 +989,24 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
     setState(() => _saving = true);
     try {
-      if (_isEdit) {
-        await _repo.updateOrder(widget.source!.id, cmd);
+      final ShopOrder savedOrder;
+      if (_isConvertingProforma) {
+        savedOrder = await _repo.convertProforma(
+          widget.convertingProforma!.id,
+          cmd,
+        );
+      } else if (_isEdit) {
+        savedOrder = await _repo.updateOrder(widget.source!.id, cmd);
       } else {
-        await _repo.createOrder(cmd);
+        savedOrder = await _repo.createOrder(cmd);
+      }
+      if (!mounted) return;
+      if (printAfter && savedOrder.id > 0) {
+        await showShopInvoicePrintSheet(
+          context,
+          repo: _repo,
+          order: savedOrder,
+        );
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -875,6 +1149,13 @@ class _OrderFormPageState extends State<OrderFormPage> {
               ..dueDate = result.start.add(Duration(days: i * result.interval)),
           );
         }
+        _chequeCharge = SaleChequeChargeInput(
+          calculatorBaseAmount: result.baseAmount,
+          calculatorRatePercent: result.ratePercent,
+          calculatorMonths: result.months,
+          adjustmentRatePercent: result.ratePercent,
+          adjustmentPeriodDays: result.interval > 0 ? result.interval : 30,
+        );
       } else {
         _insts.clear();
         for (var i = 0; i < result.months; i++) {
@@ -898,6 +1179,22 @@ class _OrderFormPageState extends State<OrderFormPage> {
   }
 
   // ================= UI =================
+  String get _screenTitle {
+    if (_isProforma) return 'صدور پیش‌فاکتور فروش';
+    if (_isConvertingProforma) {
+      return 'تبدیل پیش‌فاکتور ${Fa.digits(widget.convertingProforma!.number)} به فروش';
+    }
+    if (widget.copyTemplate != null) {
+      return _isSale ? 'کپی و صدور فاکتور فروش' : 'کپی و ثبت فاکتور خرید';
+    }
+    if (_isEdit) {
+      return _isSale
+          ? 'ویرایش فاکتور فروش ${Fa.digits(widget.source!.number)}'
+          : 'ویرایش فاکتور خرید ${Fa.digits(widget.source!.number)}';
+    }
+    return _isSale ? 'صدور فاکتور فروش' : 'ثبت فاکتور خرید';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -907,11 +1204,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
         foregroundColor: ShopColors.ink,
         elevation: 0.5,
         title: Text(
-          _isEdit
-              ? (_isSale
-                    ? 'ویرایش فاکتور فروش ${widget.source!.number}'
-                    : 'ویرایش فاکتور خرید ${widget.source!.number}')
-              : (_isSale ? 'صدور فاکتور فروش' : 'ثبت فاکتور خرید'),
+          _screenTitle,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
         ),
       ),
@@ -921,8 +1214,10 @@ class _OrderFormPageState extends State<OrderFormPage> {
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
               children: [
                 _headerCard(),
-                const SizedBox(height: 10),
-                _paymentCard(),
+                if (!_isProforma) ...[
+                  const SizedBox(height: 10),
+                  _paymentCard(),
+                ],
                 const SizedBox(height: 10),
                 _linesCard(),
                 if (_isSale && (_canSeeProfit || _referrerId > 0))
@@ -938,22 +1233,35 @@ class _OrderFormPageState extends State<OrderFormPage> {
           ),
           child: Row(
             children: [
+              OutlinedButton(
+                onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  foregroundColor: ShopColors.inkSoft,
+                  side: const BorderSide(color: ShopColors.line),
+                ),
+                child: const Text('انصراف', style: TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton(
-                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : () => _save(printAfter: true),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 48),
-                    foregroundColor: ShopColors.inkSoft,
-                    side: const BorderSide(color: ShopColors.line),
+                    foregroundColor: ShopColors.teal,
+                    side: const BorderSide(color: ShopColors.teal),
                   ),
-                  child: const Text('انصراف'),
+                  icon: const Icon(Icons.print_rounded, size: 17),
+                  label: const Text(
+                    'ثبت و چاپ',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 2,
                 child: FilledButton.icon(
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving ? null : () => _save(),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 48),
                     backgroundColor: ShopColors.seed,
@@ -969,7 +1277,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         )
                       : const Icon(Icons.check_rounded, size: 18),
                   label: Text(
-                    _isEdit ? 'ذخیره تغییرات' : 'ثبت فاکتور — خرید/فروش',
+                    _isProforma
+                        ? 'ثبت پیش‌فاکتور'
+                        : (_isEdit ? 'ذخیره تغییرات' : 'ثبت سند'),
                     style: const TextStyle(fontSize: 12.5),
                   ),
                 ),
@@ -1089,7 +1399,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
           InkWell(
             onTap: () => _pickDate(
               title: 'تاریخ سند',
-              onPicked: (d) => _date = d,
+              onPicked: _onInvoiceDateChanged,
             ),
             borderRadius: BorderRadius.circular(12),
             child: Container(
@@ -1291,6 +1601,25 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 }
               }),
             ),
+            if (_cashKind == CashKind.cardTransfer) ...[
+              const SizedBox(height: 8),
+              _label('کد رهگیری کارت به کارت', required: _isSale),
+              TextField(
+                controller: _cashTrackingCtrl,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: _isSale
+                      ? 'شماره پیگیری واریز مشتری (الزامی)'
+                      : 'شماره پیگیری واریز (اختیاری)',
+                  hintStyle: const TextStyle(
+                    fontSize: 11,
+                    color: ShopColors.inkFaint,
+                  ),
+                ),
+                style: const TextStyle(fontSize: 12.5),
+              ),
+            ],
             const SizedBox(height: 8),
             _label('بانک/صندوق'),
             Row(
@@ -1940,6 +2269,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
   Widget _linesCard() {
     final gross = _lines.fold<double>(0, (s, l) => s + l.gross);
     final lineDiscount = _lines.fold<double>(0, (s, l) => s + l.discountAmount);
+    final vatSum = _lines.fold<double>(0, (s, l) => s + l.vatAmount);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1952,10 +2282,10 @@ class _OrderFormPageState extends State<OrderFormPage> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'اقلام فاکتور',
-                  style: TextStyle(
+                  _isProforma ? 'اقلام پیش‌فاکتور' : 'اقلام فاکتور',
+                  style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w900,
                     color: ShopColors.ink,
@@ -1971,6 +2301,37 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 ),
               ),
             ],
+          ),
+          // نوار افزودن سریع با بارکد یا کد کالا
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _barcodeCtrl,
+                    textDirection: TextDirection.ltr,
+                    onSubmitted: _addByBarcode,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      prefixIcon: Icon(Icons.qr_code_scanner_rounded, size: 17),
+                      hintText: 'افزودن سریع با بارکد یا کد کالا + Enter',
+                      hintStyle: TextStyle(
+                        fontSize: 11,
+                        color: ShopColors.inkFaint,
+                      ),
+                    ),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton.filledTonal(
+                  onPressed: _addByBarcode,
+                  icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
+                  tooltip: 'افزودن کالا با بارکد/کد',
+                ),
+              ],
+            ),
           ),
           for (var i = 0; i < _lines.length; i++) _lineCard(i),
           const SizedBox(height: 8),
@@ -1993,9 +2354,15 @@ class _OrderFormPageState extends State<OrderFormPage> {
                   lineDiscount > 0 ? '- ${Fa.number(lineDiscount)} ریال' : '۰',
                   lineDiscount > 0 ? ShopColors.danger : ShopColors.inkFaint,
                 ),
+                if (vatSum > 0)
+                  _sumLine(
+                    'جمع ارزش افزوده',
+                    '${Fa.number(vatSum)} ریال',
+                    ShopColors.teal,
+                  ),
                 const Divider(height: 10, color: ShopColors.line),
                 _sumLine(
-                  'مبلغ نهایی فاکتور',
+                  _isProforma ? 'مبلغ نهایی پیش‌فاکتور' : 'مبلغ نهایی فاکتور',
                   '${Fa.number(_grandTotal)} ریال',
                   ShopColors.seed,
                   bold: true,
@@ -2012,13 +2379,22 @@ class _OrderFormPageState extends State<OrderFormPage> {
     final l = _lines[i];
     final p = _productOf(l.productId);
     final avail = _warehouseStocks[l.productId] ?? 0;
+    final sellable = _sellableStocks[l.productId] ?? avail;
     final showStock = l.productId > 0 && _warehouseId > 0 && !(p?.isService ?? false);
+    final minRev = l.minProfit?.minimumProfitEnabled == true
+        ? l.minProfit?.minimumUnitRevenue
+        : null;
+    final belowMinProfit =
+        _isSale && minRev != null && l.priceValue > 0 && l.priceValue < minRev;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
         color: ShopColors.bg,
         borderRadius: BorderRadius.circular(12),
+        border: belowMinProfit
+            ? Border.all(color: ShopColors.danger.withValues(alpha: 0.6))
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2093,22 +2469,45 @@ class _OrderFormPageState extends State<OrderFormPage> {
               ),
             ],
           ),
-          if (l.unit.isNotEmpty || showStock)
+          if (l.unit.isNotEmpty || showStock || minRev != null)
             Padding(
-              padding: const EdgeInsets.only(top: 2, bottom: 2),
-              child: Text(
-                [
-                  if (l.unit.isNotEmpty) 'واحد: ${l.unit}',
+              padding: const EdgeInsets.only(top: 2, bottom: 3),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  if (l.unit.isNotEmpty)
+                    Text(
+                      'واحد: ${l.unit}',
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        color: ShopColors.inkFaint,
+                      ),
+                    ),
                   if (showStock)
-                    '· موجودی انبار: ${Fa.number(avail)}'
-                        '${avail <= 0 ? ' (ناموجود)' : ''}',
-                ].join('  '),
-                style: TextStyle(
-                  fontSize: 9.5,
-                  color: showStock && avail <= 0
-                      ? ShopColors.danger
-                      : ShopColors.inkFaint,
-                ),
+                    Text(
+                      'موجودی به تاریخ سند: ${Fa.number(avail)}'
+                      '${_isSale && sellable < avail ? ' (قابل فروش با توجه به فروش‌های آتی: ${Fa.number(sellable)})' : ''}'
+                      '${avail <= 0 ? ' (ناموجود)' : ''}',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        color: avail <= 0 || (_isSale && l.qtyValue > sellable)
+                            ? ShopColors.danger
+                            : ShopColors.inkFaint,
+                      ),
+                    ),
+                  if (minRev != null)
+                    Text(
+                      'کف مجاز فی فروش: ${Fa.number(minRev)} ریال',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: belowMinProfit
+                            ? ShopColors.danger
+                            : ShopColors.teal,
+                      ),
+                    ),
+                ],
               ),
             ),
           Row(
@@ -2154,6 +2553,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
                       onChanged: (v) {
+                        l.manualPrice = true;
                         l.price = formatNumText(v);
                         _recalcDiscount(l);
                         setState(() {});
@@ -2191,10 +2591,73 @@ class _OrderFormPageState extends State<OrderFormPage> {
                   ],
                 ),
               ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label(l.vatValue > 100 ? 'ارزش افزوده (ریال)' : 'ارزش افزوده (٪)'),
+                    TextField(
+                      controller: TextEditingController(text: l.vat)
+                        ..selection = TextSelection.collapsed(
+                          offset: l.vat.length,
+                        ),
+                      keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      onChanged: (v) {
+                        final n = parseNum(v);
+                        l.vat = n > 100 ? formatNumText(v) : v;
+                        setState(() {});
+                      },
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        hintText: '0',
+                        hintStyle: TextStyle(fontSize: 10.5),
+                      ),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
+          if (!_isSale && _canUpdateSalePrice && l.productId > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Expanded(
+                  flex: 2,
+                  child: Text(
+                    'بروزرسانی فی فروش کالا در کاتالوگ (اختیاری):',
+                    style: TextStyle(fontSize: 10.5, color: ShopColors.inkSoft),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: TextEditingController(text: l.newSalePrice)
+                      ..selection = TextSelection.collapsed(
+                        offset: l.newSalePrice.length,
+                      ),
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    onChanged: (v) => l.newSalePrice = formatNumText(v),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: 'فی فروش جدید',
+                      hintStyle: TextStyle(fontSize: 10.5),
+                    ),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 4),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 2,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 'مبلغ کل: ${Fa.number(l.total)} ریال',
@@ -2204,8 +2667,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                   color: ShopColors.seed,
                 ),
               ),
-              if (l.discountAmount > 0) ...[
-                const SizedBox(width: 8),
+              if (l.discountAmount > 0)
                 Text(
                   'تخفیف ${Fa.number(l.discountAmount)}',
                   style: const TextStyle(
@@ -2213,8 +2675,15 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     color: ShopColors.danger,
                   ),
                 ),
-              ],
-              const Spacer(),
+              if (l.vatAmount > 0)
+                Text(
+                  'ارزش افزوده ${Fa.number(l.vatAmount)}',
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    color: ShopColors.teal,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               if (_isSale && _canSeeProfit && l.productId > 0)
                 Text(
                   'سود ${Fa.number(_lineProfit(l))}',
@@ -2226,8 +2695,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         : ShopColors.danger,
                   ),
                 ),
-              if (_isSale && _referrerId > 0 && l.productId > 0) ...[
-                const SizedBox(width: 8),
+              if (_isSale && _referrerId > 0 && l.productId > 0)
                 Text(
                   'پورسانت ${Fa.number(_lineCommission(l))}',
                   style: const TextStyle(
@@ -2236,7 +2704,6 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     color: ShopColors.indigo,
                   ),
                 ),
-              ],
             ],
           ),
         ],
@@ -2454,6 +2921,8 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
 // ============================================================
 class _CalcResult {
   _CalcResult({
+    required this.baseAmount,
+    required this.ratePercent,
     required this.months,
     required this.interval,
     required this.start,
@@ -2461,6 +2930,8 @@ class _CalcResult {
     required this.total,
     required this.amounts,
   });
+  final double baseAmount;
+  final double ratePercent;
   final int months;
   final int interval;
   final DateTime start;
@@ -2515,6 +2986,8 @@ class _CalcSheetState extends State<_CalcSheet> {
     Navigator.pop(
       context,
       _CalcResult(
+        baseAmount: _baseVal,
+        ratePercent: _rateVal,
         months: _months,
         interval: _interval,
         start: _start,

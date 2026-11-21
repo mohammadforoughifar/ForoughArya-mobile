@@ -184,7 +184,7 @@ class ShopHomePage extends StatelessWidget {
       if (perms.canSeePurchase)
         _Item(
           'خرید',
-          'سفارش و فاکتور خرید',
+          'رسید خرید، ارزش افزوده، بروزرسانی فی فروش و چاپ رسید',
           Icons.shopping_bag_rounded,
           onTap: () =>
               _push(context, const SaleOrdersPage(type: TxnType.purchase)),
@@ -192,7 +192,7 @@ class ShopHomePage extends StatelessWidget {
       if (perms.canSeeSale)
         _Item(
           'فروش',
-          'سفارش و فاکتور فروش',
+          'فاکتور و پیش‌فاکتور فروش، چاپ، نسیه و برگشت چکی',
           Icons.shopping_cart_rounded,
           onTap: () => _push(context, const SaleOrdersPage(type: TxnType.sale)),
         ),

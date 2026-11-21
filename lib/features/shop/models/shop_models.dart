@@ -541,6 +541,11 @@ class ShopCompanyProfile {
     this.phone,
     this.address,
     this.logoDataUrl,
+    this.taxId,
+    this.economicCode,
+    this.printHeaderLines,
+    this.printFooterLines,
+    this.printPaperSize = 'A4',
   });
 
   final int id;
@@ -548,6 +553,11 @@ class ShopCompanyProfile {
   final String? phone;
   final String? address;
   final String? logoDataUrl;
+  final String? taxId;
+  final String? economicCode;
+  final String? printHeaderLines;
+  final String? printFooterLines;
+  final String printPaperSize;
 
   factory ShopCompanyProfile.fromJson(Map<String, dynamic> j) =>
       ShopCompanyProfile(
@@ -556,6 +566,11 @@ class ShopCompanyProfile {
         phone: _str(j['phone']),
         address: _str(j['address']),
         logoDataUrl: _str(j['logoDataUrl']),
+        taxId: _str(j['taxId']),
+        economicCode: _str(j['economicCode']),
+        printHeaderLines: _str(j['printHeaderLines']),
+        printFooterLines: _str(j['printFooterLines']),
+        printPaperSize: (j['printPaperSize'] ?? 'A4').toString(),
       );
 }
 

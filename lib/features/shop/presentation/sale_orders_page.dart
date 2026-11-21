@@ -1,18 +1,14 @@
 // ============================================================
-//  اسناد فروش / اسناد خرید
-//  آینهٔ صفحهٔ وب: /orders/{Type} → Pages/Orders/Orders.razor
+//  اسناد فروش / اسناد خرید + پیش‌فاکتورهای فروش (فاز ۲ فروشگاهی کایر)
+//  آینهٔ کامل صفحهٔ وب: /orders/{Type} → Pages/Orders/Orders.razor
 //
-//  همان اجزا:
-//    • سرصفحه «اسناد فروش/خرید» + دکمهٔ «فروش جدید / خرید جدید»
-//    • فیلترها: از تاریخ، تا تاریخ (شمسی)، انبار، طرف حساب، «اعمال فیلتر»
-//    • ستون‌ها: شماره سند، تاریخ، طرف حساب، انبار، اقلام (تعداد قلم)،
-//      مبلغ کل، پرداخت (نشان نقدی/نسیه/چک/ترکیبی/اقساطی)،
-//      ستون سود فقط برای فروش و فقط با مجوز Orders.ViewProfit، عملیات
-//    • مشاهدهٔ سند (با اقلام، سود/بهای تمام‌شده، پورسانت، روش تسویه،
-//      حساب بانکی و چک‌ها) · ویرایش · حذف با متن تأیید وب
-//    • صفحه‌بندی ۱۵تایی (PageSize وب)
-//  ⚠️ دکمهٔ «چاپ فاکتور/رسید» وب با پنجرهٔ چاپ مرورگر کار می‌کند و در
-//     اندروید معادل ندارد؛ ساخته نشد تا چیزی خارج از وب نباشد.
+//  امکانات همگام‌سازی‌شده با وب:
+//    • سرصفحه «اسناد فروش/خرید» + «پیش‌فاکتور جدید» (فروش) + «فروش/خرید جدید»
+//    • تب دوگانه در فروش: «فاکتورهای فروش» و «پیش‌فاکتورهای فروش» (با چاپ و تبدیل به فروش)
+//    • فیلترها: از تاریخ، تا تاریخ (شمسی)، انبار، طرف حساب
+//    • عملیات کامل هر سند: مشاهده · چاپ (A4/A5/80mm) · کپی فاکتور · ویرایش ·
+//      نسیه و سوابق دریافت · برگشت فاکتور چکی · تعیین‌تکلیف بستانکاری مشتری ·
+//      ابطال فاکتور چکی · حذف (منطبق با گیت‌های Shop.Sale.* / Shop.Purchase.*)
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -27,6 +23,8 @@ import '../data/shop_repository.dart';
 import '../models/order_models.dart';
 import '../models/shop_models.dart';
 import 'order_form_page.dart';
+import 'order_operations_sheets.dart';
+import 'shop_invoice_print_sheet.dart';
 import 'shop_style.dart';
 
 class SaleOrdersPage extends StatefulWidget {
@@ -47,6 +45,8 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
   int _page = 1;
   int _total = 0;
   List<ShopOrder> _items = const [];
+  List<SalesProforma> _proformas = const [];
+  bool _showProformas = false;
   bool _loading = true;
   String? _error;
 
@@ -57,11 +57,12 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
 
   List<Warehouse> _warehouses = const [];
   List<Party> _parties = const [];
+  bool _serverProfitAccess = false;
 
   bool get _isPurchase => widget.type == TxnType.purchase;
-
-  /// همان گیت وب: Orders.ViewProfit (فقط مستقیم یا Admin)
-  bool get _canSeeProfit => _perms.canViewProfit;
+  bool get _canManage =>
+      _isPurchase ? _perms.canManagePurchase : _perms.canManageSale;
+  bool get _canSeeProfit => _perms.canViewProfit || _serverProfitAccess;
 
   int get _pageCount => _total <= 0 ? 1 : ((_total + pageSize - 1) ~/ pageSize);
 
@@ -77,19 +78,34 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
   Future<void> _loadLookups() async {
     List<Warehouse> whs = const [];
     List<Party> parties = const [];
+    bool profitAccess = false;
     try {
-      whs = (await _repo.warehouses()).items;
-    } catch (_) {}
+      whs = await _repo.invoiceWarehouses();
+    } catch (_) {
+      try {
+        whs = (await _repo.warehouses()).items;
+      } catch (_) {}
+    }
     try {
-      parties = (await _repo.parties(
+      parties = await _repo.invoiceParties(
         type: _isPurchase ? PartyType.supplier : PartyType.customer,
-        take: 500,
-      )).items;
-    } catch (_) {}
+      );
+    } catch (_) {
+      try {
+        parties = (await _repo.parties(
+          type: _isPurchase ? PartyType.supplier : PartyType.customer,
+          take: 500,
+        )).items;
+      } catch (_) {}
+    }
+    if (!_isPurchase) {
+      profitAccess = await _repo.orderProfitAccess();
+    }
     if (!mounted) return;
     setState(() {
       _warehouses = whs;
       _parties = parties;
+      _serverProfitAccess = profitAccess;
     });
   }
 
@@ -108,9 +124,21 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
         page: _page,
         pageSize: pageSize,
       );
+      List<SalesProforma> profs = const [];
+      if (!_isPurchase) {
+        try {
+          profs = await _repo.proformas(
+            from: _from,
+            to: _to,
+            partyId: _partyId,
+            warehouseId: _warehouseId,
+          );
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
         _items = res.items;
+        _proformas = profs;
         _total = res.total ?? res.items.length;
         if (_page > _pageCount) _page = _pageCount;
         _loading = false;
@@ -157,7 +185,6 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
     ShopOrder? full = source;
     if (source != null) {
       try {
-        // ویرایش: سند کامل همراه اقلام از سرور (مثل وب)
         full = await _repo.order(source.id) ?? source;
       } catch (_) {}
     }
@@ -168,6 +195,109 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
       ),
     );
     if (saved == true) _load();
+  }
+
+  Future<void> _copyOrder(ShopOrder source) async {
+    ShopOrder full = source;
+    try {
+      full = await _repo.order(source.id) ?? source;
+    } catch (_) {}
+    if (!mounted) return;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => OrderFormPage(type: widget.type, copyTemplate: full),
+      ),
+    );
+    if (saved == true) _load();
+  }
+
+  Future<void> _openNewProforma() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const OrderFormPage(
+          type: TxnType.sale,
+          isProforma: true,
+        ),
+      ),
+    );
+    if (saved == true) {
+      setState(() => _showProformas = true);
+      _load();
+    }
+  }
+
+  Future<void> _convertProforma(SalesProforma p) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => OrderFormPage(
+          type: TxnType.sale,
+          convertingProforma: p,
+        ),
+      ),
+    );
+    if (saved == true) {
+      _toast('پیش‌فاکتور به فاکتور فروش تبدیل شد.', ok: true);
+      _load();
+    }
+  }
+
+  Future<void> _printOrder(ShopOrder o, {bool isProforma = false}) async {
+    await showShopInvoicePrintSheet(
+      context,
+      repo: _repo,
+      order: o,
+      isProforma: isProforma,
+    );
+  }
+
+  Future<void> _openCreditLedger(ShopOrder o) async {
+    final changed = await showOrderCreditSheet(
+      context,
+      repo: _repo,
+      order: o,
+      canManage: _canManage,
+    );
+    if (changed == true) _load();
+  }
+
+  Future<void> _openChequeReturn(ShopOrder o) async {
+    final changed = await showChequeReturnSheet(
+      context,
+      repo: _repo,
+      order: o,
+    );
+    if (changed == true) {
+      _toast('برگشت کالا ثبت و اعمال شد.', ok: true);
+      _load();
+    }
+  }
+
+  Future<void> _openCreditSettlement(ShopOrder o) async {
+    final changed = await showCreditSettlementSheet(
+      context,
+      repo: _repo,
+      order: o,
+    );
+    if (changed == true) {
+      _toast('تسویه بستانکاری مشتری ثبت شد.', ok: true);
+      _load();
+    }
+  }
+
+  Future<void> _cancelChequeOrder(ShopOrder o) async {
+    try {
+      final done = await confirmChequeCancelDialog(
+        context,
+        repo: _repo,
+        order: o,
+      );
+      if (done) {
+        _toast('فاکتور چکی باطل شد.', ok: true);
+        _load();
+      }
+    } catch (e) {
+      _toast(e.toString());
+    }
   }
 
   Future<void> _delete(ShopOrder o) async {
@@ -201,12 +331,24 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
     }
   }
 
-  void _view(ShopOrder o) {
+  Future<void> _view(ShopOrder o) async {
+    ShopOrder full = o;
+    try {
+      full = await _repo.order(o.id) ?? o;
+    } catch (_) {}
+    if (!mounted) return;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _OrderDetailsSheet(order: o, canSeeProfit: _canSeeProfit),
+      builder: (_) => _OrderDetailsSheet(
+        order: full,
+        canSeeProfit: _canSeeProfit,
+        onPrint: () {
+          Navigator.pop(context);
+          _printOrder(full);
+        },
+      ),
     );
   }
 
@@ -223,21 +365,60 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
                 title: _isPurchase ? 'اسناد خرید' : 'اسناد فروش',
                 subtitle: _isPurchase
                     ? 'ثبت و مدیریت رسیدهای خرید'
-                    : 'ثبت و مدیریت فاکتورهای فروش',
+                    : 'ثبت و مدیریت فاکتورها و پیش‌فاکتورهای فروش',
                 icon: _isPurchase
                     ? Icons.shopping_bag_rounded
                     : Icons.shopping_cart_rounded,
                 badge: '${Fa.number(_total)} سند',
                 actions: [
-                  ShopHeaderButton(
-                    label: _isPurchase ? 'خرید جدید' : 'فروش جدید',
-                    icon: Icons.add_rounded,
-                    filled: true,
-                    onTap: () => _openForm(),
-                  ),
+                  if (!_isPurchase && _canManage)
+                    ShopHeaderButton(
+                      label: 'پیش‌فاکتور',
+                      icon: Icons.description_outlined,
+                      onTap: _openNewProforma,
+                    ),
+                  if (_canManage)
+                    ShopHeaderButton(
+                      label: _isPurchase ? 'خرید جدید' : 'فروش جدید',
+                      icon: Icons.add_rounded,
+                      filled: true,
+                      onTap: () => _openForm(),
+                    ),
                 ],
               ),
             ),
+
+            // ---------- سوییچر فاکتورها / پیش‌فاکتورهای فروش ----------
+            if (!_isPurchase)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                sliver: SliverToBoxAdapter(
+                  child: SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: const Icon(Icons.receipt_long_rounded, size: 17),
+                        label: Text(
+                          'فاکتورهای فروش (${Fa.number(_total)})',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: const Icon(Icons.description_outlined, size: 17),
+                        label: Text(
+                          'پیش‌فاکتورها (${Fa.number(_proformas.length)})',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                    selected: {_showProformas},
+                    onSelectionChanged: (s) =>
+                        setState(() => _showProformas = s.first),
+                  ),
+                ),
+              ),
+
             // ---------- فیلترها ----------
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
@@ -330,10 +511,7 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
                             backgroundColor: ShopColors.seed,
                             minimumSize: const Size(0, 42),
                           ),
-                          icon: const Icon(
-                            Icons.filter_alt_rounded,
-                            size: 16,
-                          ),
+                          icon: const Icon(Icons.filter_alt_rounded, size: 16),
                           label: const Text(
                             'اعمال فیلتر',
                             style: TextStyle(fontSize: 12),
@@ -345,6 +523,7 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
                 ),
               ),
             ),
+
             if (_loading)
               const SliverPadding(
                 padding: EdgeInsets.symmetric(vertical: 60),
@@ -373,6 +552,33 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
                   ),
                 ),
               )
+            else if (!_isPurchase && _showProformas)
+              _proformas.isEmpty
+                  ? const SliverPadding(
+                      padding: EdgeInsets.all(14),
+                      sliver: SliverToBoxAdapter(
+                        child: ShopEmpty(
+                          icon: Icons.description_outlined,
+                          title: 'پیش‌فاکتوری ثبت نشده است',
+                        ),
+                      ),
+                    )
+                  : SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+                      sliver: SliverList.separated(
+                        itemCount: _proformas.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 9),
+                        itemBuilder: (_, i) => _ProformaCard(
+                          proforma: _proformas[i],
+                          canManage: _canManage,
+                          onPrint: () => _printOrder(
+                            _proformas[i].toOrder(),
+                            isProforma: true,
+                          ),
+                          onConvert: () => _convertProforma(_proformas[i]),
+                        ),
+                      ),
+                    )
             else if (_items.isEmpty)
               const SliverPadding(
                 padding: EdgeInsets.all(14),
@@ -389,14 +595,24 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
                 sliver: SliverList.separated(
                   itemCount: _items.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 9),
-                  itemBuilder: (_, i) => _OrderCard(
-                    order: _items[i],
-                    isPurchase: _isPurchase,
-                    canSeeProfit: _canSeeProfit,
-                    onView: () => _view(_items[i]),
-                    onEdit: () => _openForm(_items[i]),
-                    onDelete: () => _delete(_items[i]),
-                  ),
+                  itemBuilder: (_, i) {
+                    final item = _items[i];
+                    return _OrderCard(
+                      order: item,
+                      isPurchase: _isPurchase,
+                      canManage: _canManage,
+                      canSeeProfit: _canSeeProfit,
+                      onView: () => _view(item),
+                      onPrint: () => _printOrder(item),
+                      onCopy: () => _copyOrder(item),
+                      onEdit: () => _openForm(item),
+                      onCreditLedger: () => _openCreditLedger(item),
+                      onChequeReturn: () => _openChequeReturn(item),
+                      onCreditSettlement: () => _openCreditSettlement(item),
+                      onChequeCancel: () => _cancelChequeOrder(item),
+                      onDelete: () => _delete(item),
+                    );
+                  },
                 ),
               ),
               SliverPadding(
@@ -526,28 +742,23 @@ class _SaleOrdersPageState extends State<SaleOrdersPage> {
 }
 
 // ============================================================
-//  کارت سند (نمای کارتی موبایل وب)
+//  کارت پیش‌فاکتور فروش
 // ============================================================
-class _OrderCard extends StatelessWidget {
-  const _OrderCard({
-    required this.order,
-    required this.isPurchase,
-    required this.canSeeProfit,
-    required this.onView,
-    required this.onEdit,
-    required this.onDelete,
+class _ProformaCard extends StatelessWidget {
+  const _ProformaCard({
+    required this.proforma,
+    required this.canManage,
+    required this.onPrint,
+    required this.onConvert,
   });
 
-  final ShopOrder order;
-  final bool isPurchase;
-  final bool canSeeProfit;
-  final VoidCallback onView;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final SalesProforma proforma;
+  final bool canManage;
+  final VoidCallback onPrint;
+  final VoidCallback onConvert;
 
   @override
   Widget build(BuildContext context) {
-    final o = order;
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
@@ -560,6 +771,159 @@ class _OrderCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              const Icon(
+                Icons.description_outlined,
+                size: 16,
+                color: ShopColors.teal,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                Fa.digits(proforma.number),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w900,
+                  color: ShopColors.teal,
+                ),
+              ),
+              const Spacer(),
+              ShopTag(
+                text: proforma.isConverted
+                    ? 'تبدیل‌شده به فروش'
+                    : 'در انتظار تبدیل',
+                color: proforma.isConverted ? ShopColors.ok : ShopColors.warn,
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            proforma.partyName,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: ShopColors.ink,
+            ),
+          ),
+          Text(
+            '${Fa.date(proforma.document.date.toIso8601String(), time: false)}'
+            ' — ${Fa.number(proforma.document.lines.length)} قلم — ${proforma.warehouseName}',
+            style: const TextStyle(fontSize: 10, color: ShopColors.inkFaint),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: ShopColors.bg,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  'مبلغ پیش‌فاکتور',
+                  style: TextStyle(fontSize: 10.5, color: ShopColors.inkFaint),
+                ),
+                const Spacer(),
+                Text(
+                  '${Fa.number(proforma.document.totalAmount)} ریال',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: ShopColors.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onPrint,
+                  icon: const Icon(Icons.print_rounded, size: 15),
+                  label: const Text('چاپ', style: TextStyle(fontSize: 11.5)),
+                ),
+              ),
+              if (canManage && !proforma.isConverted) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: ShopColors.seed,
+                    ),
+                    onPressed: onConvert,
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                    label: const Text(
+                      'تبدیل به فاکتور فروش',
+                      style: TextStyle(fontSize: 11.5),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+//  کارت سند (نمای کارتی موبایل وب با همه عملیات فاز ۲)
+// ============================================================
+class _OrderCard extends StatelessWidget {
+  const _OrderCard({
+    required this.order,
+    required this.isPurchase,
+    required this.canManage,
+    required this.canSeeProfit,
+    required this.onView,
+    required this.onPrint,
+    required this.onCopy,
+    required this.onEdit,
+    required this.onCreditLedger,
+    required this.onChequeReturn,
+    required this.onCreditSettlement,
+    required this.onChequeCancel,
+    required this.onDelete,
+  });
+
+  final ShopOrder order;
+  final bool isPurchase;
+  final bool canManage;
+  final bool canSeeProfit;
+  final VoidCallback onView;
+  final VoidCallback onPrint;
+  final VoidCallback onCopy;
+  final VoidCallback onEdit;
+  final VoidCallback onCreditLedger;
+  final VoidCallback onChequeReturn;
+  final VoidCallback onCreditSettlement;
+  final VoidCallback onChequeCancel;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final o = order;
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: o.isCancelled
+              ? ShopColors.danger.withValues(alpha: 0.5)
+              : ShopColors.line,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
               Icon(
                 isPurchase
                     ? Icons.shopping_bag_rounded
@@ -567,18 +931,24 @@ class _OrderCard extends StatelessWidget {
                 size: 16,
                 color: ShopColors.seed,
               ),
-              const SizedBox(width: 6),
               Text(
-                o.number,
+                Fa.digits(o.number),
                 style: const TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w900,
                   color: ShopColors.seed,
                 ),
               ),
-              const SizedBox(width: 8),
               ShopTag(text: o.payLabel, color: _payColor(o.paymentMethod)),
-              const Spacer(),
+              if (o.isCancelled)
+                const ShopTag(text: 'باطل‌شده', color: ShopColors.danger),
+              if (o.returnedGoodsAmount > 0)
+                const ShopTag(text: 'دارای مرجوعی', color: ShopColors.warn),
+              if (o.availableCustomerCredit > 0)
+                ShopTag(
+                  text: 'بستانکاری ${Fa.number(o.availableCustomerCredit)}',
+                  color: ShopColors.teal,
+                ),
               if (o.isSale && canSeeProfit && o.totalProfit != null)
                 ShopTag(
                   text: 'سود ${Fa.number(o.totalProfit ?? 0)}',
@@ -636,14 +1006,104 @@ class _OrderCard extends StatelessWidget {
           Row(
             children: [
               _act('مشاهده', Icons.visibility_outlined, ShopColors.seed, onView),
-              const SizedBox(width: 6),
-              _act('ویرایش', Icons.edit_outlined, ShopColors.indigo, onEdit),
-              const SizedBox(width: 6),
-              _act(
-                'حذف',
-                Icons.delete_outline_rounded,
-                ShopColors.danger,
-                onDelete,
+              const SizedBox(width: 5),
+              _act('چاپ', Icons.print_outlined, ShopColors.teal, onPrint),
+              if (!isPurchase) ...[
+                const SizedBox(width: 5),
+                _act(
+                  'نسیه',
+                  Icons.account_balance_wallet_outlined,
+                  ShopColors.warn,
+                  onCreditLedger,
+                ),
+              ],
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                tooltip: 'سایر عملیات سند',
+                padding: EdgeInsets.zero,
+                icon: const Icon(
+                  Icons.more_vert_rounded,
+                  size: 19,
+                  color: ShopColors.inkSoft,
+                ),
+                onSelected: (v) {
+                  switch (v) {
+                    case 'copy':
+                      onCopy();
+                    case 'edit':
+                      onEdit();
+                    case 'chequeReturn':
+                      onChequeReturn();
+                    case 'creditSettlement':
+                      onCreditSettlement();
+                    case 'chequeCancel':
+                      onChequeCancel();
+                    case 'delete':
+                      onDelete();
+                  }
+                },
+                itemBuilder: (_) => [
+                  if (canManage)
+                    const PopupMenuItem(
+                      value: 'copy',
+                      child: Text(
+                        'کپی به سند جدید',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  if (canManage && !o.isCancelled)
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Text(
+                        'ویرایش سند',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  if (canManage &&
+                      o.isSale &&
+                      o.hasChequeCharge &&
+                      !o.isCancelled)
+                    const PopupMenuItem(
+                      value: 'chequeReturn',
+                      child: Text(
+                        'برگشت کالا (فاکتور چکی)',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  if (canManage && o.isSale && o.availableCustomerCredit > 0)
+                    const PopupMenuItem(
+                      value: 'creditSettlement',
+                      child: Text(
+                        'تعیین‌تکلیف بستانکاری مشتری',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  if (canManage &&
+                      o.isSale &&
+                      o.hasChequeCharge &&
+                      !o.isCancelled)
+                    const PopupMenuItem(
+                      value: 'chequeCancel',
+                      child: Text(
+                        'ابطال فاکتور چکی',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: ShopColors.danger,
+                        ),
+                      ),
+                    ),
+                  if (canManage && o.canDelete)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        'حذف سند',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: ShopColors.danger,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -700,14 +1160,20 @@ class _OrderCard extends StatelessWidget {
 //  جزئیات سند — آینهٔ مودال «جزئیات سند» وب
 // ============================================================
 class _OrderDetailsSheet extends StatelessWidget {
-  const _OrderDetailsSheet({required this.order, required this.canSeeProfit});
+  const _OrderDetailsSheet({
+    required this.order,
+    required this.canSeeProfit,
+    required this.onPrint,
+  });
 
   final ShopOrder order;
   final bool canSeeProfit;
+  final VoidCallback onPrint;
 
   @override
   Widget build(BuildContext context) {
     final o = order;
+    final vatSum = o.lines.fold<double>(0, (s, l) => s + l.computedVat);
     return SafeArea(
       top: false,
       child: Container(
@@ -725,11 +1191,19 @@ class _OrderDetailsSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'جزئیات سند',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                    'جزئیات سند ${Fa.digits(o.number)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
+                ),
+                TextButton.icon(
+                  onPressed: onPrint,
+                  icon: const Icon(Icons.print_rounded, size: 16),
+                  label: const Text('چاپ', style: TextStyle(fontSize: 12)),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -741,12 +1215,14 @@ class _OrderDetailsSheet extends StatelessWidget {
               spacing: 14,
               runSpacing: 8,
               children: [
-                _kv('شماره سند', o.number),
+                _kv('شماره سند', Fa.digits(o.number)),
                 _kv('تاریخ', Fa.date(o.date?.toIso8601String(), time: false)),
                 _kv('طرف حساب', o.partyName ?? '—'),
                 _kv('انبار', o.warehouseName ?? '—'),
                 if ((o.referrerName ?? '').isNotEmpty)
                   _kv('معرف', o.referrerName!),
+                if ((o.cashTrackingNumber ?? '').isNotEmpty)
+                  _kv('کد رهگیری', Fa.digits(o.cashTrackingNumber)),
               ],
             ),
             if (o.description.trim().isNotEmpty)
@@ -819,6 +1295,10 @@ class _OrderDetailsSheet extends StatelessWidget {
                         _small('قیمت واحد', Fa.number(l.price)),
                         if (l.discountAmount > 0)
                           _small('تخفیف', Fa.number(l.discountAmount)),
+                        if (l.computedVat > 0)
+                          _small('ارزش افزوده', Fa.number(l.computedVat)),
+                        if (l.returnedQuantity > 0)
+                          _small('مرجوعی', Fa.number(l.returnedQuantity)),
                         if (o.isSale && canSeeProfit)
                           _small(
                             'بهای تمام‌شده',
@@ -850,8 +1330,30 @@ class _OrderDetailsSheet extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  if (vatSum > 0)
+                    _line(
+                      'جمع ارزش افزوده',
+                      '${Fa.number(vatSum)} ریال',
+                      ShopColors.teal,
+                    ),
+                  if (o.chequeIncomeAmount > 0)
+                    _line(
+                      'مابه‌التفاوت فروش چکی',
+                      '${Fa.number(o.chequeIncomeAmount)} ریال',
+                      ShopColors.indigo,
+                    ),
+                  if (o.returnedGoodsAmount > 0)
+                    _line(
+                      'کالای مرجوعی ثبت‌شده',
+                      '- ${Fa.number(o.returnedGoodsAmount)} ریال',
+                      ShopColors.danger,
+                    ),
                   if (o.isSale && canSeeProfit && o.totalProfit != null)
-                    _line('سود سند', Fa.number(o.totalProfit ?? 0), ShopColors.ok),
+                    _line(
+                      'سود سند',
+                      Fa.number(o.totalProfit ?? 0),
+                      ShopColors.ok,
+                    ),
                   if ((o.commissionAmount ?? 0) > 0) ...[
                     _line(
                       'پورسانت معرف',
