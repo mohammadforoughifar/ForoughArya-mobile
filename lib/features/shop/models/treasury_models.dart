@@ -909,12 +909,15 @@ class ShopCheque {
   ShopCheque({
     this.id = 0,
     this.transactionId = 0,
+    this.hasChequeCharge = false,
     this.orderNumber = '',
     this.transactionType = 0,
     this.partyId = 0,
     this.partyName = '',
     this.partyMobile,
+    this.partyPhone,
     this.number = '',
+    this.trsAccountId,
     this.bankName,
     this.accountInfo,
     this.ownerName,
@@ -931,6 +934,7 @@ class ShopCheque {
 
   final int id;
   final int transactionId;
+  final bool hasChequeCharge;
   final String orderNumber;
 
   /// ۱ = خرید (پرداختی ما) · ۲ = فروش (دریافتی)
@@ -938,7 +942,9 @@ class ShopCheque {
   final int partyId;
   final String partyName;
   final String? partyMobile;
+  final String? partyPhone;
   final String number;
+  final int? trsAccountId;
   final String? bankName;
   final String? accountInfo;
   final String? ownerName;
@@ -954,17 +960,31 @@ class ShopCheque {
 
   bool get isReceivable => transactionType == 2;
 
+  bool get isPurchase => transactionType == 1;
+
   bool get isBounced => status == TrsChequeState.bounced;
+
+  bool get isCancelledOrEndorsed =>
+      status == TrsChequeState.cancelled || status == TrsChequeState.endorsed;
+
+  bool get canSettle =>
+      !isCleared &&
+      status != TrsChequeState.cleared &&
+      status != TrsChequeState.cancelled &&
+      status != TrsChequeState.endorsed;
 
   factory ShopCheque.fromJson(Map<String, dynamic> j) => ShopCheque(
     id: (j['id'] as num?)?.toInt() ?? 0,
     transactionId: (j['transactionId'] as num?)?.toInt() ?? 0,
+    hasChequeCharge: j['hasChequeCharge'] == true,
     orderNumber: (j['orderNumber'] ?? '').toString(),
     transactionType: (j['transactionType'] as num?)?.toInt() ?? 0,
     partyId: (j['partyId'] as num?)?.toInt() ?? 0,
     partyName: (j['partyName'] ?? '').toString(),
     partyMobile: _s(j['partyMobile']),
+    partyPhone: _s(j['partyPhone']),
     number: (j['number'] ?? '').toString(),
+    trsAccountId: (j['trsAccountId'] as num?)?.toInt(),
     bankName: _s(j['bankName']),
     accountInfo: _s(j['accountInfo']),
     ownerName: _s(j['ownerName']),
@@ -980,15 +1000,70 @@ class ShopCheque {
   );
 }
 
+/// پیش‌نمایش تغییر سررسید چک — `SaleChequeReschedulePreview`
+class SaleChequeReschedulePreview {
+  const SaleChequeReschedulePreview({
+    this.baseAmount = 0,
+    this.ratePercent = 0,
+    this.periodDays = 0,
+    this.incomeDelta = 0,
+  });
+
+  final double baseAmount;
+  final double ratePercent;
+  final int periodDays;
+  final double incomeDelta;
+
+  factory SaleChequeReschedulePreview.fromJson(Map<String, dynamic> j) =>
+      SaleChequeReschedulePreview(
+        baseAmount: _d(j['baseAmount']),
+        ratePercent: _d(j['ratePercent']),
+        periodDays: (j['periodDays'] as num?)?.toInt() ?? 0,
+        incomeDelta: _d(j['incomeDelta']),
+      );
+}
+
+/// یک ردیف تاریخچه وضعیت چک — `SaleChequeStatusHistoryItem`
+class SaleChequeStatusHistoryItem {
+  const SaleChequeStatusHistoryItem({
+    this.createdAt,
+    this.previousStatus = 0,
+    this.newStatus = 0,
+    this.createdBy,
+    this.reason,
+  });
+
+  final DateTime? createdAt;
+  final int previousStatus;
+  final int newStatus;
+  final String? createdBy;
+  final String? reason;
+
+  factory SaleChequeStatusHistoryItem.fromJson(Map<String, dynamic> j) =>
+      SaleChequeStatusHistoryItem(
+        createdAt: DateTime.tryParse(
+          (j['createdAt'] ?? '').toString(),
+        )?.toLocal(),
+        previousStatus: (j['previousStatus'] as num?)?.toInt() ?? 0,
+        newStatus: (j['newStatus'] as num?)?.toInt() ?? 0,
+        createdBy: _s(j['createdBy']),
+        reason: _s(j['reason']),
+      );
+}
+
 /// قسط فروشگاهی — `ShopInstallmentItem`
 class ShopInstallment {
   ShopInstallment({
     this.id = 0,
     this.transactionId = 0,
+    this.hasChequeCharge = false,
+    this.transactionType = 2,
+    this.hasTrackedReceipt = false,
     this.orderNumber = '',
     this.partyId = 0,
     this.partyName = '',
     this.partyMobile,
+    this.partyPhone,
     this.no = 1,
     this.amount = 0,
     this.dueDate,
@@ -999,10 +1074,14 @@ class ShopInstallment {
 
   final int id;
   final int transactionId;
+  final bool hasChequeCharge;
+  final int transactionType;
+  final bool hasTrackedReceipt;
   final String orderNumber;
   final int partyId;
   final String partyName;
   final String? partyMobile;
+  final String? partyPhone;
   final int no;
   final double amount;
   final DateTime? dueDate;
@@ -1010,13 +1089,19 @@ class ShopInstallment {
   final DateTime? paidAt;
   final int daysOverdue;
 
+  bool get isPurchase => transactionType == 1;
+
   factory ShopInstallment.fromJson(Map<String, dynamic> j) => ShopInstallment(
     id: (j['id'] as num?)?.toInt() ?? 0,
     transactionId: (j['transactionId'] as num?)?.toInt() ?? 0,
+    hasChequeCharge: j['hasChequeCharge'] == true,
+    transactionType: (j['transactionType'] as num?)?.toInt() ?? 2,
+    hasTrackedReceipt: j['hasTrackedReceipt'] == true,
     orderNumber: (j['orderNumber'] ?? '').toString(),
     partyId: (j['partyId'] as num?)?.toInt() ?? 0,
     partyName: (j['partyName'] ?? '').toString(),
     partyMobile: _s(j['partyMobile']),
+    partyPhone: _s(j['partyPhone']),
     no: (j['no'] as num?)?.toInt() ?? 1,
     amount: _d(j['amount']),
     dueDate: DateTime.tryParse((j['dueDate'] ?? '').toString())?.toLocal(),

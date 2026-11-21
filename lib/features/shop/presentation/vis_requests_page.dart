@@ -19,6 +19,7 @@ import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
 import '../data/shop_repository.dart';
 import '../models/visit_models.dart';
+import 'shop_phase3_reports_pages.dart';
 import 'shop_style.dart';
 import 'visit_detail_page.dart';
 import 'visit_form_page.dart';
@@ -161,6 +162,15 @@ class _VisRequestsPageState extends State<VisRequestsPage> {
           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
         ),
         actions: [
+          IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const VisRequestsReportPage(),
+              ),
+            ),
+            icon: const Icon(Icons.analytics_rounded, size: 20),
+            tooltip: 'گزارش تجمیع سفارش‌ها',
+          ),
           IconButton(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const VisApprovalsPage()),

@@ -408,11 +408,15 @@ class ShopEmpty extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.icon = Icons.inbox_rounded,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String title;
   final String? subtitle;
   final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -425,6 +429,7 @@ class ShopEmpty extends StatelessWidget {
         border: Border.all(color: ShopColors.line),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 42, color: ShopColors.inkFaint.withValues(alpha: 0.6)),
           const SizedBox(height: 10),
@@ -449,7 +454,63 @@ class ShopEmpty extends StatelessWidget {
               ),
             ),
           ],
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: Text(actionLabel!),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// نام مستعار `ShopTag` برای یکپارچگی در کارت‌های عملیاتی
+typedef ShopPill = ShopTag;
+
+/// کادر جستجوی استاندارد صفحات فروشگاهی
+class ShopSearchField extends StatelessWidget {
+  const ShopSearchField({
+    super.key,
+    required this.controller,
+    required this.hint,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, val, _) => TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: const TextStyle(fontSize: 12.5),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(fontSize: 11.5, color: ShopColors.inkFaint),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: ShopColors.inkFaint,
+          ),
+          suffixIcon: val.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 16),
+                  onPressed: () {
+                    controller.clear();
+                    onChanged?.call('');
+                  },
+                ),
+          isDense: true,
+        ),
       ),
     );
   }

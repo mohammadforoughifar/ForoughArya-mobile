@@ -21,6 +21,7 @@ import '../data/shop_repository.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
 import 'order_form_page.dart' show QuickBankSheet;
+import 'shop_phase3_reports_pages.dart';
 import 'shop_style.dart';
 
 class ExpensesPage extends StatefulWidget {
@@ -227,10 +228,21 @@ class _ExpensesPageState extends State<ExpensesPage> {
                 badge: '${Fa.number(_total)} سند',
                 actions: [
                   ShopHeaderButton(
+                    label: 'گزارش',
+                    icon: Icons.bar_chart_rounded,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ExpenseReportPage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  ShopHeaderButton(
                     label: 'انواع هزینه',
                     icon: Icons.sell_rounded,
                     onTap: _openCats,
                   ),
+                  const SizedBox(width: 6),
                   ShopHeaderButton(
                     label: 'هزینه جدید',
                     icon: Icons.add_rounded,

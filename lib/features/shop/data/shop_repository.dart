@@ -751,18 +751,26 @@ class ShopRepository {
   // ---------- حساب‌های خزانه (برای بخش پرداخت سند) ----------
 
   /// `GET /api/orders/active-treasury-accounts` با fallback به `GET /api/trs/accounts`
-  Future<List<TrsAccount>> trsAccounts({bool activeOnly = true}) async {
+  Future<List<TrsAccount>> trsAccounts({
+    bool activeOnly = true,
+    int? kind,
+  }) async {
     if (activeOnly) {
       try {
         final r = await _api.get<dynamic>(
           '/api/orders/active-treasury-accounts',
+          query: {if (kind != null) 'kind': kind},
         );
         return ShopPage.parse(r.data, TrsAccount.fromJson).items;
       } catch (_) {}
     }
     final r = await _api.get<dynamic>(
       '/api/trs/accounts',
-      query: {'activeOnly': activeOnly, 'withBalances': false},
+      query: {
+        'activeOnly': activeOnly,
+        'withBalances': false,
+        if (kind != null) 'kind': kind,
+      },
     );
     return ShopPage.parse(r.data, TrsAccount.fromJson).items;
   }
@@ -1788,5 +1796,251 @@ class ShopRepository {
       },
     );
     return ShopPage.parse(r.data, ShopPriceHistoryItem.fromJson).items;
+  }
+
+  // ------------------------------------------------------------
+  //  فاز ۳ — ویرایش فاکتور چکی، عملیات پیشرفتهٔ چک/قسط و گزارش‌های عملیاتی
+  // ------------------------------------------------------------
+
+  /// `PUT /api/orders/{saleId}/cheque-edit`
+  Future<ShopOrder> editChequeOrder(
+    int saleId,
+    Map<String, dynamic> cmd,
+  ) async {
+    final r = await _api.put<dynamic>('/api/orders/$saleId/cheque-edit', cmd);
+    final d = r.data;
+    return d is Map
+        ? ShopOrder.fromJson(Map<String, dynamic>.from(d))
+        : ShopOrder(id: saleId);
+  }
+
+  /// `PUT /api/orders/cheques/{chequeId}/receipt`
+  Future<void> receiveShopCheque(
+    int chequeId, {
+    required String operationId,
+    required int trsAccountId,
+    required DateTime date,
+  }) async {
+    await _api.put<dynamic>('/api/orders/cheques/$chequeId/receipt', {
+      'operationId': operationId,
+      'trsAccountId': trsAccountId,
+      'date': _dateOnly(date),
+    });
+  }
+
+  /// `PUT /api/orders/cheques/{chequeId}/receipt-reversal`
+  Future<void> reverseShopChequeReceipt(
+    int chequeId, {
+    required String operationId,
+    required DateTime date,
+  }) async {
+    await _api.put<dynamic>('/api/orders/cheques/$chequeId/receipt-reversal', {
+      'operationId': operationId,
+      'date': _dateOnly(date),
+    });
+  }
+
+  /// `PUT /api/orders/cheques/{chequeId}/status`
+  Future<void> changeShopChequeStatus(
+    int chequeId, {
+    required String operationId,
+    required bool bounced,
+    String? reason,
+  }) async {
+    await _api.put<dynamic>('/api/orders/cheques/$chequeId/status', {
+      'operationId': operationId,
+      'bounced': bounced,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  /// `GET /api/orders/cheques/{chequeId}/status-history`
+  Future<List<SaleChequeStatusHistoryItem>> chequeStatusHistory(
+    int chequeId,
+  ) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/cheques/$chequeId/status-history',
+    );
+    return ShopPage.parse(r.data, SaleChequeStatusHistoryItem.fromJson).items;
+  }
+
+  /// `GET /api/orders/cheques/{chequeId}/reschedule-preview`
+  Future<SaleChequeReschedulePreview> previewChequeReschedule(
+    int chequeId, {
+    required DateTime expectedDueDate,
+    required DateTime newDueDate,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/orders/cheques/$chequeId/reschedule-preview',
+      query: {
+        'expectedDueDate': _dateOnly(expectedDueDate),
+        'newDueDate': _dateOnly(newDueDate),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? SaleChequeReschedulePreview.fromJson(Map<String, dynamic>.from(d))
+        : const SaleChequeReschedulePreview();
+  }
+
+  /// `PUT /api/orders/cheques/{chequeId}/reschedule`
+  Future<SaleChequeReschedulePreview> rescheduleShopCheque(
+    int chequeId, {
+    required String operationId,
+    required DateTime expectedDueDate,
+    required DateTime newDueDate,
+    required DateTime operationDate,
+    required double confirmedIncomeDelta,
+  }) async {
+    final r = await _api.put<dynamic>(
+      '/api/orders/cheques/$chequeId/reschedule',
+      {
+        'operationId': operationId,
+        'expectedDueDate': _dateOnly(expectedDueDate),
+        'newDueDate': _dateOnly(newDueDate),
+        'operationDate': _dateOnly(operationDate),
+        'confirmedIncomeDelta': confirmedIncomeDelta,
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? SaleChequeReschedulePreview.fromJson(Map<String, dynamic>.from(d))
+        : const SaleChequeReschedulePreview();
+  }
+
+  /// `PUT /api/orders/cheques/{chequeId}/replace`
+  Future<void> replaceShopCheque(
+    int chequeId, {
+    required String operationId,
+    required DateTime operationDate,
+    required String number,
+    required double amount,
+    required DateTime dueDate,
+    String? bankName,
+    String? ownerName,
+    String? accountInfo,
+    String? reason,
+  }) async {
+    await _api.put<dynamic>('/api/orders/cheques/$chequeId/replace', {
+      'operationId': operationId,
+      'operationDate': _dateOnly(operationDate),
+      'number': number.trim(),
+      'amount': amount,
+      'dueDate': _dateOnly(dueDate),
+      if (bankName != null && bankName.trim().isNotEmpty)
+        'bankName': bankName.trim(),
+      if (ownerName != null && ownerName.trim().isNotEmpty)
+        'ownerName': ownerName.trim(),
+      if (accountInfo != null && accountInfo.trim().isNotEmpty)
+        'accountInfo': accountInfo.trim(),
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  /// `PUT /api/orders/installments/{installmentId}/receipt`
+  Future<void> receiveShopInstallment(
+    int installmentId, {
+    required String operationId,
+    required int trsAccountId,
+    required DateTime date,
+  }) async {
+    await _api.put<dynamic>(
+      '/api/orders/installments/$installmentId/receipt',
+      {
+        'operationId': operationId,
+        'trsAccountId': trsAccountId,
+        'date': _dateOnly(date),
+      },
+    );
+  }
+
+  /// `PUT /api/orders/installments/{installmentId}/receipt-reversal`
+  Future<void> reverseShopInstallmentReceipt(
+    int installmentId, {
+    required String operationId,
+    required DateTime date,
+  }) async {
+    await _api.put<dynamic>(
+      '/api/orders/installments/$installmentId/receipt-reversal',
+      {
+        'operationId': operationId,
+        'date': _dateOnly(date),
+      },
+    );
+  }
+
+  /// `GET /api/operations/reports/cheque-income?from&to&partyId`
+  Future<ChequeIncomeReport> chequeIncomeReport({
+    DateTime? from,
+    DateTime? to,
+    int? partyId,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/operations/reports/cheque-income',
+      query: {
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+        if (partyId != null && partyId > 0) 'partyId': partyId,
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ChequeIncomeReport.fromJson(Map<String, dynamic>.from(d))
+        : const ChequeIncomeReport();
+  }
+
+  /// `GET /api/expenses/report?categoryId&from&to`
+  Future<ExpenseReport> expenseReport({
+    int? categoryId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/expenses/report',
+      query: {
+        if (categoryId != null && categoryId > 0) 'categoryId': categoryId,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? ExpenseReport.fromJson(Map<String, dynamic>.from(d))
+        : const ExpenseReport();
+  }
+
+  /// `GET /api/shop-warranties/report?from&to`
+  Future<List<ShopWarrantyReportRow>> warrantyReport({
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/shop-warranties/report',
+      query: {
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
+    );
+    return ShopPage.parse(r.data, ShopWarrantyReportRow.fromJson).items;
+  }
+
+  /// `GET /api/sales-visit/requests-report?from&to&includeCanceled`
+  Future<VisRequestsReport> visRequestsReport({
+    required DateTime from,
+    required DateTime to,
+    bool includeCanceled = false,
+  }) async {
+    final r = await _api.get<dynamic>(
+      '/api/sales-visit/requests-report',
+      query: {
+        'from': _dateOnly(from),
+        'to': _dateOnly(to),
+        'includeCanceled': includeCanceled ? 'true' : 'false',
+      },
+    );
+    final d = r.data;
+    return d is Map
+        ? VisRequestsReport.fromJson(Map<String, dynamic>.from(d))
+        : const VisRequestsReport();
   }
 }

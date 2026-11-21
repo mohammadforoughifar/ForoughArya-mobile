@@ -406,10 +406,24 @@ class ShopPerms {
   bool get canSeeProfit => isAdmin || hasDirect('Orders.ViewProfit');
   bool get canViewProfit => canSeeProfit;
 
+  /// مطابق `ChequeIncomeReport.razor`: دسترسی مشاهده فروش/گزارش فروش + `Orders.ViewProfit`
+  bool get canSeeChequeIncomeReport =>
+      (canSeeSale || canSeeOrderReports || canSeeModuleDirect('Orders')) &&
+      canSeeProfit;
+
   // ---------------- فروش و ویزیتوری (مطابق NavMenu.razor) ----------------
   bool get canSeeSalesVisitGroup =>
       canSeeSection('SalesVisit') || canSeeModuleDirect('SalesVisit');
   bool get canSeeSalesVisit => canSeeSalesVisitGroup;
+
+  /// مطابق `NavMenu.razor`: گزارش تجمیع سفارش‌های ویزیتوری
+  bool get canSeeVisRequestsReport =>
+      canSeeSalesVisit ||
+      hasDirect('SalesVisit.View') ||
+      hasDirect('SalesVisit.Create') ||
+      hasDirect('SalesVisit.Approve') ||
+      hasDirect('SalesVisit.FinanceView') ||
+      hasDirect('SalesVisit.Export');
 
   bool get canCreateVisit =>
       canManageSection('SalesVisit') || hasDirect('SalesVisit.Create');

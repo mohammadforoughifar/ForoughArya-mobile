@@ -996,7 +996,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
           cmd,
         );
       } else if (_isEdit) {
-        savedOrder = await _repo.updateOrder(widget.source!.id, cmd);
+        savedOrder = widget.source!.hasChequeCharge
+            ? await _repo.editChequeOrder(widget.source!.id, cmd)
+            : await _repo.updateOrder(widget.source!.id, cmd);
       } else {
         savedOrder = await _repo.createOrder(cmd);
       }
