@@ -54,6 +54,7 @@ class ApiClient {
   }
 
   final FlutterSecureStorage _storage;
+  FlutterSecureStorage get storage => _storage;
   late final Dio dio;
   void Function()? onUnauthorized;
 

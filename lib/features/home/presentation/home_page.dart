@@ -44,6 +44,9 @@ import '../../misc/presentation/minutes_detail_page.dart';
 import '../../misc/presentation/minutes_editor_page.dart';
 import '../../misc/presentation/minutes_list_page.dart';
 import '../../misc/presentation/misc_forms_page.dart';
+import '../../moadian/data/moadian_repository.dart';
+import '../../moadian/presentation/moadian_home_page.dart';
+import '../../moadian/presentation/moadian_invoice_form_page.dart';
 import '../../office_automation/data/email_repository.dart';
 import '../../office_automation/data/office_repository.dart';
 import '../../office_automation/presentation/letter_detail_page.dart';
@@ -97,6 +100,8 @@ class _HomePageState extends State<HomePage> {
   List<HomeKpi> _kpis = const [];
   WorkbenchPrefs _prefs = const WorkbenchPrefs();
   WorkbenchPulse _pulse = const WorkbenchPulse();
+  int _moadianActionable = 0;
+  int _moadianErrors = 0;
 
   // کارتابل یکپارچه و میز اقدام
   List<CartableEntry> _cartableEntries = const [];
@@ -536,6 +541,87 @@ class _HomePageState extends State<HomePage> {
           final summary = await ChatErpApi(api).summary();
           unreadChats = summary.totalUnreadMessages;
         } catch (_) {}
+      }(),
+
+      // مودیان تیسا — شمارندهٔ صورتحساب‌های خطادار، پیش‌نویس و منتظر استعلام
+      () async {
+        try {
+          final mRepo = MoadianRepository(api);
+          final cps = await mRepo.getCpInfos();
+          if (cps.isEmpty) {
+            _moadianActionable = 0;
+            _moadianErrors = 0;
+            return;
+          }
+          final saved = await mRepo.loadSavedCpInfoId();
+          final cpId = (saved != null && cps.any((c) => c.cpInfoId == saved))
+              ? saved
+              : cps.first.cpInfoId;
+          final invRes = await mRepo.getInvoices(
+            cpInfoId: cpId,
+            operation: 'همه',
+            page: 1,
+            pageSize: 1,
+          );
+          final lbl = invRes.labels;
+          _moadianErrors = lbl.hasError;
+          _moadianActionable =
+              lbl.notSent + lbl.hasError + lbl.waitingInquiry;
+          if (lbl.hasError > 0) {
+            extraEntries.add(
+              CartableEntry(
+                source: 'moadian',
+                kind: 'error',
+                title:
+                    '${Fa.digits(lbl.hasError)} صورتحساب مودیان دارای خطای برگشتی سامانه است',
+                subtitle: 'بررسی خطا، اصلاح و ارسال مجدد در مودیان تیسا',
+                moduleLabel: 'مودیان تیسا',
+                targetKey: 'moadian-error',
+                icon: Icons.error_outline_rounded,
+                color: const Color(0xffdc2626),
+                badgeCount: lbl.hasError,
+                priority: 3,
+              ),
+            );
+          }
+          if (lbl.notSent > 0) {
+            extraEntries.add(
+              CartableEntry(
+                source: 'moadian',
+                kind: 'draft',
+                title:
+                    '${Fa.digits(lbl.notSent)} پیش‌نویس صورتحساب آمادهٔ امضا و ارسال به مودیان',
+                subtitle: 'ارسال رسمی به کارپوشه مالیاتی tp.tax.gov.ir',
+                moduleLabel: 'مودیان تیسا',
+                targetKey: 'moadian-draft',
+                icon: Icons.receipt_long_rounded,
+                color: const Color(0xff0f766e),
+                badgeCount: lbl.notSent,
+                priority: 2,
+              ),
+            );
+          }
+          if (lbl.waitingInquiry > 0) {
+            extraEntries.add(
+              CartableEntry(
+                source: 'moadian',
+                kind: 'inquiry',
+                title:
+                    '${Fa.digits(lbl.waitingInquiry)} صورتحساب ارسال‌شده منتظر استعلام نتیجه است',
+                subtitle: 'دریافت وضعیت نهایی از سامانه مودیان',
+                moduleLabel: 'مودیان تیسا',
+                targetKey: 'moadian-inquiry',
+                icon: Icons.sync_rounded,
+                color: const Color(0xff0284c7),
+                badgeCount: lbl.waitingInquiry,
+                priority: 2,
+              ),
+            );
+          }
+        } catch (_) {
+          _moadianActionable = 0;
+          _moadianErrors = 0;
+        }
       }(),
     ]);
 
@@ -985,6 +1071,24 @@ class _HomePageState extends State<HomePage> {
       case 'doc-cartable':
         _pushPage(const DocArchiveCartablePage());
         return;
+      case 'moadian':
+        _pushPage(const MoadianHomePage());
+        return;
+      case 'moadian-error':
+        _pushPage(
+          const MoadianHomePage(initialTab: 1, initialInvoiceFilter: '5'),
+        );
+        return;
+      case 'moadian-draft':
+        _pushPage(
+          const MoadianHomePage(initialTab: 1, initialInvoiceFilter: '0'),
+        );
+        return;
+      case 'moadian-inquiry':
+        _pushPage(
+          const MoadianHomePage(initialTab: 1, initialInvoiceFilter: '1'),
+        );
+        return;
       default:
         _pushPage(const ShopHomePage());
     }
@@ -993,6 +1097,20 @@ class _HomePageState extends State<HomePage> {
   /// ساخت فهرست کامل فرمان‌یار جستجوی سریع (Command Palette) در سراسر نرم‌افزار.
   List<WorkbenchCommandItem> _buildCommandItems(List<ModuleTile> modules) => [
     // عملیات سریع
+    WorkbenchCommandItem(
+      title: 'صدور صورتحساب الکترونیکی مودیان',
+      subtitle: 'مودیان تیسا • ارسال رسمی به کارپوشه مالیاتی',
+      group: 'عملیات سریع یک‌ضربه‌ای',
+      icon: Icons.post_add_rounded,
+      color: const Color(0xff0f766e),
+      keywords: const [
+        'صورتحساب مودیان',
+        'مودیان تیسا',
+        'فاکتور مالیاتی',
+        'سامانه مودیان',
+      ],
+      onSelect: () => _pushPage(const MoadianInvoiceFormPage()),
+    ),
     WorkbenchCommandItem(
       title: 'صدور فاکتور فروش جدید',
       subtitle: 'فروشگاهی کایر • عملیات فروش',
@@ -1147,6 +1265,37 @@ class _HomePageState extends State<HomePage> {
       color: const Color(0xffd97706),
       keywords: const ['تعمیرات', 'گارانتی', 'طرح تعویض'],
       onSelect: () => _pushPage(const RepairsPage()),
+    ),
+    WorkbenchCommandItem(
+      title: 'فهرست و کارپوشه صورتحساب‌های مودیان',
+      subtitle: 'مودیان تیسا • ارسال، استعلام، اصلاحیه و ابطال',
+      group: 'صفحات و گزارش‌های پرکاربرد',
+      icon: Icons.receipt_long_rounded,
+      color: const Color(0xff0f766e),
+      keywords: const ['کارپوشه مودیان', 'استعلام مودیان', 'اصلاحیه', 'ابطالی'],
+      onSelect: () => _pushPage(const MoadianHomePage(initialTab: 1)),
+    ),
+    WorkbenchCommandItem(
+      title: 'اتصال، حافظه مالیاتی و کلید خصوصی RSA',
+      subtitle: 'مودیان تیسا • اطلاعات پایه و تست اتصال',
+      group: 'صفحات و گزارش‌های پرکاربرد',
+      icon: Icons.vpn_key_rounded,
+      color: const Color(0xff0d9488),
+      keywords: const ['کلید خصوصی', 'حافظه مالیاتی', 'PEM', 'تست اتصال مودیان'],
+      onSelect: () => _pushPage(
+        const MoadianHomePage(initialTab: 2, initialBasicSection: 1),
+      ),
+    ),
+    WorkbenchCommandItem(
+      title: 'کالا و خدمات دارای کد ۱۳ رقمی CPC',
+      subtitle: 'مودیان تیسا • شناسه‌های stuffid.tax.gov.ir',
+      group: 'صفحات و گزارش‌های پرکاربرد',
+      icon: Icons.qr_code_2_rounded,
+      color: const Color(0xff0f766e),
+      keywords: const ['CPC', 'شناسه کالا', '۱۳ رقمی', 'stuffid'],
+      onSelect: () => _pushPage(
+        const MoadianHomePage(initialTab: 2, initialBasicSection: 2),
+      ),
     ),
     WorkbenchCommandItem(
       title: 'هزینه‌های فروشگاه',
@@ -1612,6 +1761,9 @@ class _HomePageState extends State<HomePage> {
       case 'sales':
         _pushPage(const ShopHomePage());
         return;
+      case 'moadian':
+        _pushPage(const MoadianHomePage());
+        return;
       case 'misc':
         _pushPage(const MiscFormsPage());
         return;
@@ -1681,8 +1833,8 @@ class _HomePageState extends State<HomePage> {
                 'نسخهٔ وب این ماژول به‌طور کامل در دسترس است؛ نسخهٔ موبایل '
                 'آن در فازهای بعدی تکمیل می‌شود. هم‌اکنون می‌توانید از '
                 'ماژول‌های فعال (اتوماسیون اداری توکا، دستورکار رایکا، '
-                'فروشگاهی کایر، پیام رسان میها، مدیریت سیستم، صورتجلسه و '
-                'آرشیو اسناد) در میز کار موبایل استفاده کنید.',
+                'فروشگاهی کایر، مودیان تیسا، پیام رسان میها، مدیریت سیستم، '
+                'صورتجلسه و آرشیو اسناد) در میز کار موبایل استفاده کنید.',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.9,
@@ -1738,6 +1890,12 @@ class _HomePageState extends State<HomePage> {
           'doc-cartable' when _pulse.pendingArchiveTasks > 0 => m.copyWith(
             liveCount: _pulse.pendingArchiveTasks,
             liveLabel: '${Fa.digits(_pulse.pendingArchiveTasks)} مورد',
+          ),
+          'moadian' when _moadianActionable > 0 => m.copyWith(
+            liveCount: _moadianActionable,
+            liveLabel: _moadianErrors > 0
+                ? '${Fa.digits(_moadianErrors)} خطادار'
+                : '${Fa.digits(_moadianActionable)} اقدام',
           ),
           _ => m,
         },
@@ -1879,6 +2037,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                   onNewMinutes: () => _pushPage(const MinutesEditorPage()),
                   onNewItRequest: () => _pushPage(const ItRequestFormPage()),
+                  onMoadianInvoice: () =>
+                      _pushPage(const MoadianInvoiceFormPage()),
                 ),
               ),
             ],
@@ -2800,6 +2960,7 @@ class _QuickActionsRail extends StatelessWidget {
     required this.onNewReceipt,
     required this.onNewMinutes,
     required this.onNewItRequest,
+    required this.onMoadianInvoice,
   });
 
   final VoidCallback onSaleInvoice;
@@ -2810,6 +2971,7 @@ class _QuickActionsRail extends StatelessWidget {
   final VoidCallback onNewReceipt;
   final VoidCallback onNewMinutes;
   final VoidCallback onNewItRequest;
+  final VoidCallback onMoadianInvoice;
 
   @override
   Widget build(BuildContext context) {
@@ -2821,6 +2983,13 @@ class _QuickActionsRail extends StatelessWidget {
             icon: Icons.add_shopping_cart_rounded,
             color: const Color(0xff2563eb),
             onTap: onSaleInvoice,
+          ),
+          (
+            title: 'صورتحساب مودیان',
+            sub: 'مودیان تیسا',
+            icon: Icons.receipt_long_rounded,
+            color: const Color(0xff0f766e),
+            onTap: onMoadianInvoice,
           ),
           (
             title: 'فاکتور خرید',
