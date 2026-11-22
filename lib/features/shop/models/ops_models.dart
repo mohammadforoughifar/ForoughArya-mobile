@@ -1080,6 +1080,8 @@ class OrderReport {
     this.documentCount = 0,
     this.lineCount = 0,
     this.totalQuantity = 0,
+    this.goodsAmount = 0,
+    this.chequeIncomeAmount = 0,
     this.totalAmount = 0,
     this.averageDocumentAmount = 0,
     this.trend = const [],
@@ -1089,6 +1091,8 @@ class OrderReport {
   final int documentCount;
   final int lineCount;
   final double totalQuantity;
+  final double goodsAmount;
+  final double chequeIncomeAmount;
   final double totalAmount;
   final double averageDocumentAmount;
   final List<OrderReportTrendPoint> trend;
@@ -1098,6 +1102,8 @@ class OrderReport {
     documentCount: (j['documentCount'] as num?)?.toInt() ?? 0,
     lineCount: (j['lineCount'] as num?)?.toInt() ?? 0,
     totalQuantity: _d(j['totalQuantity']),
+    goodsAmount: _d(j['goodsAmount']),
+    chequeIncomeAmount: _d(j['chequeIncomeAmount']),
     totalAmount: _d(j['totalAmount']),
     averageDocumentAmount: _d(j['averageDocumentAmount']),
     trend: (j['trend'] as List? ?? [])

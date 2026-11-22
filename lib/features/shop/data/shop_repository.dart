@@ -358,7 +358,7 @@ class ShopRepository {
   //  فاز ۳ — اسناد خرید و فروش (api/orders)
   // ------------------------------------------------------------
 
-  /// `GET /api/orders?type&from&to&partyId&warehouseId&page&pageSize`
+  /// `GET /api/orders?type&from&to&partyId&warehouseId&page&pageSize&hasChequeIncome`
   Future<ShopPage<ShopOrder>> orders({
     required int type,
     DateTime? from,
@@ -367,6 +367,7 @@ class ShopRepository {
     int? warehouseId,
     int page = 1,
     int pageSize = 15,
+    bool? hasChequeIncome,
   }) async {
     final r = await _api.get<dynamic>(
       '/api/orders',
@@ -376,6 +377,7 @@ class ShopRepository {
         if (to != null) 'to': _dateOnly(to),
         if (partyId != null && partyId > 0) 'partyId': partyId,
         if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+        if (hasChequeIncome != null) 'hasChequeIncome': hasChequeIncome,
         'page': page,
         'pageSize': pageSize,
       },
@@ -961,13 +963,14 @@ class ShopRepository {
 
   // ---------- گزارش‌های عملیات ----------
 
-  /// `GET /api/operations/reports/orders?type&from&to&partyId&warehouseId`
+  /// `GET /api/operations/reports/orders?type&from&to&partyId&warehouseId&hasChequeIncome`
   Future<OrderReport> orderReport({
     required int type,
     DateTime? from,
     DateTime? to,
     int? partyId,
     int? warehouseId,
+    bool? hasChequeIncome,
   }) async {
     final r = await _api.get<dynamic>(
       '/api/operations/reports/orders',
@@ -977,6 +980,7 @@ class ShopRepository {
         if (to != null) 'to': _dateOnly(to),
         if (partyId != null && partyId > 0) 'partyId': partyId,
         if (warehouseId != null && warehouseId > 0) 'warehouseId': warehouseId,
+        if (hasChequeIncome != null) 'hasChequeIncome': hasChequeIncome,
       },
     );
     final d = r.data;

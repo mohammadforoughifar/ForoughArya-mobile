@@ -1,9 +1,13 @@
 // ============================================================
-//  «میز کار فروشگاهی کایر» (Multi-Tab ERP Workspace Shell)
-//  طراحی میز کار عملیاتی با الهام مستقیم از معماری تب‌های وب
-//  (`Layout/TabBar.razor` + `Layout/TabPages.razor` + `ShopSections.cs`)
-//  به‌همراه پیشخوان ثبت سریع، شاخص‌های زنده، کارتابل پیگیری‌های فوری
-//  و شبکهٔ ابزارهای دسته‌بندی‌شده با حفظ وضعیت صفحات باز (`IndexedStack`).
+//  «فروشگاهی کایر» — پوستهٔ ساختاریافته و چندتبی (Structured ERP Menu + Multi-Tab)
+//  ساختار منویی دقیقاً منطبق بر وب (`Layout/NavMenu.razor` + `ShopSections.cs`):
+//    ۱) اطلاعات پایه و تعاریف
+//    ۲) عملیات روزانه و انبار
+//    ۳) خزانه‌داری، چک و تسویه
+//    ۴) گزارش‌ها و داشبوردها
+//    ۵) فروش ویزیتوری و معرف‌ها
+//    ۶) تنظیمات و راهنما
+//  به‌همراه نوار تب‌های زنده (`IndexedStack`) برای حفظ وضعیت فرم‌های باز.
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -11,14 +15,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/fa.dart';
 import '../data/shop_perms.dart';
-import '../data/shop_repository.dart';
-import '../models/ops_models.dart';
 import '../models/order_models.dart';
 import '../models/treasury_models.dart';
-import '../models/visit_models.dart';
 import 'categories_page.dart';
 import 'expenses_page.dart';
 import 'goods_issues_page.dart';
@@ -56,18 +56,55 @@ import 'visit_form_page.dart';
 import 'visits_page.dart';
 import 'warehouses_page.dart';
 
-enum _DeskCat {
-  all('همه', Icons.apps_rounded),
-  ops('عملیات روزانه', Icons.bolt_rounded),
-  treasury('خزانه و تسویه', Icons.account_balance_wallet_rounded),
-  catalog('کالا و انبار', Icons.inventory_2_rounded),
-  reports('گزارش و تحلیل', Icons.insights_rounded),
-  visits('ویزیتوری', Icons.directions_walk_rounded),
-  settings('پایه و تنظیمات', Icons.tune_rounded);
+enum _ShopGroup {
+  basicInfo(
+    title: 'اطلاعات پایه',
+    subtitle: 'کالاها، قیمت‌گذاری، انبارها، طرف‌حساب‌ها، معرف‌ها و بانک/POS',
+    icon: Icons.dns_rounded,
+    color: ShopColors.seed,
+  ),
+  operations(
+    title: 'عملیات',
+    subtitle: 'فروش، خرید، بیجک، موجودی انبار، تعمیرات، گارانتی، تعویض و هزینه',
+    icon: Icons.bolt_rounded,
+    color: ShopColors.ok,
+  ),
+  treasury(
+    title: 'خزانه‌داری، چک و تسویه',
+    subtitle: 'تسویه فاکتورها، مدیریت اقساط و چک‌ها، چک خزانه و مانده اول دوره',
+    icon: Icons.account_balance_wallet_rounded,
+    color: ShopColors.teal,
+  ),
+  reports(
+    title: 'گزارش‌ها و داشبورد',
+    subtitle: 'داشبوردها، کاردکس، نقطه سفارش، گزارش خرید/فروش و صورت‌حساب اشخاص',
+    icon: Icons.bar_chart_rounded,
+    color: ShopColors.indigo,
+  ),
+  visits(
+    title: 'فروش ویزیتوری و معرف‌ها',
+    subtitle: 'سفارش‌های میدانی، کارتابل تأیید، صف مالی و کیف پول معرف‌ها',
+    icon: Icons.directions_walk_rounded,
+    color: ShopColors.warn,
+  ),
+  settings(
+    title: 'تنظیمات و راهنما',
+    subtitle: 'تنظیمات چاپ، سقف تخفیف ویزیتورها و راهنمای سامانه فروشگاهی',
+    icon: Icons.tune_rounded,
+    color: ShopColors.accent,
+  );
 
-  const _DeskCat(this.label, this.icon);
-  final String label;
+  const _ShopGroup({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String subtitle;
   final IconData icon;
+  final Color color;
 }
 
 class _DeskTool {
@@ -77,7 +114,7 @@ class _DeskTool {
     required this.subtitle,
     required this.icon,
     required this.color,
-    required this.category,
+    required this.group,
     required this.builder,
     this.keywords = '',
   });
@@ -87,7 +124,7 @@ class _DeskTool {
   final String subtitle;
   final IconData icon;
   final Color color;
-  final _DeskCat category;
+  final _ShopGroup group;
   final WidgetBuilder builder;
   final String keywords;
 }
@@ -106,7 +143,6 @@ class _OpenWorkspaceTab {
   final IconData icon;
   final Color color;
   WidgetBuilder builder;
-  bool pinned = false;
   int reloadVersion = 0;
   final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
 }
@@ -119,29 +155,12 @@ class ShopHomePage extends StatefulWidget {
 }
 
 class _ShopHomePageState extends State<ShopHomePage> {
-  static const String _homeTabId = '__workbench__';
+  static const String _homeTabId = '__menu__';
 
-  late final ShopRepository _repo;
   final List<_OpenWorkspaceTab> _openTabs = [];
   String _activeTabId = _homeTabId;
-
-  // فیلترهای نمای میز کار
+  _ShopGroup? _expandedGroup;
   final _searchCtrl = TextEditingController();
-  _DeskCat _selectedCat = _DeskCat.all;
-
-  // شاخص‌های زندهٔ میز کار
-  bool _loadingLive = false;
-  OpsDashboard? _opsDash;
-  TreasuryDashboard? _trsDash;
-  ShopCreditSummary? _creditSum;
-  VisStats? _visStats;
-
-  @override
-  void initState() {
-    super.initState();
-    _repo = ShopRepository(context.read<ApiClient>());
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLiveMetrics());
-  }
 
   @override
   void dispose() {
@@ -149,48 +168,9 @@ class _ShopHomePageState extends State<ShopHomePage> {
     super.dispose();
   }
 
-  Future<void> _loadLiveMetrics() async {
-    if (!mounted) return;
-    final auth = context.read<AuthController>();
-    final perms = ShopPerms(auth.session);
-    setState(() => _loadingLive = true);
+  // -------------------- مدیریت تب‌های باز --------------------
 
-    final now = DateTime.now();
-    final monthAgo = now.subtract(const Duration(days: 30));
-
-    final futures = <Future<void>>[
-      if (perms.canSeeDashboard)
-        _repo
-            .opsDashboard(from: monthAgo, to: now)
-            .then((v) => _opsDash = v)
-            .catchError((_) => const OpsDashboard()),
-      if (perms.canSeeSettlement || perms.canSeeBanks || perms.canSeeCheques)
-        _repo
-            .treasuryDashboard(from: monthAgo, to: now)
-            .then((v) => _trsDash = v)
-            .catchError((_) => TreasuryDashboard()),
-      if (perms.canSeeInstallments || perms.canSeeSale || perms.canSeePurchase)
-        _repo
-            .shopCreditSummary()
-            .then((v) => _creditSum = v)
-            .catchError((_) => ShopCreditSummary()),
-      if (perms.canSeeSalesVisit)
-        _repo.visStats().then((v) => _visStats = v).catchError((_) => VisStats()),
-    ];
-
-    if (futures.isNotEmpty) {
-      await Future.wait(futures);
-    }
-    if (!mounted) return;
-    setState(() => _loadingLive = false);
-  }
-
-  // -------------------- مدیریت تب‌های میز کار --------------------
-
-  void _openToolInTab(
-    _DeskTool tool, {
-    WidgetBuilder? customBuilder,
-  }) {
+  void _openToolInTab(_DeskTool tool, {WidgetBuilder? customBuilder}) {
     HapticFeedback.selectionClick();
     final existingIdx = _openTabs.indexWhere((t) => t.id == tool.id);
     setState(() {
@@ -199,7 +179,7 @@ class _ShopHomePageState extends State<ShopHomePage> {
           _openTabs[existingIdx].builder = customBuilder;
           _openTabs[existingIdx].reloadVersion++;
         }
-        _activeTabId = tool.id;
+        _activeTabId = _openTabs[existingIdx].id;
       } else {
         _openTabs.add(
           _OpenWorkspaceTab(
@@ -215,453 +195,57 @@ class _ShopHomePageState extends State<ShopHomePage> {
     });
   }
 
-  Future<void> _pushQuickModal(Widget page) async {
-    HapticFeedback.selectionClick();
-    await Navigator.of(context).push<dynamic>(
-      MaterialPageRoute<dynamic>(builder: (_) => page),
-    );
-    if (mounted) _loadLiveMetrics();
-  }
-
   void _closeTab(String id) {
     final idx = _openTabs.indexWhere((t) => t.id == id);
-    if (idx < 0 || _openTabs[idx].pinned) return;
+    if (idx < 0) return;
     HapticFeedback.lightImpact();
     setState(() {
-      final wasActive = _activeTabId == id;
       _openTabs.removeAt(idx);
-      if (wasActive) {
+      if (_activeTabId == id) {
         if (_openTabs.isEmpty) {
           _activeTabId = _homeTabId;
         } else {
-          final nextIdx = idx.clamp(0, _openTabs.length - 1);
+          final nextIdx = idx >= _openTabs.length ? _openTabs.length - 1 : idx;
           _activeTabId = _openTabs[nextIdx].id;
         }
       }
     });
   }
 
-  void _showTabActions(_OpenWorkspaceTab tab) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: ShopColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 38,
-              height: 4,
-              decoration: BoxDecoration(
-                color: ShopColors.line,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            ListTile(
-              leading: Icon(tab.icon, color: tab.color),
-              title: Text(
-                tab.title,
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-              subtitle: const Text(
-                'مدیریت تب باز در میز کار',
-                style: TextStyle(fontSize: 11),
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.refresh_rounded),
-              title: const Text('تازه‌سازی این تب'),
-              onTap: () {
-                Navigator.pop(ctx);
-                setState(() {
-                  tab.reloadVersion++;
-                  _activeTabId = tab.id;
-                });
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                tab.pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
-              ),
-              title: Text(
-                tab.pinned ? 'برداشتن سنجاق تب' : 'سنجاق کردن در نوار میز کار',
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                setState(() => tab.pinned = !tab.pinned);
-              },
-            ),
-            if (!tab.pinned)
-              ListTile(
-                leading: const Icon(
-                  Icons.close_rounded,
-                  color: ShopColors.danger,
-                ),
-                title: const Text(
-                  'بستن این تب',
-                  style: TextStyle(color: ShopColors.danger),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _closeTab(tab.id);
-                },
-              ),
-            if (_openTabs.any((t) => t.id != tab.id && !t.pinned))
-              ListTile(
-                leading: const Icon(Icons.tab_unselected_rounded),
-                title: const Text('بستن سایر تب‌ها'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  setState(() {
-                    _openTabs.removeWhere((t) => t.id != tab.id && !t.pinned);
-                    _activeTabId = tab.id;
-                  });
-                },
-              ),
-            if (_openTabs.any((t) => !t.pinned))
-              ListTile(
-                leading: const Icon(Icons.clear_all_rounded),
-                title: const Text('بستن همه تب‌های غیرسنجاق'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  setState(() {
-                    _openTabs.removeWhere((t) => !t.pinned);
-                    if (!_openTabs.any((t) => t.id == _activeTabId)) {
-                      _activeTabId = _homeTabId;
-                    }
-                  });
-                },
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+  void _closeAllTabs() {
+    setState(() {
+      _openTabs.clear();
+      _activeTabId = _homeTabId;
+    });
   }
 
-  void _openQuickSwitcherSheet(List<_DeskTool> tools) {
-    final qCtrl = TextEditingController();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: ShopColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setM) {
-          final q = qCtrl.text.trim().toLowerCase();
-          final filtered = q.isEmpty
-              ? tools
-              : tools
-                    .where(
-                      (t) =>
-                          t.title.toLowerCase().contains(q) ||
-                          t.subtitle.toLowerCase().contains(q) ||
-                          t.keywords.toLowerCase().contains(q),
-                    )
-                    .toList();
-          return DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.72,
-            maxChildSize: 0.92,
-            minChildSize: 0.45,
-            builder: (_, scrollCtrl) => Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: ShopColors.line,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.space_dashboard_rounded,
-                        color: ShopColors.seed,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'پرش سریع بین بخش‌های میز کار',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${numFa(tools.length)} ابزار',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: ShopColors.inkFaint,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ShopSearchField(
-                    controller: qCtrl,
-                    hint: 'نام بخش را بنویسید (مثلاً فاکتور، چک، کاردکس)...',
-                    onChanged: (_) => setM(() {}),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView.separated(
-                      controller: scrollCtrl,
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (_, idx) {
-                        final t = filtered[idx];
-                        final isOpen = _openTabs.any((o) => o.id == t.id);
-                        return ListTile(
-                          dense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                          ),
-                          leading: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: t.color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(t.icon, size: 18, color: t.color),
-                          ),
-                          title: Text(
-                            t.title,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          subtitle: Text(
-                            t.subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 10.5),
-                          ),
-                          trailing: isOpen
-                              ? const ShopPill(
-                                  text: 'تب باز',
-                                  color: ShopColors.ok,
-                                )
-                              : const Icon(
-                                  Icons.open_in_new_rounded,
-                                  size: 16,
-                                  color: ShopColors.inkFaint,
-                                ),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            _openToolInTab(t);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    ).whenComplete(qCtrl.dispose);
+  Future<void> _pushQuickForm(Widget page) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<dynamic>(builder: (_) => page));
   }
 
-  // -------------------- فهرست کامل ابزارهای میز کار (با گیت دسترسی وب) --------------------
+  // -------------------- تعریف فهرست ابزارها به تفکیک سرفصل وب --------------------
 
   List<_DeskTool> _buildTools(ShopPerms perms, bool isRef) {
     final showParties = perms.anyPartyAccess;
     final partiesLabel = perms.partiesMenuLabel;
     final partiesSubtitle = perms.canSeeCustomers && perms.canSeeSuppliers
-        ? 'مشتریان و تأمین‌کنندگان'
-        : (perms.canSeeCustomers
-              ? 'خریداران حقیقی و حقوقی'
-              : 'فروشندگان کالا و خدمات');
+        ? 'تعریف مشتریان و تأمین‌کنندگان'
+        : (perms.canSeeCustomers ? 'تعریف مشتریان' : 'تعریف تأمین‌کنندگان');
 
     return <_DeskTool>[
-      // ---- عملیات روزانه ----
-      if (perms.canSeeSale)
-        _DeskTool(
-          id: 'sale',
-          title: 'فروش و پیش‌فاکتور',
-          subtitle: 'ثبت فاکتور فروش، پیش‌فاکتور، چاپ، نسیه و برگشت چکی',
-          icon: Icons.shopping_cart_rounded,
-          color: ShopColors.ok,
-          category: _DeskCat.ops,
-          keywords: 'فاکتور فروش پیش فاکتور مشتری برگشت از فروش',
-          builder: (_) => const SaleOrdersPage(type: TxnType.sale),
-        ),
-      if (perms.canSeePurchase)
-        _DeskTool(
-          id: 'purchase',
-          title: 'خرید و تأمین',
-          subtitle: 'رسید خرید، ارزش افزوده، بروزرسانی فی فروش و چاپ رسید',
-          icon: Icons.shopping_bag_rounded,
-          color: ShopColors.seed,
-          category: _DeskCat.ops,
-          keywords: 'فاکتور خرید رسید تامین کننده',
-          builder: (_) => const SaleOrdersPage(type: TxnType.purchase),
-        ),
-      if (perms.canSeeGoodsIssue)
-        _DeskTool(
-          id: 'goods-issue',
-          title: 'بیجک خروج انبار',
-          subtitle: 'حوالهٔ خروج کالا بدون قیمت برای ارسال بار',
-          icon: Icons.local_shipping_rounded,
-          color: ShopColors.teal,
-          category: _DeskCat.ops,
-          keywords: 'بیجک حواله خروج ارسال بار',
-          builder: (_) => const GoodsIssuesPage(),
-        ),
-      if (perms.canSeeRepairs) ...[
-        _DeskTool(
-          id: 'repairs',
-          title: 'کارگاه تعمیرات',
-          subtitle: 'پذیرش دستگاه، کارها و قطعات، چاپ قبض/تحویل و تبدیل به فروش',
-          icon: Icons.build_rounded,
-          color: ShopColors.indigo,
-          category: _DeskCat.ops,
-          keywords: 'تعمیر پذیرش دستگاه تکنسین فیش تحویل قبض',
-          builder: (_) => const RepairsPage(),
-        ),
-        _DeskTool(
-          id: 'warranty',
-          title: 'پذیرش گارانتی',
-          subtitle: 'بررسی گارانتی، ردیف‌های رایگان/ردشده و تسویه بدهی گارانتی',
-          icon: Icons.verified_user_rounded,
-          color: ShopColors.teal,
-          category: _DeskCat.ops,
-          keywords: 'گارانتی پذیرش گارانتی تصمیم گارانتی تسویه',
-          builder: (_) => const RepairsPage(initialTab: 1),
-        ),
-        _DeskTool(
-          id: 'trade-in',
-          title: 'طرح تعویض کالا',
-          subtitle: 'پذیرش کالای کارکرده، ثبت اعتبار مشتری و مصرف در فاکتور فروش',
-          icon: Icons.swap_horizontal_circle_rounded,
-          color: ShopColors.accent,
-          category: _DeskCat.ops,
-          keywords: 'طرح تعویض کالای کارکرده اعتبار مشتری دست دوم',
-          builder: (_) => const RepairsPage(initialTab: 2),
-        ),
-      ],
-      if (perms.canSeeExpenses)
-        _DeskTool(
-          id: 'expenses',
-          title: 'ثبت هزینه‌ها',
-          subtitle: 'ثبت اسناد هزینه جاری و مدیریت سرفصل‌های هزینه',
-          icon: Icons.payments_rounded,
-          color: ShopColors.danger,
-          category: _DeskCat.ops,
-          keywords: 'هزینه تنخواه سرفصل',
-          builder: (_) => const ExpensesPage(),
-        ),
-
-      // ---- خزانه، چک و تسویه ----
-      if (perms.canSeeSettlement || perms.canSeeBanks || perms.canSeeCheques)
-        _DeskTool(
-          id: 'trs-dashboard',
-          title: 'داشبورد خزانه',
-          subtitle: 'نقدینگی کل، جریان ورودی/خروجی دوره و چک‌های سررسید نزدیک',
-          icon: Icons.account_balance_wallet_rounded,
-          color: ShopColors.teal,
-          category: _DeskCat.treasury,
-          keywords: 'داشبورد خزانه نقدینگی موجودی بانک صندوق',
-          builder: (_) => const TrsDashboardPage(),
-        ),
-      if (perms.canSeeSettlement)
-        _DeskTool(
-          id: 'settlement',
-          title: 'تسویه فاکتورها',
-          subtitle: 'اسناد دریافت، پرداخت و انتقال بین حساب‌ها',
-          icon: Icons.swap_horiz_rounded,
-          color: ShopColors.seed,
-          category: _DeskCat.treasury,
-          keywords: 'دریافت پرداخت انتقال تسویه سند خزانه',
-          builder: (_) => const TrsVouchersPage(),
-        ),
-      if (perms.canSeeInstallments)
-        _DeskTool(
-          id: 'credit-mgmt',
-          title: 'چک‌ها و دفترچه اقساط',
-          subtitle: 'وصول به بانک، تغییر سررسید، تعویض چک، برگشت و اقساط',
-          icon: Icons.event_note_rounded,
-          color: ShopColors.warn,
-          category: _DeskCat.treasury,
-          keywords: 'چک اقساط قسط سررسید برگشتی تعویض وصول',
-          builder: (_) => const ShopCreditPage(),
-        ),
-      if (perms.canSeeCheques)
-        _DeskTool(
-          id: 'trs-cheques',
-          title: 'چک‌های خزانه‌داری',
-          subtitle: 'صدور، واگذاری به بانک، خرج کردن، وصول و برگشت چک',
-          icon: Icons.credit_card_rounded,
-          color: ShopColors.indigo,
-          category: _DeskCat.treasury,
-          keywords: 'چک خزانه صیادی واگذاری خرج چک',
-          builder: (_) => const TrsChequesPage(),
-        ),
-      if (perms.canSeeBanks)
-        _DeskTool(
-          id: 'banks',
-          title: 'بانک، صندوق و POS',
-          subtitle: 'حساب‌های خزانه با مانده جاری، شماره شبا و کارتخوان',
-          icon: Icons.account_balance_rounded,
-          color: ShopColors.deep,
-          category: _DeskCat.treasury,
-          keywords: 'بانک صندوق کارتخوان شبا حساب',
-          builder: (_) => const TrsAccountsPage(),
-        ),
-      if (perms.canSeeOpeningBalance)
-        _DeskTool(
-          id: 'opening-balance',
-          title: 'افتتاح حساب اول دوره',
-          subtitle: 'طلب/بدهی اولیه اشخاص، چک‌ها، اقساط و موجودی اول دوره',
-          icon: Icons.savings_rounded,
-          color: ShopColors.accent,
-          category: _DeskCat.treasury,
-          keywords: 'افتتاح حساب مانده اولیه اول دوره',
-          builder: (_) => const OpeningBalancePage(),
-        ),
-
-      // ---- کالا و انبار ----
+      // ============ ۱) اطلاعات پایه ============
       if (perms.canSeeProducts)
         _DeskTool(
           id: 'products',
           title: 'کالاها و خدمات',
-          subtitle: 'تعریف کالا، بارکد، ارزش افزوده، ورود اکسل و نقطه سفارش',
+          subtitle: 'تعریف کالا، بارکد، ارزش افزوده، اکسل و نقطه سفارش',
           icon: Icons.inventory_2_rounded,
           color: ShopColors.seed,
-          category: _DeskCat.catalog,
-          keywords: 'کالا خدمات بارکد اکسل فی فروش',
+          group: _ShopGroup.basicInfo,
+          keywords: 'کالا خدمات بارکد اکسل فی فروش اطلاعات پایه',
           builder: (_) => const ProductsPage(),
-        ),
-      if (perms.canSeeStock)
-        _DeskTool(
-          id: 'stock',
-          title: 'موجودی لحظه‌ای انبار',
-          subtitle: 'موجودی به تفکیک انبار، هشدار کسری و تعدیل انبارگردانی',
-          icon: Icons.inventory_rounded,
-          color: ShopColors.teal,
-          category: _DeskCat.catalog,
-          keywords: 'موجودی انبار کسری انبارگردانی',
-          builder: (_) => const StockPage(),
         ),
       if (perms.canSeePricing)
         _DeskTool(
@@ -670,29 +254,18 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: 'سیاست کف سود فروش، اصلاح گروهی قیمت و تاریخچه قیمت',
           icon: Icons.price_change_rounded,
           color: ShopColors.ok,
-          category: _DeskCat.catalog,
+          group: _ShopGroup.basicInfo,
           keywords: 'قیمت گذاری حداقل سود افزایش قیمت گروهی',
           builder: (_) => const ShopPricingPage(),
-        ),
-      if (perms.canSeeWarehouses)
-        _DeskTool(
-          id: 'warehouses',
-          title: 'انبارها',
-          subtitle: 'تعریف انبارها و مراکز نگهداری کالا',
-          icon: Icons.warehouse_rounded,
-          color: ShopColors.indigo,
-          category: _DeskCat.catalog,
-          keywords: 'انبار مراکز نگهداری',
-          builder: (_) => const WarehousesPage(),
         ),
       if (perms.canSeeCategories)
         _DeskTool(
           id: 'categories',
           title: 'گروه‌های کالا',
-          subtitle: 'دسته‌بندی درختی و گروه‌بندی کالاها',
+          subtitle: 'دسته‌بندی و گروه‌بندی کالاها',
           icon: Icons.sell_rounded,
           color: ShopColors.accent,
-          category: _DeskCat.catalog,
+          group: _ShopGroup.basicInfo,
           keywords: 'گروه دسته بندی کالا',
           builder: (_) => const ProductCategoriesPage(),
         ),
@@ -703,193 +276,21 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: 'تعریف عدد، کارتن، کیلوگرم و واحدهای اندازه‌گیری',
           icon: Icons.straighten_rounded,
           color: ShopColors.inkSoft,
-          category: _DeskCat.catalog,
+          group: _ShopGroup.basicInfo,
           keywords: 'واحد شمارش اندازه گیری',
           builder: (_) => const UnitsPage(),
         ),
-
-      // ---- گزارش‌ها و تحلیل ----
-      if (perms.canSeeDashboard)
+      if (perms.canSeeWarehouses)
         _DeskTool(
-          id: 'ops-dashboard',
-          title: 'داشبورد جامع عملیاتی',
-          subtitle: 'تحلیل نموداری خرید، فروش، خدمات تعمیراتی و معرف‌ها',
-          icon: Icons.bar_chart_rounded,
-          color: ShopColors.seed,
-          category: _DeskCat.reports,
-          keywords: 'داشبورد عملیاتی نمودار سود',
-          builder: (_) => const OpsDashboardPage(),
-        ),
-      if (perms.canSeePartyStatements)
-        _DeskTool(
-          id: 'party-statements',
-          title: 'طلب و بدهی اشخاص',
-          subtitle: 'گردش حساب، مانده افتتاحیه و ریز صورت‌حساب مشتریان',
-          icon: Icons.account_balance_wallet_rounded,
+          id: 'warehouses',
+          title: 'انبارها',
+          subtitle: 'تعریف انبارها و مراکز نگهداری کالا',
+          icon: Icons.warehouse_rounded,
           color: ShopColors.indigo,
-          category: _DeskCat.reports,
-          keywords: 'صورتحساب گردش حساب معین اشخاص بدهکار بستانکار',
-          builder: (_) => const PartyStatementsPage(),
+          group: _ShopGroup.basicInfo,
+          keywords: 'انبار مراکز نگهداری',
+          builder: (_) => const WarehousesPage(),
         ),
-      if (perms.canSeeOrderReports) ...[
-        _DeskTool(
-          id: 'sale-report',
-          title: 'گزارش جامع فروش',
-          subtitle: 'تحلیل روند فروش، رتبه‌بندی مشتریان و سود ناخالص',
-          icon: Icons.trending_up_rounded,
-          color: ShopColors.ok,
-          category: _DeskCat.reports,
-          keywords: 'گزارش فروش سود مشتریان برتر',
-          builder: (_) => const OrderReportPage(type: TxnType.sale),
-        ),
-        _DeskTool(
-          id: 'purchase-report',
-          title: 'گزارش جامع خرید',
-          subtitle: 'تحلیل خرید دوره‌ای و رتبه‌بندی تأمین‌کنندگان',
-          icon: Icons.shopping_bag_outlined,
-          color: ShopColors.seed,
-          category: _DeskCat.reports,
-          keywords: 'گزارش خرید تامین کنندگان',
-          builder: (_) => const OrderReportPage(type: TxnType.purchase),
-        ),
-      ],
-      if (perms.canSeeChequeIncomeReport)
-        _DeskTool(
-          id: 'cheque-income-report',
-          title: 'گزارش تاخیر تادیه چک',
-          subtitle: 'گردش درآمد کارمزد چک‌های مدت‌دار، تغییر سررسید و برگشت',
-          icon: Icons.request_quote_rounded,
-          color: ShopColors.teal,
-          category: _DeskCat.reports,
-          keywords: 'تاخیر تادیه سود چک کارمزد چک',
-          builder: (_) => const ChequeIncomeReportPage(),
-        ),
-      if (perms.canSeeReorder)
-        _DeskTool(
-          id: 'reorder',
-          title: 'نقطه سفارش و کسری کالا',
-          subtitle: 'کالاهای زیر نقطه سفارش، مقدار کسری و پیشنهاد خرید مجدد',
-          icon: Icons.production_quantity_limits_rounded,
-          color: ShopColors.warn,
-          category: _DeskCat.reports,
-          keywords: 'نقطه سفارش کسری موجودی خرید مجدد حداقل موجودی',
-          builder: (_) => const ReorderReportPage(),
-        ),
-      if (perms.canSeeKardex) ...[
-        _DeskTool(
-          id: 'kardex-qty',
-          title: 'کاردکس تعدادی کالا',
-          subtitle: 'رهگیری خط‌به‌خط وارده، صادره و مانده فیزیکی کالا',
-          icon: Icons.list_alt_rounded,
-          color: ShopColors.accent,
-          category: _DeskCat.reports,
-          keywords: 'کاردکس تعدادی گردش کالا',
-          builder: (_) => const KardexPage(),
-        ),
-        _DeskTool(
-          id: 'kardex-rial',
-          title: 'کاردکس ریالی کالا',
-          subtitle: 'فی تمام‌شده، ارزش دفتری و میانگین بهای مانده انبار',
-          icon: Icons.currency_exchange_rounded,
-          color: ShopColors.warn,
-          category: _DeskCat.reports,
-          keywords: 'کاردکس ریالی بهای تمام شده میانگین موزون',
-          builder: (_) => const KardexPage(rial: true),
-        ),
-      ],
-      if (perms.canSeeExpenses)
-        _DeskTool(
-          id: 'expense-report',
-          title: 'گزارش هزینه‌ها',
-          subtitle: 'تجمیع اسناد هزینه به تفکیک سرفصل و خروجی CSV',
-          icon: Icons.receipt_long_rounded,
-          color: ShopColors.danger,
-          category: _DeskCat.reports,
-          keywords: 'گزارش هزینه ها سرفصل',
-          builder: (_) => const ExpenseReportPage(),
-        ),
-      if (perms.canSeeRepairs)
-        _DeskTool(
-          id: 'warranty-report',
-          title: 'گزارش گارانتی',
-          subtitle: 'پذیرش‌های تحویل‌شده، هزینه داخلی و سهم مشتری',
-          icon: Icons.verified_user_rounded,
-          color: ShopColors.indigo,
-          category: _DeskCat.reports,
-          keywords: 'گزارش گارانتی تعمیرات تحویل شده',
-          builder: (_) => const WarrantyReportPage(),
-        ),
-      if (perms.canSeeVisRequestsReport)
-        _DeskTool(
-          id: 'vis-requests-report',
-          title: 'گزارش تجمیع ویزیتوری',
-          subtitle: 'تجمیع سفارش‌ها بر اساس کالا (کسری انبار)، ویزیتور و مشتری',
-          icon: Icons.analytics_rounded,
-          color: ShopColors.seed,
-          category: _DeskCat.reports,
-          keywords: 'گزارش تجمیع ویزیتوری کسری کالا ویزیتور',
-          builder: (_) => const VisRequestsReportPage(),
-        ),
-
-      // ---- فروش و ویزیتوری ----
-      if (perms.canSeeSalesVisit) ...[
-        _DeskTool(
-          id: 'my-visits',
-          title: 'سفارش‌های ویزیتوری من',
-          subtitle: 'پیگیری وضعیت سفارش‌های ثبت‌شده توسط ویزیتور',
-          icon: Icons.assignment_rounded,
-          color: ShopColors.seed,
-          category: _DeskCat.visits,
-          keywords: 'ویزیت سفارش های من ویزیتور',
-          builder: (_) => const VisitsPage(),
-        ),
-        if (perms.canCreateVisit)
-          _DeskTool(
-            id: 'new-visit',
-            title: 'ثبت سفارش ویزیتوری',
-            subtitle: 'ثبت سریع سفارش میدانی برای مشتری',
-            icon: Icons.add_box_rounded,
-            color: ShopColors.ok,
-            category: _DeskCat.visits,
-            keywords: 'ثبت سفارش ویزیت جدید میدانی',
-            builder: (_) => const VisitFormPage(),
-          ),
-        if (perms.canApproveVisits) ...[
-          _DeskTool(
-            id: 'vis-approvals',
-            title: 'کارتابل تأیید مدیر فروش',
-            subtitle: 'بررسی، تأیید، اصلاح یا رد سفارش‌های ویزیتورها',
-            icon: Icons.verified_rounded,
-            color: ShopColors.warn,
-            category: _DeskCat.visits,
-            keywords: 'تایید سفارش مدیر فروش کارتابل',
-            builder: (_) => const VisApprovalsPage(),
-          ),
-          _DeskTool(
-            id: 'vis-all-requests',
-            title: 'همهٔ درخواست‌های ویزیت',
-            subtitle: 'آرشیو و پایش تمام سفارش‌های ویزیتوری شرکت',
-            icon: Icons.collections_bookmark_rounded,
-            color: ShopColors.indigo,
-            category: _DeskCat.visits,
-            keywords: 'همه درخواست های ویزیتوری',
-            builder: (_) => const VisRequestsPage(),
-          ),
-        ],
-        if (perms.canFinanceVisit)
-          _DeskTool(
-            id: 'vis-finance',
-            title: 'صف مالی ویزیتوری',
-            subtitle: 'تأیید نحوه تسویه و صدور خودکار فاکتور فروش',
-            icon: Icons.point_of_sale_rounded,
-            color: ShopColors.teal,
-            category: _DeskCat.visits,
-            keywords: 'صف مالی ویزیتوری صدور فاکتور',
-            builder: (_) => const VisFinanceQueuePage(),
-          ),
-      ],
-
-      // ---- پایه، معرف‌ها و تنظیمات ----
       if (showParties)
         _DeskTool(
           id: 'parties',
@@ -897,32 +298,359 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: partiesSubtitle,
           icon: Icons.people_alt_rounded,
           color: ShopColors.seed,
-          category: _DeskCat.settings,
+          group: _ShopGroup.basicInfo,
           keywords: 'مشتری تامین کننده طرف حساب اشخاص کد ملی',
           builder: (_) => const PartiesPage(),
-        ),
-      if (perms.canSeePrintSettings)
-        _DeskTool(
-          id: 'print-settings',
-          title: 'تنظیمات چاپ و فروشگاه',
-          subtitle: 'قالب چاپ فاکتور، حساب‌های بانکی زیر فاکتور و سقف تخفیف',
-          icon: Icons.print_rounded,
-          color: ShopColors.indigo,
-          category: _DeskCat.settings,
-          keywords: 'تنظیمات چاپ فاکتور فروشگاه شبا سقف تخفیف',
-          builder: (_) => const ShopPrintSettingsPage(),
         ),
       if (perms.canSeeReferrers)
         _DeskTool(
           id: 'referrers',
-          title: 'معرف‌ها و بازاریاب‌ها',
+          title: 'معرف‌ها',
           subtitle: 'تعریف معرف‌ها و درصد پورسانت کالا و خدمات',
           icon: Icons.badge_rounded,
           color: ShopColors.teal,
-          category: _DeskCat.settings,
+          group: _ShopGroup.basicInfo,
           keywords: 'معرف بازاریاب پورسانت',
           builder: (_) => const ReferrersPage(),
         ),
+      if (perms.canSeeBanks)
+        _DeskTool(
+          id: 'banks',
+          title: 'بانک، صندوق و کارتخوان (POS)',
+          subtitle: 'حساب‌های خزانه با مانده جاری، شبا، کارتخوان و گردش حساب',
+          icon: Icons.account_balance_rounded,
+          color: ShopColors.deep,
+          group: _ShopGroup.basicInfo,
+          keywords: 'بانک صندوق کارتخوان شبا حساب گردش',
+          builder: (_) => const TrsAccountsPage(),
+        ),
+
+      // ============ ۲) عملیات ============
+      if (perms.canSeeSale)
+        _DeskTool(
+          id: 'sale',
+          title: 'فروش (فاکتور و پیش‌فاکتور)',
+          subtitle: 'ثبت فاکتور فروش، پیش‌فاکتور، چاپ، نسیه و برگشت از فروش',
+          icon: Icons.shopping_cart_rounded,
+          color: ShopColors.ok,
+          group: _ShopGroup.operations,
+          keywords: 'فاکتور فروش پیش فاکتور مشتری برگشت از فروش',
+          builder: (_) => const SaleOrdersPage(type: TxnType.sale),
+        ),
+      if (perms.canSeePurchase)
+        _DeskTool(
+          id: 'purchase',
+          title: 'خرید (رسید خرید)',
+          subtitle: 'ثبت رسید خرید، بروزرسانی فی فروش و چاپ رسید خرید',
+          icon: Icons.shopping_bag_rounded,
+          color: ShopColors.seed,
+          group: _ShopGroup.operations,
+          keywords: 'فاکتور خرید رسید تامین کننده',
+          builder: (_) => const SaleOrdersPage(type: TxnType.purchase),
+        ),
+      if (perms.canSeeGoodsIssue)
+        _DeskTool(
+          id: 'goods-issue',
+          title: 'بیجک (حوالهٔ تحویل کالا)',
+          subtitle: 'ثبت و چاپ حواله خروج کالا بدون مبلغ (A4 / A5)',
+          icon: Icons.local_shipping_rounded,
+          color: ShopColors.teal,
+          group: _ShopGroup.operations,
+          keywords: 'بیجک حواله خروج ارسال بار',
+          builder: (_) => const GoodsIssuesPage(),
+        ),
+      if (perms.canSeeStock)
+        _DeskTool(
+          id: 'stock',
+          title: 'موجودی انبار و انبارگردانی',
+          subtitle: 'موجودی لحظه‌ای به تفکیک انبار و ثبت تعدیل موجودی',
+          icon: Icons.inventory_rounded,
+          color: ShopColors.teal,
+          group: _ShopGroup.operations,
+          keywords: 'موجودی انبار کسری انبارگردانی تعدیل',
+          builder: (_) => const StockPage(),
+        ),
+      if (perms.canSeeRepairs) ...[
+        _DeskTool(
+          id: 'repairs',
+          title: 'تعمیرات',
+          subtitle: 'پذیرش دستگاه، کارها و قطعات، چاپ قبض/فیش تحویل و فاکتور',
+          icon: Icons.build_rounded,
+          color: ShopColors.indigo,
+          group: _ShopGroup.operations,
+          keywords: 'تعمیر پذیرش دستگاه تکنسین فیش تحویل قبض',
+          builder: (_) => const RepairsPage(),
+        ),
+        _DeskTool(
+          id: 'warranty',
+          title: 'پذیرش گارانتی',
+          subtitle: 'بررسی گارانتی، ردیف‌های رایگان/ردشده و تسویه بدهی گارانتی',
+          icon: Icons.verified_user_rounded,
+          color: ShopColors.teal,
+          group: _ShopGroup.operations,
+          keywords: 'گارانتی پذیرش گارانتی تصمیم گارانتی تسویه',
+          builder: (_) => const RepairsPage(initialTab: 1),
+        ),
+        _DeskTool(
+          id: 'trade-in',
+          title: 'طرح تعویض کالای کارکرده',
+          subtitle: 'پذیرش دستگاه کارکرده، ثبت اعتبار مشتری و مصرف در فروش',
+          icon: Icons.swap_horizontal_circle_rounded,
+          color: ShopColors.accent,
+          group: _ShopGroup.operations,
+          keywords: 'طرح تعویض کالای کارکرده اعتبار مشتری دست دوم',
+          builder: (_) => const RepairsPage(initialTab: 2),
+        ),
+      ],
+      if (perms.canSeeExpenses)
+        _DeskTool(
+          id: 'expenses',
+          title: 'هزینه‌ها',
+          subtitle: 'ثبت اسناد هزینه جاری و مدیریت سرفصل‌های هزینه',
+          icon: Icons.payments_rounded,
+          color: ShopColors.danger,
+          group: _ShopGroup.operations,
+          keywords: 'هزینه تنخواه سرفصل',
+          builder: (_) => const ExpensesPage(),
+        ),
+
+      // ============ ۳) خزانه‌داری، چک و تسویه ============
+      if (perms.canSeeSettlement)
+        _DeskTool(
+          id: 'settlement',
+          title: 'تسویه فاکتورها',
+          subtitle: 'اسناد دریافت، پرداخت و انتقال بین حساب‌ها',
+          icon: Icons.swap_horiz_rounded,
+          color: ShopColors.seed,
+          group: _ShopGroup.treasury,
+          keywords: 'دریافت پرداخت انتقال تسویه سند خزانه',
+          builder: (_) => const TrsVouchersPage(),
+        ),
+      if (perms.canSeeInstallments)
+        _DeskTool(
+          id: 'credit-mgmt',
+          title: 'مدیریت اقساط و چک‌ها',
+          subtitle: 'وصول به بانک، تغییر سررسید، تعویض چک، برگشت و دفترچه اقساط',
+          icon: Icons.event_note_rounded,
+          color: ShopColors.warn,
+          group: _ShopGroup.treasury,
+          keywords: 'چک اقساط قسط سررسید برگشتی تعویض وصول',
+          builder: (_) => const ShopCreditPage(),
+        ),
+      if (perms.canSeeCheques)
+        _DeskTool(
+          id: 'trs-cheques',
+          title: 'چک‌های خزانه‌داری',
+          subtitle: 'صدور، واگذاری به بانک، خرج کردن، وصول و برگشت چک',
+          icon: Icons.credit_card_rounded,
+          color: ShopColors.indigo,
+          group: _ShopGroup.treasury,
+          keywords: 'چک خزانه صیادی واگذاری خرج چک',
+          builder: (_) => const TrsChequesPage(),
+        ),
+      if (perms.canSeeOpeningBalance)
+        _DeskTool(
+          id: 'opening-balance',
+          title: 'افتتاح حساب و مانده‌های اولیه',
+          subtitle: 'طلب/بدهی اولیه اشخاص، چک‌ها، اقساط و موجودی اول دوره',
+          icon: Icons.savings_rounded,
+          color: ShopColors.accent,
+          group: _ShopGroup.treasury,
+          keywords: 'افتتاح حساب مانده اولیه اول دوره',
+          builder: (_) => const OpeningBalancePage(),
+        ),
+
+      // ============ ۴) گزارش‌ها و داشبورد ============
+      if (perms.canSeeDashboard)
+        _DeskTool(
+          id: 'ops-dashboard',
+          title: 'داشبورد عملیاتی (خرید، فروش و تعمیرات)',
+          subtitle: 'تحلیل نموداری خرید، فروش، خدمات تعمیراتی و معرف‌ها',
+          icon: Icons.bar_chart_rounded,
+          color: ShopColors.seed,
+          group: _ShopGroup.reports,
+          keywords: 'داشبورد عملیاتی نمودار سود',
+          builder: (_) => const OpsDashboardPage(),
+        ),
+      if (perms.canSeeSettlement || perms.canSeeBanks || perms.canSeeCheques)
+        _DeskTool(
+          id: 'trs-dashboard',
+          title: 'داشبورد خزانه',
+          subtitle: 'نقدینگی کل، ورودی/خروجی دوره و چک‌های سررسید نزدیک',
+          icon: Icons.account_balance_wallet_rounded,
+          color: ShopColors.teal,
+          group: _ShopGroup.reports,
+          keywords: 'داشبورد خزانه نقدینگی موجودی بانک صندوق',
+          builder: (_) => const TrsDashboardPage(),
+        ),
+      if (perms.canSeePartyStatements)
+        _DeskTool(
+          id: 'party-statements',
+          title: 'گزارش طلب و بدهی اشخاص',
+          subtitle: 'گردش حساب، مانده اشخاص و چاپ رسمی صورت‌حساب',
+          icon: Icons.account_balance_wallet_outlined,
+          color: ShopColors.indigo,
+          group: _ShopGroup.reports,
+          keywords: 'صورتحساب گردش حساب معین اشخاص بدهکار بستانکار',
+          builder: (_) => const PartyStatementsPage(),
+        ),
+      if (perms.canSeeOrderReports) ...[
+        _DeskTool(
+          id: 'sale-report',
+          title: 'گزارش فروش',
+          subtitle: 'روند فروش، مشتریان برتر، سود و پورسانت و چاپ گزارش',
+          icon: Icons.trending_up_rounded,
+          color: ShopColors.ok,
+          group: _ShopGroup.reports,
+          keywords: 'گزارش فروش سود مشتریان برتر',
+          builder: (_) => const OrderReportPage(type: TxnType.sale),
+        ),
+        _DeskTool(
+          id: 'purchase-report',
+          title: 'گزارش خرید',
+          subtitle: 'تحلیل خرید دوره‌ای، تأمین‌کنندگان برتر و چاپ گزارش',
+          icon: Icons.shopping_bag_outlined,
+          color: ShopColors.seed,
+          group: _ShopGroup.reports,
+          keywords: 'گزارش خرید تامین کنندگان',
+          builder: (_) => const OrderReportPage(type: TxnType.purchase),
+        ),
+      ],
+      if (perms.canSeeKardex) ...[
+        _DeskTool(
+          id: 'kardex-qty',
+          title: 'کاردکس تعدادی کالاها',
+          subtitle: 'رهگیری خط‌به‌خط وارده، صادره و مانده فیزیکی کالا',
+          icon: Icons.list_alt_rounded,
+          color: ShopColors.accent,
+          group: _ShopGroup.reports,
+          keywords: 'کاردکس تعدادی گردش کالا',
+          builder: (_) => const KardexPage(),
+        ),
+        _DeskTool(
+          id: 'kardex-rial',
+          title: 'کاردکس ریالی کالاها',
+          subtitle: 'فی تمام‌شده، ارزش دفتری و میانگین بهای مانده انبار',
+          icon: Icons.currency_exchange_rounded,
+          color: ShopColors.warn,
+          group: _ShopGroup.reports,
+          keywords: 'کاردکس ریالی بهای تمام شده میانگین موزون',
+          builder: (_) => const KardexPage(rial: true),
+        ),
+      ],
+      if (perms.canSeeReorder)
+        _DeskTool(
+          id: 'reorder',
+          title: 'نقطه سفارش و کسری کالا',
+          subtitle: 'کالاهای زیر نقطه سفارش، مقدار کسری و پیشنهاد خرید مجدد',
+          icon: Icons.production_quantity_limits_rounded,
+          color: ShopColors.warn,
+          group: _ShopGroup.reports,
+          keywords: 'نقطه سفارش کسری موجودی خرید مجدد حداقل موجودی',
+          builder: (_) => const ReorderReportPage(),
+        ),
+      if (perms.canSeeChequeIncomeReport)
+        _DeskTool(
+          id: 'cheque-income-report',
+          title: 'گزارش تاخیر تادیه چک',
+          subtitle: 'گردش درآمد کارمزد چک‌های مدت‌دار، تغییر سررسید و برگشت',
+          icon: Icons.request_quote_rounded,
+          color: ShopColors.teal,
+          group: _ShopGroup.reports,
+          keywords: 'تاخیر تادیه سود چک کارمزد چک',
+          builder: (_) => const ChequeIncomeReportPage(),
+        ),
+      if (perms.canSeeRepairs)
+        _DeskTool(
+          id: 'warranty-report',
+          title: 'گزارش گارانتی',
+          subtitle: 'پذیرش‌های تحویل‌شده، هزینه داخلی و سهم مشتری',
+          icon: Icons.verified_user_outlined,
+          color: ShopColors.indigo,
+          group: _ShopGroup.reports,
+          keywords: 'گزارش گارانتی تعمیرات تحویل شده',
+          builder: (_) => const WarrantyReportPage(),
+        ),
+      if (perms.canSeeExpenses)
+        _DeskTool(
+          id: 'expense-report',
+          title: 'گزارش هزینه‌ها',
+          subtitle: 'تجمیع اسناد هزینه به تفکیک سرفصل و خروجی CSV',
+          icon: Icons.receipt_long_rounded,
+          color: ShopColors.danger,
+          group: _ShopGroup.reports,
+          keywords: 'گزارش هزینه ها سرفصل',
+          builder: (_) => const ExpenseReportPage(),
+        ),
+      if (perms.canSeeVisRequestsReport)
+        _DeskTool(
+          id: 'vis-requests-report',
+          title: 'گزارش تجمیع سفارش‌ها',
+          subtitle: 'تجمیع سفارش‌های ویزیتوری بر اساس کالا، ویزیتور و مشتری',
+          icon: Icons.analytics_rounded,
+          color: ShopColors.seed,
+          group: _ShopGroup.reports,
+          keywords: 'گزارش تجمیع ویزیتوری کسری کالا ویزیتور',
+          builder: (_) => const VisRequestsReportPage(),
+        ),
+
+      // ============ ۵) فروش ویزیتوری و معرف‌ها ============
+      if (perms.canSeeSalesVisit) ...[
+        _DeskTool(
+          id: 'my-visits',
+          title: 'سفارش‌های من',
+          subtitle: 'پیگیری وضعیت سفارش‌های ثبت‌شده توسط ویزیتور',
+          icon: Icons.assignment_rounded,
+          color: ShopColors.seed,
+          group: _ShopGroup.visits,
+          keywords: 'ویزیت سفارش های من ویزیتور',
+          builder: (_) => const VisitsPage(),
+        ),
+        if (perms.canCreateVisit)
+          _DeskTool(
+            id: 'new-visit',
+            title: 'ثبت سفارش ویزیتوری جدید',
+            subtitle: 'ثبت سریع سفارش میدانی برای مشتری',
+            icon: Icons.add_box_rounded,
+            color: ShopColors.ok,
+            group: _ShopGroup.visits,
+            keywords: 'ثبت سفارش ویزیت جدید میدانی',
+            builder: (_) => const VisitFormPage(),
+          ),
+        if (perms.canApproveVisits) ...[
+          _DeskTool(
+            id: 'vis-approvals',
+            title: 'تأیید سفارش‌ها',
+            subtitle: 'کارتابل مدیر فروش برای بررسی، تأیید یا رد سفارش‌ها',
+            icon: Icons.verified_rounded,
+            color: ShopColors.warn,
+            group: _ShopGroup.visits,
+            keywords: 'تایید سفارش مدیر فروش کارتابل',
+            builder: (_) => const VisApprovalsPage(),
+          ),
+          _DeskTool(
+            id: 'vis-all-requests',
+            title: 'همهٔ درخواست‌ها',
+            subtitle: 'آرشیو و پایش تمام سفارش‌های ویزیتوری شرکت',
+            icon: Icons.collections_bookmark_rounded,
+            color: ShopColors.indigo,
+            group: _ShopGroup.visits,
+            keywords: 'همه درخواست های ویزیتوری',
+            builder: (_) => const VisRequestsPage(),
+          ),
+        ],
+        if (perms.canFinanceVisit)
+          _DeskTool(
+            id: 'vis-finance',
+            title: 'صف مالی سفارش‌ها',
+            subtitle: 'تأیید تسویه و صدور خودکار فاکتور فروش از سفارش ویزیتوری',
+            icon: Icons.point_of_sale_rounded,
+            color: ShopColors.teal,
+            group: _ShopGroup.visits,
+            keywords: 'صف مالی ویزیتوری صدور فاکتور',
+            builder: (_) => const VisFinanceQueuePage(),
+          ),
+      ],
       if (perms.canSeeReferrerWallets)
         _DeskTool(
           id: 'referrer-wallets',
@@ -930,7 +658,7 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: 'مانده پورسانت و ثبت اسناد تسویه با معرف‌ها',
           icon: Icons.wallet_rounded,
           color: ShopColors.ok,
-          category: _DeskCat.settings,
+          group: _ShopGroup.visits,
           keywords: 'کیف پول معرف پورسانت تسویه',
           builder: (_) => const ReferrerWalletsPage(),
         ),
@@ -941,7 +669,7 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: 'مانده پورسانت و پرداخت‌های دریافتی من',
           icon: Icons.account_balance_wallet_rounded,
           color: ShopColors.ok,
-          category: _DeskCat.settings,
+          group: _ShopGroup.visits,
           builder: (_) => const MyWalletPage(),
         ),
         _DeskTool(
@@ -950,7 +678,7 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: 'مشاهده کالاهای موجود و قیمت فروش روز',
           icon: Icons.inventory_2_rounded,
           color: ShopColors.seed,
-          category: _DeskCat.settings,
+          group: _ShopGroup.visits,
           builder: (_) => const MyProductsPage(),
         ),
         _DeskTool(
@@ -959,25 +687,38 @@ class _ShopHomePageState extends State<ShopHomePage> {
           subtitle: 'پیش‌نمایش کارت شناسایی معرف',
           icon: Icons.contact_page_rounded,
           color: ShopColors.indigo,
-          category: _DeskCat.settings,
+          group: _ShopGroup.visits,
           builder: (_) => const MyCardPage(),
         ),
       ],
+
+      // ============ ۶) تنظیمات و راهنما ============
+      if (perms.canSeePrintSettings)
+        _DeskTool(
+          id: 'print-settings',
+          title: 'تنظیمات فروشگاه',
+          subtitle: 'شماره کارت و شبای چاپ فاکتور و سقف تخفیف ویزیتورها',
+          icon: Icons.settings_rounded,
+          color: ShopColors.indigo,
+          group: _ShopGroup.settings,
+          keywords: 'تنظیمات چاپ فاکتور فروشگاه شبا سقف تخفیف',
+          builder: (_) => const ShopPrintSettingsPage(),
+        ),
       if (perms.canSeeGuide)
         _DeskTool(
           id: 'guide',
-          title: 'راهنمای میز کار کایر',
-          subtitle: 'آموزش گام‌به‌گام گردش‌کارهای فروشگاهی',
+          title: 'راهنمای سامانه',
+          subtitle: 'آموزش گام‌به‌گام بخش‌های فروشگاهی کایر',
           icon: Icons.menu_book_rounded,
           color: ShopColors.accent,
-          category: _DeskCat.settings,
+          group: _ShopGroup.settings,
           keywords: 'راهنما آموزش مستندات',
           builder: (_) => const ShopGuidePage(),
         ),
     ];
   }
 
-  // -------------------- ساخت بدنهٔ اصلی پوستهٔ میز کار --------------------
+  // -------------------- ساخت پوستهٔ اصلی --------------------
 
   @override
   Widget build(BuildContext context) {
@@ -1009,25 +750,55 @@ class _ShopHomePageState extends State<ShopHomePage> {
       },
       child: Scaffold(
         backgroundColor: ShopColors.bg,
+        appBar: AppBar(
+          backgroundColor: ShopColors.surface,
+          foregroundColor: ShopColors.ink,
+          elevation: 0.5,
+          titleSpacing: 4,
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'فروشگاهی کایر',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              ),
+              Text(
+                'دسته‌بندی ساختاریافته بر اساس اطلاعات پایه، عملیات و گزارش‌ها',
+                style: TextStyle(fontSize: 10, color: ShopColors.inkFaint),
+              ),
+            ],
+          ),
+          actions: [
+            if (_openTabs.isNotEmpty)
+              TextButton.icon(
+                onPressed: _closeAllTabs,
+                icon: const Icon(Icons.clear_all_rounded, size: 17),
+                label: Text(
+                  'بستن تب‌ها (${Fa.digits(_openTabs.length)})',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                style: TextButton.styleFrom(foregroundColor: ShopColors.inkSoft),
+              ),
+          ],
+        ),
         body: Column(
           children: [
-            _buildWorkspaceTopChrome(context, allTools),
+            if (_openTabs.isNotEmpty) _buildTabBar(),
             Expanded(
-              child: MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: IndexedStack(
-                  index: safeStackIdx,
-                  children: [
-                    _buildWorkbenchHome(context, auth, perms, allTools),
-                    for (final tab in _openTabs)
-                      _WorkspaceTabViewport(
-                        key: ValueKey('${tab.id}-v${tab.reloadVersion}'),
-                        navKey: tab.navKey,
-                        builder: tab.builder,
+              child: IndexedStack(
+                index: safeStackIdx,
+                children: [
+                  _buildStructuredMenu(perms, allTools),
+                  for (final tab in _openTabs)
+                    KeyedSubtree(
+                      key: ValueKey('${tab.id}:${tab.reloadVersion}'),
+                      child: Navigator(
+                        key: tab.navKey,
+                        onGenerateRoute: (_) =>
+                            MaterialPageRoute<dynamic>(builder: tab.builder),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -1036,209 +807,94 @@ class _ShopHomePageState extends State<ShopHomePage> {
     );
   }
 
-  // -------------------- نوار تب‌های بالای میز کار (Workspace Tab Bar) --------------------
-
-  Widget _buildWorkspaceTopChrome(
-    BuildContext context,
-    List<_DeskTool> allTools,
-  ) {
-    final homeActive = _activeTabId == _homeTabId;
+  Widget _buildTabBar() {
     return Container(
+      height: 44,
       decoration: const BoxDecoration(
-        color: ShopColors.deep,
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x1f0f172a),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
+        color: ShopColors.surface,
+        border: Border(bottom: BorderSide(color: ShopColors.line)),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 48,
-          child: Row(
-            children: [
-              const SizedBox(width: 6),
-              // دکمه خروج از میز کار فروشگاهی به صفحه خانه اصلی اپ
-              Tooltip(
-                message: 'بازگشت به خانه اصلی برنامه',
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 19,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              // نوار اسکرول افقی تب‌ها (تب سنجاق‌شده «میز کار» + تب‌های باز)
-              Expanded(
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  children: [
-                    // تب ثابت میز کار
-                    GestureDetector(
-                      onTap: () => setState(() => _activeTabId = _homeTabId),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: homeActive
-                              ? ShopColors.bg
-                              : Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.space_dashboard_rounded,
-                              size: 15,
-                              color: homeActive
-                                  ? ShopColors.seed
-                                  : Colors.white,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'میز کار',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                                color: homeActive
-                                    ? ShopColors.ink
-                                    : Colors.white,
-                              ),
-                            ),
-                            if (_openTabs.isNotEmpty) ...[
-                              const SizedBox(width: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: homeActive
-                                      ? ShopColors.seed.withValues(alpha: 0.14)
-                                      : Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  numFa(_openTabs.length),
-                                  style: TextStyle(
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: homeActive
-                                        ? ShopColors.seed
-                                        : Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    // تب‌های باز شده توسط کاربر
-                    for (final tab in _openTabs) ...[
-                      const SizedBox(width: 6),
-                      _buildTabChip(tab),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 4),
-              // دکمه پرش سریع / باز کردن تب جدید
-              if (allTools.isNotEmpty)
-                Tooltip(
-                  message: 'باز کردن بخش جدید در میز کار',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => _openQuickSwitcherSheet(allTools),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.add_rounded,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 8),
-            ],
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        children: [
+          _tabChip(
+            label: 'فهرست بخش‌ها',
+            icon: Icons.folder_copy_rounded,
+            selected: _activeTabId == _homeTabId,
+            color: ShopColors.seed,
+            onTap: () => setState(() => _activeTabId = _homeTabId),
           ),
-        ),
+          for (final t in _openTabs) ...[
+            const SizedBox(width: 6),
+            _tabChip(
+              label: t.title,
+              icon: t.icon,
+              selected: _activeTabId == t.id,
+              color: t.color,
+              onTap: () => setState(() => _activeTabId = t.id),
+              onClose: () => _closeTab(t.id),
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildTabChip(_OpenWorkspaceTab tab) {
-    final active = _activeTabId == tab.id;
-    return GestureDetector(
-      onTap: () => setState(() => _activeTabId = tab.id),
-      onLongPress: () => _showTabActions(tab),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.fromLTRB(6, 0, 10, 0),
+  Widget _tabChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required Color color,
+    required VoidCallback onTap,
+    VoidCallback? onClose,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          onClose == null ? 10 : 6,
+          0,
+          10,
+          0,
+        ),
         decoration: BoxDecoration(
-          color: active ? ShopColors.bg : Colors.white.withValues(alpha: 0.1),
+          color: selected ? color.withValues(alpha: 0.12) : ShopColors.bg,
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? color : ShopColors.line,
+            width: selected ? 1.2 : 1,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              tab.pinned ? Icons.push_pin_rounded : tab.icon,
+              icon,
               size: 14,
-              color: active ? tab.color : Colors.white.withValues(alpha: 0.9),
+              color: selected ? color : ShopColors.inkSoft,
             ),
             const SizedBox(width: 5),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 118),
-              child: Text(
-                tab.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                  color: active ? ShopColors.ink : Colors.white,
-                ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                color: selected ? color : ShopColors.ink,
               ),
             ),
-            if (!tab.pinned) ...[
+            if (onClose != null) ...[
               const SizedBox(width: 4),
               InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => _closeTab(tab.id),
-                child: Padding(
-                  padding: const EdgeInsets.all(3),
+                onTap: onClose,
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
                   child: Icon(
                     Icons.close_rounded,
-                    size: 14,
-                    color: active
-                        ? ShopColors.inkSoft
-                        : Colors.white.withValues(alpha: 0.78),
+                    size: 13,
+                    color: ShopColors.inkFaint,
                   ),
                 ),
               ),
@@ -1249,946 +905,388 @@ class _ShopHomePageState extends State<ShopHomePage> {
     );
   }
 
-  // -------------------- صفحهٔ اصلی «میز کار فروشگاهی کایر» --------------------
+  // -------------------- نمای ساختاریافته و خلوت بخش‌ها --------------------
 
-  Widget _buildWorkbenchHome(
-    BuildContext context,
-    AuthController auth,
-    ShopPerms perms,
-    List<_DeskTool> allTools,
-  ) {
-    if (allTools.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: ShopEmpty(
-          icon: Icons.lock_outline_rounded,
-          title: 'دسترسی به بخش‌های فروشگاهی ندارید',
-          subtitle:
-              'هیچ‌یک از بخش‌های «فروشگاهی کایر» برای نقش شما فعال نشده است.',
-        ),
-      );
-    }
+  Widget _buildStructuredMenu(ShopPerms perms, List<_DeskTool> allTools) {
+    final query = _searchCtrl.text.trim().toLowerCase();
+    final isSearching = query.isNotEmpty;
 
-    // دسته‌هایی که حداقل یک ابزار برای این کاربر دارند
-    final availableCats = <_DeskCat>[
-      _DeskCat.all,
-      for (final c in _DeskCat.values.where((x) => x != _DeskCat.all))
-        if (allTools.any((t) => t.category == c)) c,
-    ];
-    final effectiveCat = availableCats.contains(_selectedCat)
-        ? _selectedCat
-        : _DeskCat.all;
+    final filtered = isSearching
+        ? allTools.where((t) {
+            return t.title.toLowerCase().contains(query) ||
+                t.subtitle.toLowerCase().contains(query) ||
+                t.keywords.toLowerCase().contains(query) ||
+                t.group.title.toLowerCase().contains(query);
+          }).toList()
+        : allTools;
 
-    final q = _searchCtrl.text.trim().toLowerCase();
-    final visibleTools = allTools.where((t) {
-      if (effectiveCat != _DeskCat.all && t.category != effectiveCat) {
-        return false;
-      }
-      if (q.isEmpty) return true;
-      return t.title.toLowerCase().contains(q) ||
-          t.subtitle.toLowerCase().contains(q) ||
-          t.keywords.toLowerCase().contains(q);
-    }).toList();
-
-    final alerts = _buildWorkQueueAlerts(perms, allTools);
-    final quickActions = _buildQuickActions(perms);
-    final userName = (auth.session?.displayName ?? '').trim();
-
-    return RefreshIndicator(
-      onRefresh: _loadLiveMetrics,
-      child: CustomScrollView(
-        slivers: [
-          // ۱) بنر میز کار + جستجوی فوری
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-              decoration: const BoxDecoration(
-                gradient: ShopColors.heroGradient,
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(24),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: const Icon(
-                          Icons.point_of_sale_rounded,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'میز کار فروشگاهی کایر',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            Text(
-                              '${userName.isEmpty ? 'کاربر سامانه' : userName} · امروز ${jalaliLong(DateTime.now())}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.84),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _loadingLive ? null : _loadLiveMetrics,
-                        tooltip: 'بروزرسانی شاخص‌های میز کار',
-                        icon: _loadingLive
-                            ? const SizedBox(
-                                width: 17,
-                                height: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.refresh_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // کادر جستجوی سریع میز کار
-                  TextField(
-                    controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
-                    style: const TextStyle(fontSize: 12.5),
-                    decoration: InputDecoration(
-                      hintText:
-                          'جستجوی فوری در میز کار (فاکتور، چک، کاردکس، کالا...)',
-                      hintStyle: const TextStyle(
-                        fontSize: 11.5,
-                        color: ShopColors.inkFaint,
-                      ),
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
-                        size: 19,
-                        color: ShopColors.seed,
-                      ),
-                      suffixIcon: _searchCtrl.text.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 17),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() {});
-                              },
-                            ),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
+      children: [
+        // ۱) جستجوی فوری جمع‌وجور
+        TextField(
+          controller: _searchCtrl,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: ShopColors.surface,
+            hintText: 'جستجو در بخش‌ها (مثلاً کالا، فاکتور فروش، کاردکس، چک…)',
+            hintStyle: const TextStyle(
+              fontSize: 11.5,
+              color: ShopColors.inkFaint,
             ),
+            prefixIcon: const Icon(Icons.search_rounded, size: 19),
+            suffixIcon: isSearching
+                ? IconButton(
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.close_rounded, size: 17),
+                  )
+                : null,
           ),
+          style: const TextStyle(fontSize: 12.5),
+        ),
+        const SizedBox(height: 10),
 
-          // ۲) پیشخوان ثبت سریع (Quick Action Dock)
-          if (quickActions.isNotEmpty && q.isEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.bolt_rounded,
-                          size: 16,
-                          color: ShopColors.seed,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'پیشخوان ثبت سریع سند',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            color: ShopColors.ink,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 40,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: quickActions.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (_, idx) => quickActions[idx],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+        // ۲) ردیف جمع‌وجور ثبت سریع (فقط وقتی جستجو خالی است)
+        if (!isSearching) ...[
+          _buildQuickStrip(perms),
+          const SizedBox(height: 12),
+        ],
+
+        // ۳) نتایج جستجو یا سرفصل‌های درختی ساختاریافته
+        if (allTools.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: ShopEmpty(
+              icon: Icons.lock_outline_rounded,
+              title: 'بخشی برای حساب شما فعال نیست',
+              subtitle: 'دسترسی‌های فروشگاهی را از مدیریت نقش‌ها بررسی کنید.',
             ),
-
-          // ۳) شاخص‌های زندهٔ ۳۰ روز اخیر روی میز کار
-          if (q.isEmpty && _hasAnyKpiData)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-              sliver: SliverToBoxAdapter(
-                child: _buildLiveKpiGrid(allTools),
-              ),
-            ),
-
-          // ۴) کارتابل پیگیری‌های فوری روی میز کار
-          if (q.isEmpty && alerts.isNotEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-              sliver: SliverToBoxAdapter(
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          )
+        else if (isSearching)
+          filtered.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.only(top: 32),
+                  child: ShopEmpty(
+                    icon: Icons.search_off_rounded,
+                    title: 'بخشی با این عبارت یافت نشد',
+                  ),
+                )
+              : Container(
                   decoration: BoxDecoration(
                     color: ShopColors.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: ShopColors.line),
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.notifications_active_rounded,
-                            size: 16,
-                            color: ShopColors.warn,
+                      for (var i = 0; i < filtered.length; i++) ...[
+                        if (i > 0)
+                          const Divider(
+                            height: 1,
+                            indent: 52,
+                            color: ShopColors.line,
                           ),
-                          const SizedBox(width: 6),
-                          const Expanded(
-                            child: Text(
-                              'کارتابل پیگیری‌های فوری میز کار',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                                color: ShopColors.ink,
-                              ),
-                            ),
-                          ),
-                          ShopPill(
-                            text: '${numFa(alerts.length)} مورد',
-                            color: ShopColors.warn,
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 12),
-                      ...alerts,
+                        _buildMenuRow(filtered[i], showGroupBadge: true),
+                      ],
                     ],
                   ),
-                ),
-              ),
-            ),
-
-          // ۵) فیلتر دسته‌ای میز کار
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-            sliver: SliverToBoxAdapter(
-              child: SizedBox(
-                height: 36,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: availableCats.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 6),
-                  itemBuilder: (_, idx) {
-                    final cat = availableCats[idx];
-                    final sel = cat == effectiveCat;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedCat = cat),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: sel ? ShopColors.seed : ShopColors.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: sel ? ShopColors.seed : ShopColors.line,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              cat.icon,
-                              size: 14,
-                              color: sel ? Colors.white : ShopColors.inkSoft,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              cat.label,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: sel ? Colors.white : ShopColors.ink,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                )
+        else
+          for (final group in _ShopGroup.values)
+            Builder(
+              builder: (_) {
+                final items = allTools.where((t) => t.group == group).toList();
+                if (items.isEmpty) return const SizedBox.shrink();
+                final expanded = _expandedGroup == group;
+                return _buildGroupFolder(
+                  group: group,
+                  items: items,
+                  expanded: expanded,
+                  onToggle: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _expandedGroup = expanded ? null : group;
+                    });
                   },
+                );
+              },
+            ),
+      ],
+    );
+  }
+
+  Widget _buildQuickStrip(ShopPerms perms) {
+    final actions = <(String, IconData, Color, VoidCallback)>[
+      if (perms.canManageSection('Sale'))
+        (
+          'فاکتور فروش',
+          Icons.add_shopping_cart_rounded,
+          ShopColors.ok,
+          () => _pushQuickForm(const OrderFormPage(type: TxnType.sale)),
+        ),
+      if (perms.canManageSection('Purchase'))
+        (
+          'رسید خرید',
+          Icons.shopping_bag_rounded,
+          ShopColors.seed,
+          () => _pushQuickForm(const OrderFormPage(type: TxnType.purchase)),
+        ),
+      if (perms.canManageSection('Settlement'))
+        (
+          'دریافت / پرداخت',
+          Icons.payments_rounded,
+          ShopColors.teal,
+          () => _pushQuickForm(
+            const TrsVoucherFormPage(kind: TrsKind.receipt),
+          ),
+        ),
+      if (perms.canSeeRepairs)
+        (
+          'تعمیرات',
+          Icons.build_rounded,
+          ShopColors.indigo,
+          () => _pushQuickForm(const RepairsPage()),
+        ),
+    ];
+
+    if (actions.isEmpty) return const SizedBox.shrink();
+
+    return Row(
+      children: [
+        for (var i = 0; i < actions.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: actions[i].$4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: ShopColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ShopColors.line),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(actions[i].$2, size: 18, color: actions[i].$3),
+                    const SizedBox(height: 4),
+                    Text(
+                      actions[i].$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: ShopColors.ink,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
+        ],
+      ],
+    );
+  }
 
-          // ۶) شبکهٔ دو‌ستونهٔ کاشی‌های میز کار (Bento Workbench Grid)
-          if (visibleTools.isEmpty)
-            const SliverPadding(
-              padding: EdgeInsets.all(20),
-              sliver: SliverToBoxAdapter(
-                child: ShopEmpty(
-                  icon: Icons.search_off_rounded,
-                  title: 'ابزاری با این عبارت در میز کار پیدا نشد.',
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(14, 2, 14, 28),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  mainAxisExtent: 108,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (_, idx) {
-                    final tool = visibleTools[idx];
-                    final openTab = _openTabs
-                        .where((t) => t.id == tool.id)
-                        .firstOrNull;
-                    return _WorkbenchTileCard(
-                      tool: tool,
-                      isOpen: openTab != null,
-                      isPinned: openTab?.pinned ?? false,
-                      onTap: () => _openToolInTab(tool),
-                      onLongPress: openTab != null
-                          ? () => _showTabActions(openTab)
-                          : null,
-                    );
-                  },
-                  childCount: visibleTools.length,
-                ),
+  Widget _buildGroupFolder({
+    required _ShopGroup group,
+    required List<_DeskTool> items,
+    required bool expanded,
+    required VoidCallback onToggle,
+  }) {
+    final openInGroup = items
+        .where((it) => _openTabs.any((t) => t.id == it.id))
+        .length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: expanded ? group.color.withValues(alpha: 0.5) : ShopColors.line,
+          width: expanded ? 1.3 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(16),
+              bottom: Radius.circular(expanded ? 0 : 16),
+            ),
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: group.color.withValues(alpha: 0.11),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(group.icon, size: 21, color: group.color),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              group.title,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w900,
+                                color: ShopColors.ink,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: ShopColors.bg,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                              child: Text(
+                                '${Fa.digits(items.length)} بخش',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: ShopColors.inkSoft,
+                                ),
+                              ),
+                            ),
+                            if (openInGroup > 0) ...[
+                              const SizedBox(width: 5),
+                              ShopTag(
+                                text: '${Fa.digits(openInGroup)} باز',
+                                color: group.color,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          group.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            color: ShopColors.inkFaint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                      color: expanded ? group.color : ShopColors.inkSoft,
+                    ),
+                  ),
+                ],
               ),
             ),
+          ),
+          if (expanded) ...[
+            const Divider(height: 1, color: ShopColors.line),
+            for (var i = 0; i < items.length; i++) ...[
+              if (i > 0)
+                const Divider(height: 1, indent: 52, color: ShopColors.line),
+              _buildMenuRow(items[i]),
+            ],
+          ],
         ],
       ),
     );
   }
 
-  // -------------------- پیشخوان ثبت سریع --------------------
-
-  List<Widget> _buildQuickActions(ShopPerms perms) {
-    return <Widget>[
-      if (perms.canManageSale)
-        _QuickDockButton(
-          label: 'فاکتور فروش',
-          icon: Icons.add_shopping_cart_rounded,
-          color: ShopColors.ok,
-          onTap: () => _pushQuickModal(const OrderFormPage(type: TxnType.sale)),
-        ),
-      if (perms.canManageSale)
-        _QuickDockButton(
-          label: 'پیش‌فاکتور',
-          icon: Icons.description_outlined,
-          color: ShopColors.indigo,
-          onTap: () => _pushQuickModal(
-            const OrderFormPage(type: TxnType.sale, isProforma: true),
-          ),
-        ),
-      if (perms.canManagePurchase)
-        _QuickDockButton(
-          label: 'رسید خرید',
-          icon: Icons.shopping_bag_rounded,
-          color: ShopColors.seed,
-          onTap: () =>
-              _pushQuickModal(const OrderFormPage(type: TxnType.purchase)),
-        ),
-      if (perms.canManageSettlement) ...[
-        _QuickDockButton(
-          label: 'سند دریافت',
-          icon: Icons.south_west_rounded,
-          color: ShopColors.teal,
-          onTap: () =>
-              _pushQuickModal(const TrsVoucherFormPage(kind: TrsKind.receipt)),
-        ),
-        _QuickDockButton(
-          label: 'سند پرداخت',
-          icon: Icons.north_east_rounded,
-          color: ShopColors.warn,
-          onTap: () =>
-              _pushQuickModal(const TrsVoucherFormPage(kind: TrsKind.payment)),
-        ),
-      ],
-      if (perms.canCreateVisit)
-        _QuickDockButton(
-          label: 'سفارش ویزیت',
-          icon: Icons.directions_walk_rounded,
-          color: ShopColors.accent,
-          onTap: () => _pushQuickModal(const VisitFormPage()),
-        ),
-    ];
-  }
-
-  // -------------------- شاخص‌های زندهٔ میز کار --------------------
-
-  bool get _hasAnyKpiData =>
-      _opsDash != null || _trsDash != null || _creditSum != null;
-
-  Widget _buildLiveKpiGrid(List<_DeskTool> tools) {
-    void jumpTo(String id, {WidgetBuilder? customBuilder}) {
-      final tool = tools.where((t) => t.id == id).firstOrNull;
-      if (tool != null) {
-        _openToolInTab(tool, customBuilder: customBuilder);
-      }
-    }
-
-    final cards = <Widget>[
-      if (_opsDash != null)
-        _MiniWorkbenchKpi(
-          title: 'فروش ۳۰ روز اخیر',
-          value: '${money(_opsDash!.saleTotal)} ریال',
-          sub: '${numFa(_opsDash!.saleCount)} فاکتور فروش ثبت‌شده',
-          icon: Icons.trending_up_rounded,
-          color: ShopColors.ok,
-          onTap: () => jumpTo('sale'),
-        ),
-      if (_trsDash != null)
-        _MiniWorkbenchKpi(
-          title: 'نقدینگی کل خزانه',
-          value: '${money(_trsDash!.totalBalance)} ریال',
-          sub: 'بانک: ${money(_trsDash!.totalBankBalance)}',
-          icon: Icons.account_balance_wallet_rounded,
-          color: ShopColors.teal,
-          onTap: () => jumpTo('trs-dashboard'),
-        ),
-      if (_creditSum != null)
-        _MiniWorkbenchKpi(
-          title: 'چک‌های در جریان',
-          value: '${money(_creditSum!.inHandChequesTotal)} ریال',
-          sub: _creditSum!.bouncedChequesCount > 0
-              ? '${numFa(_creditSum!.bouncedChequesCount)} چک برگشتی!'
-              : '${numFa(_creditSum!.inHandChequesCount)} فقره چک باز',
-          icon: Icons.credit_card_rounded,
-          color: _creditSum!.bouncedChequesCount > 0
-              ? ShopColors.danger
-              : ShopColors.seed,
-          onTap: () => jumpTo(
-            'credit-mgmt',
-            customBuilder: (_) => const ShopCreditPage(initialTab: 0),
-          ),
-        ),
-      if (_creditSum != null)
-        _MiniWorkbenchKpi(
-          title: 'اقساط باز مشتریان',
-          value: '${money(_creditSum!.pendingInstallmentsTotal)} ریال',
-          sub: _creditSum!.overdueInstallmentsCount > 0
-              ? '${numFa(_creditSum!.overdueInstallmentsCount)} قسط معوق!'
-              : '${numFa(_creditSum!.pendingInstallmentsCount)} نوبت قسط باز',
-          icon: Icons.event_note_rounded,
-          color: _creditSum!.overdueInstallmentsCount > 0
-              ? ShopColors.warn
-              : ShopColors.indigo,
-          onTap: () => jumpTo(
-            'credit-mgmt',
-            customBuilder: (_) => const ShopCreditPage(initialTab: 1),
-          ),
-        ),
-    ];
-
-    if (cards.isEmpty) return const SizedBox.shrink();
-
-    final rows = <Widget>[];
-    for (var i = 0; i < cards.length; i += 2) {
-      if (i > 0) rows.add(const SizedBox(height: 8));
-      rows.add(
-        Row(
+  Widget _buildMenuRow(_DeskTool tool, {bool showGroupBadge = false}) {
+    final isOpen = _openTabs.any((t) => t.id == tool.id);
+    return InkWell(
+      onTap: () => _openToolInTab(tool),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
           children: [
-            Expanded(child: cards[i]),
-            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: tool.color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(tool.icon, size: 17, color: tool.color),
+            ),
+            const SizedBox(width: 10),
             Expanded(
-              child: i + 1 < cards.length ? cards[i + 1] : const SizedBox(),
-            ),
-          ],
-        ),
-      );
-    }
-    return Column(children: rows);
-  }
-
-  // -------------------- کارتابل پیگیری‌های فوری --------------------
-
-  List<Widget> _buildWorkQueueAlerts(ShopPerms perms, List<_DeskTool> tools) {
-    final items = <Widget>[];
-
-    void openById(String id, {WidgetBuilder? customBuilder}) {
-      final tool = tools.where((t) => t.id == id).firstOrNull;
-      if (tool != null) _openToolInTab(tool, customBuilder: customBuilder);
-    }
-
-    if (_creditSum != null && _creditSum!.bouncedChequesCount > 0) {
-      items.add(
-        _WorkQueueRow(
-          icon: Icons.report_gmailerrorred_rounded,
-          color: ShopColors.danger,
-          text:
-              '${numFa(_creditSum!.bouncedChequesCount)} فقره چک برگشتی (${money(_creditSum!.bouncedChequesTotal)} ریال)',
-          actionLabel: 'پیگیری چک‌ها',
-          onTap: () => openById(
-            'credit-mgmt',
-            customBuilder: (_) => const ShopCreditPage(
-              initialTab: 0,
-              initialQuickFilter: 'bounced',
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_creditSum != null && _creditSum!.overdueInstallmentsCount > 0) {
-      items.add(
-        _WorkQueueRow(
-          icon: Icons.schedule_rounded,
-          color: ShopColors.warn,
-          text:
-              '${numFa(_creditSum!.overdueInstallmentsCount)} قسط معوق سررسید گذشته (${money(_creditSum!.overdueInstallmentsTotal)} ریال)',
-          actionLabel: 'دفترچه اقساط',
-          onTap: () => openById(
-            'credit-mgmt',
-            customBuilder: (_) => const ShopCreditPage(
-              initialTab: 1,
-              initialQuickFilter: 'pending',
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_trsDash != null && _trsDash!.draftCount > 0) {
-      items.add(
-        _WorkQueueRow(
-          icon: Icons.pending_actions_rounded,
-          color: ShopColors.indigo,
-          text:
-              '${numFa(_trsDash!.draftCount)} سند خزانه در حالت پیش‌نویس منتظر قطعی‌شدن',
-          actionLabel: 'اسناد خزانه',
-          onTap: () => openById('settlement'),
-        ),
-      );
-    }
-
-    if (_visStats != null &&
-        perms.canApproveVisits &&
-        _visStats!.submitted > 0) {
-      items.add(
-        _WorkQueueRow(
-          icon: Icons.verified_rounded,
-          color: ShopColors.seed,
-          text:
-              '${numFa(_visStats!.submitted)} سفارش ویزیتوری در انتظار تأیید مدیر فروش',
-          actionLabel: 'بررسی و تأیید',
-          onTap: () => openById('vis-approvals'),
-        ),
-      );
-    }
-
-    if (_visStats != null && perms.canFinanceVisit && _visStats!.approved > 0) {
-      items.add(
-        _WorkQueueRow(
-          icon: Icons.point_of_sale_rounded,
-          color: ShopColors.teal,
-          text:
-              '${numFa(_visStats!.approved)} سفارش تأییدشده در صف مالی آماده صدور فاکتور',
-          actionLabel: 'صف مالی',
-          onTap: () => openById('vis-finance'),
-        ),
-      );
-    }
-
-    if (_opsDash != null &&
-        perms.canSeeRepairs &&
-        _opsDash!.openRepairCount > 0) {
-      items.add(
-        _WorkQueueRow(
-          icon: Icons.build_circle_rounded,
-          color: ShopColors.accent,
-          text:
-              '${numFa(_opsDash!.openRepairCount)} دستگاه باز در کارگاه تعمیرات (${numFa(_opsDash!.openReadyCount)} آماده تحویل)',
-          actionLabel: 'کارگاه',
-          onTap: () => openById('repairs'),
-        ),
-      );
-    }
-
-    return items;
-  }
-}
-
-// ============================================================
-//  پوستهٔ مستقل هر تب باز با Navigator اختصاصی برای حفظ کامل وضعیت
-// ============================================================
-
-class _WorkspaceTabViewport extends StatelessWidget {
-  const _WorkspaceTabViewport({
-    super.key,
-    required this.navKey,
-    required this.builder,
-  });
-
-  final GlobalKey<NavigatorState> navKey;
-  final WidgetBuilder builder;
-
-  @override
-  Widget build(BuildContext context) {
-    return Navigator(
-      key: navKey,
-      onGenerateRoute: (_) => MaterialPageRoute<void>(builder: builder),
-    );
-  }
-}
-
-// ============================================================
-//  اجزای بصری میز کار
-// ============================================================
-
-class _QuickDockButton extends StatelessWidget {
-  const _QuickDockButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: ShopColors.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 6),
-              Text(
-                '+ $label',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w900,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniWorkbenchKpi extends StatelessWidget {
-  const _MiniWorkbenchKpi({
-    required this.title,
-    required this.value,
-    required this.sub,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String title;
-  final String value;
-  final String sub;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: ShopColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: ShopColors.line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: ShopColors.inkSoft,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, size: 14, color: color),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                sub,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: ShopColors.inkFaint,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WorkQueueRow extends StatelessWidget {
-  const _WorkQueueRow({
-    required this.icon,
-    required this.color,
-    required this.text,
-    required this.actionLabel,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String text;
-  final String actionLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-          child: Row(
-            children: [
-              Icon(icon, size: 17, color: color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  text,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: ShopColors.ink,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  actionLabel,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    color: color,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WorkbenchTileCard extends StatelessWidget {
-  const _WorkbenchTileCard({
-    required this.tool,
-    required this.isOpen,
-    required this.isPinned,
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  final _DeskTool tool;
-  final bool isOpen;
-  final bool isPinned;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: ShopColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isOpen
-                  ? tool.color.withValues(alpha: 0.55)
-                  : ShopColors.line,
-              width: isOpen ? 1.4 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: tool.color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(tool.icon, size: 18, color: tool.color),
-                  ),
-                  const Spacer(),
-                  if (isPinned)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: Icon(
-                        Icons.push_pin_rounded,
-                        size: 13,
-                        color: tool.color,
-                      ),
-                    ),
-                  if (isOpen)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: ShopColors.ok.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'تب باز',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          color: ShopColors.ok,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          tool.title,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: ShopColors.ink,
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    const Icon(
-                      Icons.north_west_rounded,
-                      size: 14,
-                      color: ShopColors.inkFaint,
+                      if (showGroupBadge) ...[
+                        const SizedBox(width: 6),
+                        ShopTag(text: tool.group.title, color: tool.group.color),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    tool.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: ShopColors.inkSoft,
                     ),
+                  ),
                 ],
               ),
-              const Spacer(),
-              Text(
-                tool.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w900,
-                  color: ShopColors.ink,
-                ),
+            ),
+            if (isOpen)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 4),
+                child: ShopTag(text: 'تب باز', color: tool.color),
               ),
-              const SizedBox(height: 2),
-              Text(
-                tool.subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: ShopColors.inkFaint,
-                ),
-              ),
-            ],
-          ),
+            const Icon(
+              Icons.chevron_left_rounded,
+              size: 18,
+              color: ShopColors.inkFaint,
+            ),
+          ],
         ),
       ),
     );
