@@ -345,7 +345,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Text(
-                                      'اتوماسیون اداری',
+                                      'اتوماسیون اداری توکا',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,

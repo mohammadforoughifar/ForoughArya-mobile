@@ -1,47 +1,172 @@
 // ============================================================
-//  زبان طراحی صفحهٔ اصلی
-//  همان هویت بصری ماژول‌های «دستور کار» و «اتوماسیون اداری»:
-//  گرادیان نیلی، کارت درخشان، هالهٔ نبضی و ریزانیمیشن‌های ورود —
-//  به‌همراه انیمیشن‌های اختصاصی این صفحه:
-//    • شمارش تدریجی اعداد (count-up)
-//    • رسم تدریجی sparkline
-//    • مقیاس/شفافیت کارت‌های کاروسل بر اساس فاصله از مرکز
-//    • هالهٔ نبضی روی زنگولهٔ اعلان
-//    • اسکلت shimmer هنگام بارگذاری
+//  زبان طراحی «میز کار حرفه‌ای فروغ آریا»
+//  هویت بصری سازمانی رده‌بالا (Executive Workbench):
+//    • پالت سرمه‌ای/نیلی عمیق با گرادیان چندلایه و شبکهٔ نوری ظریف
+//    • ساعت زنده و تاریخ شمسی هوشمند
+//    • شمارش تدریجی اعداد (count-up) و رسم تدریجی sparkline
+//    • هالهٔ نبضی، مقیاس فنری لمس و اسکلت shimmer
 // ============================================================
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:shamsi_date/shamsi_date.dart';
 
 import '../../../core/utils/fa.dart';
 
 // ------------------------------------------------------------
-//  پالت
+//  پالت میز کار
 // ------------------------------------------------------------
 
 class HomeColors {
   static const seed = Color(0xff2547a8);
-  static const deep = Color(0xff152a63);
-  static const accent = Color(0xff5b47d6);
+  static const deep = Color(0xff0c1938);
+  static const mid = Color(0xff17316e);
+  static const accent = Color(0xff4f46e5);
+  static const cyan = Color(0xff0ea5e9);
 
-  static const bg = Color(0xfff4f7fb);
+  static const bg = Color(0xfff1f5fb);
   static const surface = Color(0xffffffff);
-  static const line = Color(0xffe4eaf3);
-  static const ink = Color(0xff1e293b);
-  static const inkSoft = Color(0xff5b6b85);
-  static const inkFaint = Color(0xff93a1b8);
+  static const surfaceSoft = Color(0xfff8fafd);
+  static const line = Color(0xffe2e8f0);
+  static const ink = Color(0xff0f172a);
+  static const inkSoft = Color(0xff475569);
+  static const inkFaint = Color(0xff94a3b8);
 
-  static const ok = Color(0xff1a7f37);
-  static const warn = Color(0xffe07b00);
-  static const danger = Color(0xffd13438);
+  static const ok = Color(0xff059669);
+  static const warn = Color(0xffd97706);
+  static const danger = Color(0xffdc2626);
 
   static const LinearGradient hero = LinearGradient(
-    colors: [deep, seed, accent],
+    colors: [deep, mid, seed, accent],
+    stops: [0.0, 0.38, 0.75, 1.0],
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
   );
+}
+
+// ------------------------------------------------------------
+//  ساعت دیجیتال زنده + تاریخ شمسی برای سربرگ میز کار
+// ------------------------------------------------------------
+
+class HLiveClock extends StatefulWidget {
+  const HLiveClock({super.key});
+
+  @override
+  State<HLiveClock> createState() => _HLiveClockState();
+}
+
+class _HLiveClockState extends State<HLiveClock> {
+  late DateTime _now = DateTime.now();
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final j = Jalali.fromDateTime(_now);
+    final f = j.formatter;
+    final dateStr =
+        '${f.wN} ${Fa.digits(j.day)} ${f.mN} ${Fa.digits(j.year)}';
+    final hh = _now.hour.toString().padLeft(2, '0');
+    final mm = _now.minute.toString().padLeft(2, '0');
+    final timeStr = Fa.digits('$hh:$mm');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.calendar_today_rounded,
+            size: 11.5,
+            color: Colors.white.withValues(alpha: 0.85),
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              dateStr,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.92),
+              ),
+            ),
+          ),
+          Container(
+            width: 3.5,
+            height: 3.5,
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.55),
+            ),
+          ),
+          Icon(
+            Icons.access_time_filled_rounded,
+            size: 11.5,
+            color: const Color(0xff7dd3fc),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            timeStr,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------
+//  شبکهٔ معماری ظریف برای پس‌زمینهٔ هدر میز کار
+// ------------------------------------------------------------
+
+class HHeaderGridPainter extends CustomPainter {
+  const HHeaderGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = Colors.white.withValues(alpha: 0.045)
+      ..strokeWidth = 0.8;
+    const step = 30.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ------------------------------------------------------------
@@ -125,11 +250,13 @@ class HPressable extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.scale = 0.96,
   });
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final double scale;
 
   @override
@@ -150,6 +277,7 @@ class _HPressableState extends State<HPressable> {
     onTapUp: (_) => _set(false),
     onTapCancel: () => _set(false),
     onTap: widget.onTap,
+    onLongPress: widget.onLongPress,
     child: AnimatedScale(
       scale: _down ? widget.scale : 1,
       duration: const Duration(milliseconds: 140),
@@ -184,7 +312,7 @@ class HCountUp extends StatelessWidget {
     duration: duration,
     curve: Curves.easeOutCubic,
     builder: (_, v, _) => Text(
-      Fa.digits(v.toStringAsFixed(decimals)),
+      Fa.number(v, decimals: decimals),
       style: style,
     ),
   );
@@ -301,7 +429,6 @@ class _SparkPainter extends CustomPainter {
         ),
     ];
 
-    // مسیر هموار با منحنی کاتمول-رام ساده‌شده
     final path = Path()..moveTo(pts.first.dx, pts.first.dy);
     for (var i = 0; i < pts.length - 1; i++) {
       final p0 = pts[i];
@@ -311,7 +438,6 @@ class _SparkPainter extends CustomPainter {
     }
     path.lineTo(pts.last.dx, pts.last.dy);
 
-    // ناحیهٔ زیر منحنی
     final area = Path.from(path)
       ..lineTo(pts.last.dx, size.height)
       ..lineTo(pts.first.dx, size.height)
@@ -327,7 +453,6 @@ class _SparkPainter extends CustomPainter {
     canvas.drawPath(area, fill);
     canvas.restore();
 
-    // خط با رسم تدریجی
     final metrics = path.computeMetrics().toList();
     final linePaint = Paint()
       ..style = PaintingStyle.stroke
@@ -339,7 +464,6 @@ class _SparkPainter extends CustomPainter {
       canvas.drawPath(m.extractPath(0, m.length * progress), linePaint);
     }
 
-    // نقطهٔ پایانی
     if (progress > 0.9) {
       final a = ((progress - 0.9) / 0.1).clamp(0.0, 1.0);
       canvas.drawCircle(
@@ -359,19 +483,16 @@ class _SparkPainter extends CustomPainter {
   Path _clipProgress(Path area, Size size, double p) => Path.combine(
     PathOperation.intersect,
     area,
-    Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width * p, size.height)),
+    Path()..addRect(Rect.fromLTWH(0, 0, size.width * p, size.height)),
   );
 
   @override
   bool shouldRepaint(_SparkPainter old) =>
-      old.progress != progress ||
-      old.color != color ||
-      old.values != values;
+      old.progress != progress || old.color != color || old.values != values;
 }
 
 // ------------------------------------------------------------
-//  هالهٔ نبضی — برای زنگولهٔ اعلان و کارت‌های فوری
+//  هالهٔ نبضی — برای زنگولهٔ اعلان و نشانگرهای فوری
 // ------------------------------------------------------------
 
 class HPulseHalo extends StatefulWidget {

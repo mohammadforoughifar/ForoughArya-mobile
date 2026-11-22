@@ -133,27 +133,27 @@ class _HomeShellState extends State<HomeShell> {
           onSelected: _go,
           items: const [
             NavItem(
-              label: 'خانه',
-              icon: Icons.home_outlined,
-              activeIcon: Icons.home_rounded,
+              label: 'میز کار',
+              icon: Icons.space_dashboard_outlined,
+              activeIcon: Icons.space_dashboard_rounded,
             ),
             NavItem(
-              label: 'دستور کار',
+              label: 'دستورکار رایکا',
               icon: Icons.assignment_outlined,
               activeIcon: Icons.assignment_rounded,
             ),
             NavItem(
-              label: 'اتوماسیون',
-              icon: Icons.account_balance_outlined,
-              activeIcon: Icons.account_balance_rounded,
+              label: 'اتوماسیون توکا',
+              icon: Icons.mark_email_read_outlined,
+              activeIcon: Icons.mark_email_read_rounded,
             ),
             NavItem(
-              label: 'ایمیل',
+              label: 'ایمیل سازمانی',
               icon: Icons.alternate_email_rounded,
               activeIcon: Icons.mark_email_unread_rounded,
             ),
             NavItem(
-              label: 'پیام‌رسان',
+              label: 'پیام رسان میها',
               icon: Icons.forum_outlined,
               activeIcon: Icons.forum_rounded,
             ),

@@ -46,7 +46,7 @@ class ItHomePage extends StatelessWidget {
         foregroundColor: ShopColors.ink,
         elevation: 0.5,
         title: const Text(
-          'مدیریت سخت‌افزار',
+          'مدیریت سیستم',
           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
         ),
       ),
@@ -54,7 +54,7 @@ class ItHomePage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 30),
         children: [
           const ShopHeader(
-            title: 'مدیریت سخت‌افزار و زیرساخت',
+            title: 'مدیریت سیستم، سخت‌افزار و زیرساخت',
             subtitle:
                 'پایش بلادرنگ تجهیزات، درخواست‌های خدمت IT، شناسنامه سیستم‌ها، سرورها، شبکه و دوربین‌ها',
             icon: Icons.dns_rounded,

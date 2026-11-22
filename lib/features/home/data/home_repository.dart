@@ -1,6 +1,14 @@
 // ============================================================
-//  منبع دادهٔ صفحهٔ اصلی
-//  همهٔ مسیرها endpoint واقعی بک‌اند (Inventory.Api) هستند.
+//  منبع دادهٔ صفحهٔ اصلی و «میز کار حرفه‌ای»
+//  همهٔ مسیرها endpoint واقعی بک‌اند (Inventory.Api) هستند
+//  و نام‌های نمایشی ماژول‌ها ۱۰۰٪ با نسخهٔ وب هم‌تراز شده‌اند:
+//    • اتوماسیون اداری توکا
+//    • دستورکار رایکا
+//    • فروشگاهی کایر
+//    • پیام رسان میها
+//    • ERP فیکا
+//    • مودیان تیسا
+//    • مدیریت سیستم / آرشیو اسناد و مدارک / کارتابل آرشیو / صورتجلسه
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -61,8 +69,78 @@ class HomeRepository {
         .toList();
   }
 
+  /// صفحهٔ دسته‌بندی‌شدهٔ اعلان‌های کارتابل (`main` = اقدامات اصلی | `sub` = پیگیری‌ها)
+  /// مطابق `Cartable.razor` در وب (`GET /api/notifications/page`) با fallback خودکار.
+  Future<NotificationPageResult> fetchNotificationPage({
+    int take = 8,
+    int skip = 0,
+    String category = 'main',
+    bool unreadOnly = false,
+  }) async {
+    try {
+      final r = await _api.get<dynamic>(
+        '/api/notifications/page',
+        query: {
+          'take': take,
+          'skip': skip,
+          'category': category,
+          if (unreadOnly) 'unreadOnly': true,
+        },
+      );
+      final d = r.data;
+      if (d is Map) {
+        return NotificationPageResult.fromJson(Map<String, dynamic>.from(d));
+      }
+    } catch (_) {
+      // سرور قدیمی‌تر بدون /page — از فهرست استاندارد تفکیک می‌کنیم
+    }
+    try {
+      final all = await fetchNotifications(take: 60);
+      final mains = all.where((n) => !n.isFollowUp).toList();
+      final subs = all.where((n) => n.isFollowUp).toList();
+      final source = category == 'sub' ? subs : mains;
+      final filtered = unreadOnly
+          ? source.where((n) => !n.isRead).toList()
+          : source;
+      final sliced = filtered.skip(skip).take(take).toList();
+      return NotificationPageResult(
+        items: sliced,
+        total: all.length,
+        unread: all.where((n) => !n.isRead).length,
+        filteredTotal: filtered.length,
+        mainTotal: mains.length,
+        mainUnread: mains.where((n) => !n.isRead).length,
+        subTotal: subs.length,
+        subUnread: subs.where((n) => !n.isRead).length,
+        hasMore: skip + sliced.length < filtered.length,
+      );
+    } catch (_) {
+      return const NotificationPageResult();
+    }
+  }
+
+  /// کارتابل یکپارچهٔ سرور — `GET /api/cartable/me`
+  Future<List<CartableEntry>> fetchUnifiedCartable() async {
+    try {
+      final r = await _api.get<dynamic>('/api/cartable/me');
+      final d = r.data;
+      if (d is Map) {
+        final raw = (d['items'] ?? d['Items']) as List? ?? const [];
+        return raw
+            .whereType<Map>()
+            .map(
+              (e) => CartableEntry.fromServerJson(Map<String, dynamic>.from(e)),
+            )
+            .where((e) => e.title.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {}
+    return const [];
+  }
+
   /// علامت‌گذاری یک اعلان به خوانده‌شده — `POST /api/notifications/{id}/read`
-  Future<void> markRead(int id) => _api.post<dynamic>('/api/notifications/$id/read');
+  Future<void> markRead(int id) =>
+      _api.post<dynamic>('/api/notifications/$id/read');
 
   /// پاک کردن یک اعلان — چند مسیر رایج بک‌اند امتحان می‌شود.
   Future<void> deleteNotification(int id) async {
@@ -106,11 +184,14 @@ class HomeRepository {
     }
   }
 
-  /// خواندن همزمان دادهٔ چند ویجت — هرکدام مستقل، خطای یکی بقیه را خراب نمی‌کند.
-  Future<Map<String, WidgetData>> fetchWidgets(Iterable<String> keys) async {
+  /// خواندن همزمان دادهٔ چند ویجت در بازهٔ انتخابی (`۰=امروز · ۱=هفته · ۲=ماه`).
+  Future<Map<String, WidgetData>> fetchWidgets(
+    Iterable<String> keys, {
+    int range = 0,
+  }) async {
     final entries = await Future.wait(
       keys.map((k) async {
-        final v = await fetchWidgetData(k);
+        final v = await fetchWidgetData(k, range: range);
         return v == null ? null : MapEntry(k, v);
       }),
     );
@@ -118,10 +199,8 @@ class HomeRepository {
   }
 
   /// ثبت شرکت فعال کاربر — `PUT /api/company-context/users/{userId}`
-  Future<void> setUserCompanies(int userId, List<int> companyIds) => _api.put(
-    '/api/company-context/users/$userId',
-    {'companyIds': companyIds},
-  );
+  Future<void> setUserCompanies(int userId, List<int> companyIds) =>
+      _api.put('/api/company-context/users/$userId', {'companyIds': companyIds});
 }
 
 /// پاسخ `WidgetDataDto` سرور.
@@ -166,13 +245,15 @@ class WidgetData {
     error: j['error']?.toString(),
     rows: (j['rows'] as List? ?? const [])
         .whereType<Map>()
-        .map((r) => (r['cells'] as List? ?? const [])
-            .map((c) => c?.toString() ?? '')
-            .toList())
+        .map(
+          (r) => (r['cells'] as List? ?? const [])
+              .map((c) => c?.toString() ?? '')
+              .toList(),
+        )
         .toList(),
     series: ((j['series'] as List? ?? const [])
-            .whereType<Map>()
-            .firstOrNull?['values'] as List? ??
+                .whereType<Map>()
+                .firstOrNull?['values'] as List? ??
             const [])
         .whereType<num>()
         .map((e) => e.toDouble())
@@ -180,31 +261,31 @@ class WidgetData {
   );
 }
 
-/// کارت‌های گزارش روزانه — کلیدها از `WidgetCatalog.cs` سرور.
-///
-/// ترتیب این فهرست همان ترتیب کارت‌ها در کاروسل است.
+/// کارت‌های شاخص کلیدی عملکرد — کلیدها از `WidgetCatalog.cs` سرور و نام‌ها هم‌تراز با وب.
 List<HomeKpi> buildKpiCards() => const [
   HomeKpi(
     widgetKey: 'fac-sales-today',
     moduleName: 'فروش و فاکتور',
     moduleSubtitle: 'فروشگاهی کایر',
+    targetKey: 'shop-ops',
     icon: Icons.point_of_sale_rounded,
-    from: Color(0xff4f7ce8),
-    to: Color(0xff2547a8),
+    from: Color(0xff3b82f6),
+    to: Color(0xff1d4ed8),
     unit: 'میلیون ریال',
     rows: [
-      KpiRow('تعداد فاکتور', '۰', hint: 'سند'),
-      KpiRow('برترین طرف حساب', '—'),
+      KpiRow('فاکتور فروش', '۰', hint: 'سند'),
+      KpiRow('فاکتور خرید', '۰', hint: 'سند'),
       KpiRow('زیر نقطه سفارش', '۰', hint: 'قلم'),
     ],
   ),
   HomeKpi(
     widgetKey: 'off-letters-count',
     moduleName: 'دبیرخانه و نامه‌ها',
-    moduleSubtitle: 'اتوماسیون اداری',
-    icon: Icons.mail_outline_rounded,
-    from: Color(0xff2fa8b8),
-    to: Color(0xff0d7d8c),
+    moduleSubtitle: 'اتوماسیون اداری توکا',
+    targetKey: 'tab-2',
+    icon: Icons.mark_email_unread_rounded,
+    from: Color(0xff14b8a6),
+    to: Color(0xff0f766e),
     unit: 'نامه',
     rows: [
       KpiRow('وارده', '۰', hint: 'نامه'),
@@ -214,39 +295,87 @@ List<HomeKpi> buildKpiCards() => const [
   ),
   HomeKpi(
     widgetKey: 'wo-open',
-    moduleName: 'دستور کار',
-    moduleSubtitle: 'پشتیبانی و IT',
-    icon: Icons.build_rounded,
-    from: Color(0xfff3a33c),
-    to: Color(0xffd2691e),
+    moduleName: 'دستورکار رایکا',
+    moduleSubtitle: 'پیگیری، مهلت و عملکرد',
+    targetKey: 'tab-1',
+    icon: Icons.assignment_turned_in_rounded,
+    from: Color(0xfff59e0b),
+    to: Color(0xffd97706),
     unit: 'دستور کار باز',
     rows: [
       KpiRow('معوق', '۰', hint: 'مورد'),
-      KpiRow('تکمیل‌شده امروز', '۰', hint: 'مورد'),
-      KpiRow('در انتظار تأیید', '۰', hint: 'مورد'),
+      KpiRow('انجام‌شده', '۰', hint: 'مورد'),
+      KpiRow('محول به من', '۰', hint: 'مورد'),
     ],
   ),
   HomeKpi(
     widgetKey: 'trs-receipt-period',
     moduleName: 'خزانه و چک',
-    moduleSubtitle: 'مالی',
-    icon: Icons.account_balance_rounded,
-    from: Color(0xff3fb27f),
-    to: Color(0xff1a7f37),
+    moduleSubtitle: 'فروشگاهی کایر • مالی',
+    targetKey: 'shop-trs',
+    icon: Icons.account_balance_wallet_rounded,
+    from: Color(0xff10b981),
+    to: Color(0xff047857),
     unit: 'میلیون ریال',
     rows: [
-      KpiRow('دریافتی امروز', '۰', hint: 'م.ر'),
-      KpiRow('پرداختی امروز', '۰', hint: 'م.ر'),
-      KpiRow('چک سررسیدنزدیک', '۰', hint: 'فقره'),
+      KpiRow('دریافت دوره', '۰', hint: 'م.ر'),
+      KpiRow('پرداخت دوره', '۰', hint: 'م.ر'),
+      KpiRow('چک سررسیدشده', '۰', hint: 'فقره'),
+    ],
+  ),
+  HomeKpi(
+    widgetKey: 'off-erja-unread',
+    moduleName: 'ارجاع‌های من',
+    moduleSubtitle: 'اتوماسیون اداری توکا',
+    targetKey: 'tab-2',
+    icon: Icons.forward_to_inbox_rounded,
+    from: Color(0xffef4444),
+    to: Color(0xffb91c1c),
+    unit: 'ارجاع نخوانده',
+    rows: [
+      KpiRow('پیش‌نویس', '۰', hint: 'نامه'),
+      KpiRow('در انتظار امضا', '۰', hint: 'نامه'),
+      KpiRow('صف دبیرخانه', '۰', hint: 'نامه'),
+    ],
+  ),
+  HomeKpi(
+    widgetKey: 'it-open',
+    moduleName: 'درخواست خدمت IT',
+    moduleSubtitle: 'مدیریت سیستم',
+    targetKey: 'it-requests',
+    icon: Icons.support_agent_rounded,
+    from: Color(0xff6366f1),
+    to: Color(0xff4338ca),
+    unit: 'درخواست باز',
+    rows: [
+      KpiRow('درخواست‌های من', '۰', hint: 'مورد'),
+      KpiRow('کارتابل کارشناس', '۰', hint: 'مورد'),
+      KpiRow('منتظر تصمیم', '۰', hint: 'مورد'),
+    ],
+  ),
+  HomeKpi(
+    widgetKey: 'inv-doc-count',
+    moduleName: 'انبار و موجودی',
+    moduleSubtitle: 'ERP فیکا • انبارداری',
+    targetKey: 'shop-stock',
+    icon: Icons.inventory_2_rounded,
+    from: Color(0xfff97316),
+    to: Color(0xffc2410c),
+    unit: 'سند / قلم',
+    rows: [
+      KpiRow('اقلام زیر نقطه سفارش', '۰', hint: 'قلم'),
+      KpiRow('رسید انبار', '۰', hint: 'سند'),
+      KpiRow('حواله انبار', '۰', hint: 'سند'),
     ],
   ),
   HomeKpi(
     widgetKey: 'fa-att-today',
     moduleName: 'تردد و مرخصی',
-    moduleSubtitle: 'منابع انسانی',
+    moduleSubtitle: 'منابع انسانی فروغ آریا',
+    targetKey: '',
     icon: Icons.schedule_rounded,
-    from: Color(0xff8b7bff),
-    to: Color(0xff5b47d6),
+    from: Color(0xff8b5cf6),
+    to: Color(0xff6d28d9),
     unit: 'تردد امروز',
     rows: [
       KpiRow('پرسنل فعال', '۰', hint: 'نفر'),
@@ -254,159 +383,205 @@ List<HomeKpi> buildKpiCards() => const [
       KpiRow('غیبت ثبت‌شده', '۰', hint: 'مورد'),
     ],
   ),
-  HomeKpi(
-    widgetKey: 'inv-doc-count',
-    moduleName: 'انبار و موجودی',
-    moduleSubtitle: 'کاتالوگ',
-    icon: Icons.inventory_2_outlined,
-    from: Color(0xffe08a4f),
-    to: Color(0xffc2410c),
-    unit: 'سند انبار',
-    rows: [
-      KpiRow('ارزش موجودی', '۰', hint: 'م.ر'),
-      KpiRow('رسید', '۰', hint: 'سند'),
-      KpiRow('حواله', '۰', hint: 'سند'),
-    ],
-  ),
-  HomeKpi(
-    widgetKey: 'off-erja-unread',
-    moduleName: 'ارجاع‌های من',
-    moduleSubtitle: 'کارتابل نامه',
-    icon: Icons.forward_to_inbox_rounded,
-    from: Color(0xffe05357),
-    to: Color(0xffa4262c),
-    unit: 'ارجاع نخوانده',
-    rows: [
-      KpiRow('فوری', '۰', hint: 'مورد'),
-      KpiRow('از مهلت گذشته', '۰', hint: 'مورد'),
-      KpiRow('در انتظار پاسخ', '۰', hint: 'مورد'),
-    ],
-  ),
-  HomeKpi(
-    widgetKey: 'it-open',
-    moduleName: 'درخواست‌های IT',
-    moduleSubtitle: 'دارایی‌های IT',
-    icon: Icons.dns_rounded,
-    from: Color(0xff5b8def),
-    to: Color(0xff1e3a8a),
-    unit: 'درخواست باز',
-    rows: [
-      KpiRow('تخصیص‌یافته به من', '۰', hint: 'مورد'),
-      KpiRow('در انتظار قطعه', '۰', hint: 'مورد'),
-      KpiRow('بسته‌شده امروز', '۰', hint: 'مورد'),
-    ],
-  ),
 ];
 
-/// کاشی‌های گرید ماژول‌ها — ترتیب دقیقاً همان چیزی است که کاربر خواسته
-/// (از راست‌به‌چپ و سطر به سطر):
-///   اتوماسیون، دستور کار، صورتجلسه، مدیریت سخت‌افزار، فروشگاهی،
-///   پست الکترونیکی، ERP، منابع انسانی فروغ آریا، منابع انسانی بن‌سازه،
-///   منابع انسانی اصلی، سامانه مودیان
+/// کاشی‌های گرید ماژول‌ها — ۱۰۰٪ هم‌تراز با نام‌های مصوب نسخهٔ وب (`MODULE-BRANDING-FA.md` و `NavMenu.razor`).
 List<ModuleTile> buildModuleTiles({required Set<int> openTabs}) => [
   ModuleTile(
-    name: 'اتوماسیون',
-    subtitle: 'دبیرخانه و نامه',
-    icon: Icons.account_balance_rounded,
+    id: 'letters',
+    name: 'اتوماسیون اداری توکا',
+    subtitle: 'نامه‌های داخلی، وارده، صادره و دبیرخانه',
+    icon: Icons.mark_email_read_rounded,
     color: const Color(0xff2547a8),
+    gradientEnd: const Color(0xff1e3a8a),
+    category: 'office',
+    keywords: const [
+      'اتوماسیون',
+      'توکا',
+      'نامه',
+      'دبیرخانه',
+      'کارتابل',
+      'ارجاع',
+      'وارده',
+      'صادره',
+    ],
     tabIndex: 2,
   ),
   ModuleTile(
-    name: 'دستور کار',
-    subtitle: 'پشتیبانی و تعمیر',
-    icon: Icons.build_rounded,
-    color: const Color(0xffd2691e),
+    id: 'workorders',
+    name: 'دستورکار رایکا',
+    subtitle: 'دستورهای کار، تقویم، کانبان و عملکرد',
+    icon: Icons.assignment_turned_in_rounded,
+    color: const Color(0xffd97706),
+    gradientEnd: const Color(0xffb45309),
+    category: 'tech',
+    keywords: const [
+      'دستور کار',
+      'دستورکار',
+      'رایکا',
+      'وظیفه',
+      'پشتیبانی',
+      'تقویم',
+      'کانبان',
+    ],
     tabIndex: 1,
   ),
   ModuleTile(
-    // ماژول مستقل «صورتجلسه» — ورود مستقیم به فهرست صورتجلسه‌ها
-    name: 'صورتجلسه',
-    subtitle: 'مصوبات و امضای جلسات',
-    icon: Icons.description_rounded,
-    color: const Color(0xff0f766e),
-    onTapName: 'minutes',
-  ),
-  ModuleTile(
-    name: 'مدیریت سخت‌افزار',
-    subtitle: 'دارایی‌های IT و شبکه',
-    icon: Icons.dns_rounded,
-    color: const Color(0xff1e3a8a),
-    onTapName: 'it-assets',
-  ),
-  ModuleTile(
-    // ماژول مستقل «آرشیو اسناد و مدارک» — آینهٔ منوی وب (گیت DocArchive)
-    name: 'آرشیو اسناد و مدارک',
-    subtitle: 'پوشه، نسخه و گردش',
-    icon: Icons.folder_open_rounded,
-    color: const Color(0xff4f7ce8),
-    onTapName: 'doc-archive',
-  ),
-  ModuleTile(
-    // کارتابل آرشیو — همان گروه وب «آرشیو اسناد و مدارک» (گیت DocArchive)
-    name: 'کارتابل آرشیو اسناد و مدارک',
-    subtitle: 'کارهای تأیید و اعلان',
-    icon: Icons.move_to_inbox_rounded,
-    color: const Color(0xffb45309),
-    onTapName: 'doc-archive-cartable',
-  ),
-  ModuleTile(
+    id: 'shop',
     name: 'فروشگاهی کایر',
-    subtitle: 'فاکتور و سفارش',
-    icon: Icons.point_of_sale_rounded,
-    color: const Color(0xff4f7ce8),
+    subtitle: 'خرید، فروش، خزانه‌داری، انبار و ویزیتوری',
+    icon: Icons.storefront_rounded,
+    color: const Color(0xff2563eb),
+    gradientEnd: const Color(0xff1d4ed8),
+    category: 'commerce',
+    keywords: const [
+      'فروشگاه',
+      'کایر',
+      'فاکتور',
+      'خرید',
+      'فروش',
+      'چک',
+      'انبار',
+      'خزانه',
+      'تعمیرات',
+      'ویزیتور',
+    ],
     onTapName: 'sales',
   ),
   ModuleTile(
-    name: 'پست الکترونیکی',
-    subtitle: 'ایمیل سازمانی',
-    icon: Icons.alternate_email_rounded,
-    color: const Color(0xff0e7490),
-    tabIndex: 3,
-  ),
-  ModuleTile(
-    name: 'پیام‌رسان',
-    subtitle: 'چت و پیام صوتی',
+    id: 'chat',
+    name: 'پیام رسان میها',
+    subtitle: 'گفت‌وگوی سازمانی، فایل و پیام صوتی',
     icon: Icons.forum_rounded,
-    color: const Color(0xff1f8f7a),
+    color: const Color(0xff0d9488),
+    gradientEnd: const Color(0xff0f766e),
+    category: 'office',
+    keywords: const ['پیام رسان', 'پیام‌رسان', 'میها', 'چت', 'گفتگو', 'صوتی'],
     tabIndex: 4,
   ),
   ModuleTile(
-    name: 'ERP',
-    subtitle: 'سامانهٔ یکپارچه',
-    icon: Icons.hub_rounded,
-    color: const Color(0xff0b7285),
+    id: 'email',
+    name: 'ایمیل سازمانی',
+    subtitle: 'صندوق پست الکترونیکی سازمانی و شخصی',
+    icon: Icons.alternate_email_rounded,
+    color: const Color(0xff0284c7),
+    gradientEnd: const Color(0xff0369a1),
+    category: 'office',
+    keywords: const ['ایمیل', 'پست الکترونیکی', 'mail', 'email'],
+    tabIndex: 3,
+  ),
+  ModuleTile(
+    id: 'minutes',
+    name: 'صورتجلسه',
+    subtitle: 'فرم‌های متفرقه، مصوبات و امضای جلسات',
+    icon: Icons.description_rounded,
+    color: const Color(0xff059669),
+    gradientEnd: const Color(0xff047857),
+    category: 'office',
+    keywords: const ['صورتجلسه', 'جلسه', 'مصوبات', 'فرم‌های متفرقه', 'امضا'],
+    onTapName: 'minutes',
+  ),
+  ModuleTile(
+    id: 'it-assets',
+    name: 'مدیریت سیستم',
+    subtitle: 'سخت‌افزار، سرورها، شبکه، دوربین و IT',
+    icon: Icons.dns_rounded,
+    color: const Color(0xff4f46e5),
+    gradientEnd: const Color(0xff3730a3),
+    category: 'tech',
+    keywords: const [
+      'مدیریت سیستم',
+      'مدیریت سخت‌افزار',
+      'سخت افزار',
+      'سرور',
+      'شبکه',
+      'دوربین',
+      'آی‌پی',
+      'گاوصندوق',
+      'IT',
+    ],
+    onTapName: 'it-assets',
+  ),
+  ModuleTile(
+    id: 'doc-archive',
+    name: 'آرشیو اسناد و مدارک',
+    subtitle: 'پوشه‌ها، نسخه‌بندی، تگ و جستجوی هوشمند',
+    icon: Icons.folder_special_rounded,
+    color: const Color(0xff3b82f6),
+    gradientEnd: const Color(0xff1d4ed8),
+    category: 'office',
+    keywords: const ['آرشیو', 'اسناد', 'مدارک', 'پوشه', 'بایگانی'],
+    onTapName: 'doc-archive',
+  ),
+  ModuleTile(
+    id: 'doc-cartable',
+    name: 'کارتابل آرشیو',
+    subtitle: 'تأیید، بازبینی و گردش مدارک سازمانی',
+    icon: Icons.move_to_inbox_rounded,
+    color: const Color(0xffea580c),
+    gradientEnd: const Color(0xffc2410c),
+    category: 'office',
+    keywords: const ['کارتابل آرشیو', 'گردش مدرک', 'تایید مدرک'],
+    onTapName: 'doc-archive-cartable',
+  ),
+  ModuleTile(
+    id: 'erp',
+    name: 'ERP فیکا',
+    subtitle: 'حسابداری، انبارداری، خزانه و انبارگردانی',
+    icon: Icons.layers_rounded,
+    color: const Color(0xff0891b2),
+    gradientEnd: const Color(0xff0e7490),
+    category: 'commerce',
+    keywords: const ['ERP', 'فیکا', 'حسابداری', 'انبارداری', 'دفتر کل', 'سند'],
+    badge: 'نسخه وب',
     onTapName: 'erp',
   ),
   ModuleTile(
-    name: 'منابع انسانی فروغ آریا',
-    subtitle: 'پرسنل و احکام',
-    icon: Icons.groups_rounded,
-    color: const Color(0xff5b47d6),
+    id: 'moadian',
+    name: 'مودیان تیسا',
+    subtitle: 'صورتحساب الکترونیکی و کارپوشه مالیاتی',
+    icon: Icons.receipt_long_rounded,
+    color: const Color(0xffdc2626),
+    gradientEnd: const Color(0xffb91c1c),
+    category: 'commerce',
+    keywords: const ['مودیان', 'تیسا', 'مالیات', 'صورتحساب الکترونیکی'],
     badge: 'به‌زودی',
-    onTapName: 'hr-forough',
+    onTapName: 'moadian',
   ),
   ModuleTile(
-    name: 'منابع انسانی بن‌سازه',
-    subtitle: 'پرسنل و احکام',
-    icon: Icons.groups_2_rounded,
-    color: const Color(0xff7c3aed),
-    badge: 'به‌زودی',
-    onTapName: 'hr-bonsaze',
-  ),
-  ModuleTile(
+    id: 'hr-main',
     name: 'منابع انسانی اصلی',
-    subtitle: 'پرسنل و احکام',
+    subtitle: 'ساختار سازمانی، احکام، قراردادها و حقوق',
     icon: Icons.badge_rounded,
-    color: const Color(0xff4c1d95),
+    color: const Color(0xff7c3aed),
+    gradientEnd: const Color(0xff5b21b6),
+    category: 'hr',
+    keywords: const ['منابع انسانی اصلی', 'پرسنل', 'احکام', 'حقوق', 'قرارداد'],
     badge: 'به‌زودی',
     onTapName: 'hr-main',
   ),
   ModuleTile(
-    name: 'سامانه مودیان',
-    subtitle: 'صورتحساب الکترونیک',
-    icon: Icons.receipt_long_rounded,
-    color: const Color(0xffd13438),
+    id: 'hr-forough',
+    name: 'منابع انسانی فروغ آریا',
+    subtitle: 'حضور و غیاب، تردد، مرخصی و مأموریت',
+    icon: Icons.groups_rounded,
+    color: const Color(0xff6366f1),
+    gradientEnd: const Color(0xff4338ca),
+    category: 'hr',
+    keywords: const ['منابع انسانی فروغ آریا', 'تردد', 'مرخصی', 'حضور و غیاب'],
     badge: 'به‌زودی',
-    onTapName: 'moadian',
+    onTapName: 'hr-forough',
+  ),
+  ModuleTile(
+    id: 'hr-bonsaze',
+    name: 'منابع انسانی بن‌سازه',
+    subtitle: 'پرسنل، تولید روزانه، دستمزد و HSE',
+    icon: Icons.groups_2_rounded,
+    color: const Color(0xff9333ea),
+    gradientEnd: const Color(0xff6b21a8),
+    category: 'hr',
+    keywords: const ['منابع انسانی بن‌سازه', 'بن سازه', 'HSE', 'دستمزد'],
+    badge: 'به‌زودی',
+    onTapName: 'hr-bonsaze',
   ),
 ];

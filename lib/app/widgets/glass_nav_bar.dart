@@ -281,16 +281,22 @@ class _NavButton extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 3),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 240),
-                style: TextStyle(
-                  fontSize: selected ? 10.5 : 9.5,
-                  height: 1.2,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  color: color,
-                  fontFamily: 'Vazirmatn',
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 240),
+                    style: TextStyle(
+                      fontSize: selected ? 10.2 : 9.3,
+                      height: 1.2,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: color,
+                      fontFamily: 'Vazirmatn',
+                    ),
+                    child: Text(item.label, maxLines: 1),
+                  ),
                 ),
-                child: Text(item.label, maxLines: 1),
               ),
             ],
           ),

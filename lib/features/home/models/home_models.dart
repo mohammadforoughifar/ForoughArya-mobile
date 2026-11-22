@@ -1,9 +1,11 @@
 // ============================================================
-//  مدل‌های صفحهٔ اصلی
+//  مدل‌های صفحهٔ اصلی و «میز کار حرفه‌ای»
 //  ساختار داده‌ها مستقیماً از پاسخ‌های واقعی API گرفته شده است:
-//    • CompanyContext  ← GET  /api/company-context
-//    • NotificationItem ← GET  /api/notifications
-//    • WidgetData      ← GET  /api/my-dashboards/widget-data/{key}
+//    • CompanyContext        ← GET  /api/company-context
+//    • CartableEntry         ← GET  /api/cartable/me (+ تجمیع ماژول‌ها)
+//    • NotificationPageResult← GET  /api/notifications/page
+//    • NotificationItem      ← GET  /api/notifications
+//    • WidgetData            ← GET  /api/my-dashboards/widget-data/{key}
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -78,6 +80,196 @@ class CompanyContext {
   static const empty = CompanyContext(companies: []);
 }
 
+/// یک آیتم در «کارتابل یکپارچه و میز اقدام» (آینهٔ `CartableItemDto` وب + منابع زنده).
+class CartableEntry {
+  const CartableEntry({
+    required this.source,
+    required this.kind,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    this.moduleLabel = '',
+    this.link = '',
+    this.targetKey = '',
+    this.badgeCount,
+    this.actionable = true,
+    this.priority = 1,
+    this.dueAt,
+  });
+
+  final String source;
+  final String kind;
+  final String title;
+  final String subtitle;
+  final String moduleLabel;
+  final String link;
+  final String targetKey;
+  final IconData icon;
+  final Color color;
+  final int? badgeCount;
+  final bool actionable;
+
+  /// ۰ عادی · ۱ مهم · ۲ فوری
+  final int priority;
+  final DateTime? dueAt;
+
+  static Color _parseHex(String? hex, Color fallback) {
+    final clean = (hex ?? '').trim().replaceAll('#', '');
+    if (clean.length == 6) {
+      final v = int.tryParse('FF$clean', radix: 16);
+      if (v != null) return Color(v);
+    }
+    return fallback;
+  }
+
+  static IconData _mapBootstrapIcon(String? bi) {
+    final s = (bi ?? '').toLowerCase();
+    if (s.contains('exclamation') || s.contains('warning')) {
+      return Icons.warning_amber_rounded;
+    }
+    if (s.contains('patch-check') || s.contains('check')) {
+      return Icons.verified_outlined;
+    }
+    if (s.contains('receipt') || s.contains('cash')) {
+      return Icons.receipt_long_rounded;
+    }
+    if (s.contains('cart') || s.contains('bag')) {
+      return Icons.shopping_bag_outlined;
+    }
+    if (s.contains('arrow-return')) {
+      return Icons.assignment_return_outlined;
+    }
+    if (s.contains('pencil')) {
+      return Icons.edit_note_rounded;
+    }
+    if (s.contains('envelope') || s.contains('mail')) {
+      return Icons.mark_email_unread_outlined;
+    }
+    if (s.contains('tools') || s.contains('headset')) {
+      return Icons.support_agent_rounded;
+    }
+    return Icons.bolt_rounded;
+  }
+
+  static int _parsePriority(dynamic p) {
+    if (p is num) return p.toInt();
+    final s = (p ?? '').toString().toLowerCase();
+    if (s.contains('urgent') || s.contains('critical')) return 3;
+    if (s.contains('high')) return 2;
+    return 1;
+  }
+
+  factory CartableEntry.fromServerJson(Map<String, dynamic> j) {
+    T? pick<T>(String a, String b) => (j[a] ?? j[b]) as T?;
+    final link = (pick<String>('link', 'Link') ?? '').trim();
+    final source = (pick<String>('source', 'Source') ?? 'cartable').trim();
+    final kind = (pick<String>('kind', 'Kind') ?? '').trim();
+    String targetKey = '';
+    if (link.contains('sales/approvals')) {
+      targetKey = 'vis-approvals';
+    } else if (link.contains('sales/finance-queue')) {
+      targetKey = 'vis-finance';
+    } else if (link.contains('sales/visits')) {
+      targetKey = 'vis-orders';
+    } else if (link.contains('orders/sale')) {
+      targetKey = 'sale-orders';
+    }
+    return CartableEntry(
+      source: source,
+      kind: kind,
+      title: (pick<String>('title', 'Title') ?? '').trim(),
+      subtitle: (pick<String>('subtitle', 'Subtitle') ?? '').trim(),
+      moduleLabel: source == 'sales-visit' ? 'فروشگاهی کایر' : 'کارتابل یکپارچه',
+      link: link,
+      targetKey: targetKey,
+      icon: _mapBootstrapIcon(pick<String>('icon', 'Icon')),
+      color: _parseHex(
+        pick<String>('color', 'Color'),
+        const Color(0xff2547a8),
+      ),
+      badgeCount:
+          (j['badgeCount'] as num?)?.toInt() ??
+          (j['BadgeCount'] as num?)?.toInt(),
+      actionable: (j['actionable'] ?? j['Actionable']) != false,
+      priority: _parsePriority(j['priority'] ?? j['Priority']),
+      dueAt: DateTime.tryParse(
+        (pick<String>('dueAt', 'DueAt') ?? '').toString(),
+      )?.toLocal(),
+    );
+  }
+}
+
+/// پاسخ صفحه‌بندی‌شدهٔ اعلان‌های کارتابل (`GET /api/notifications/page`).
+class NotificationPageResult {
+  const NotificationPageResult({
+    this.items = const [],
+    this.total = 0,
+    this.unread = 0,
+    this.filteredTotal = 0,
+    this.mainTotal = 0,
+    this.mainUnread = 0,
+    this.subTotal = 0,
+    this.subUnread = 0,
+    this.hasMore = false,
+  });
+
+  final List<NotificationItem> items;
+  final int total;
+  final int unread;
+  final int filteredTotal;
+  final int mainTotal;
+  final int mainUnread;
+  final int subTotal;
+  final int subUnread;
+  final bool hasMore;
+
+  factory NotificationPageResult.fromJson(Map<String, dynamic> j) {
+    int numOf(String a, String b) =>
+        (j[a] as num?)?.toInt() ?? (j[b] as num?)?.toInt() ?? 0;
+    final raw = (j['items'] ?? j['Items']) as List? ?? const [];
+    return NotificationPageResult(
+      items: raw
+          .whereType<Map>()
+          .map((e) => NotificationItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      total: numOf('total', 'Total'),
+      unread: numOf('unread', 'Unread'),
+      filteredTotal: numOf('filteredTotal', 'FilteredTotal'),
+      mainTotal: numOf('mainTotal', 'MainTotal'),
+      mainUnread: numOf('mainUnread', 'MainUnread'),
+      subTotal: numOf('subTotal', 'SubTotal'),
+      subUnread: numOf('subUnread', 'SubUnread'),
+      hasMore: j['hasMore'] == true || j['HasMore'] == true,
+    );
+  }
+}
+
+/// خلاصهٔ نبض زندهٔ میز کار (شمارنده‌های تجمیعی بالای صفحه و بج ماژول‌ها).
+class WorkbenchPulse {
+  const WorkbenchPulse({
+    this.actionableCount = 0,
+    this.unreadLetters = 0,
+    this.signingLetters = 0,
+    this.openWorkOrders = 0,
+    this.overdueWorkOrders = 0,
+    this.unreadNotifications = 0,
+    this.unreadChats = 0,
+    this.openItRequests = 0,
+    this.pendingArchiveTasks = 0,
+  });
+
+  final int actionableCount;
+  final int unreadLetters;
+  final int signingLetters;
+  final int openWorkOrders;
+  final int overdueWorkOrders;
+  final int unreadNotifications;
+  final int unreadChats;
+  final int openItRequests;
+  final int pendingArchiveTasks;
+}
+
 /// یک اعلان (از `AppNotifications`).
 /// استخراج شناسهٔ رکورد مقصد از کلیدهای مستقیم یا از انتهای `link`.
 int? parseEntityId(Map<String, dynamic> j) {
@@ -112,7 +304,8 @@ int? parseEntityId(Map<String, dynamic> j) {
   final link = (j['link'] ?? j['Link'] ?? j['url'] ?? '').toString();
   if (link.isEmpty) return null;
   // erjaId از letterId مهم‌تر است (ارجاع، رکورد دقیق‌تری است)
-  final q = RegExp(r'[?&](?:erjaId|ErjaId|erja)=(\d+)').firstMatch(link) ??
+  final q =
+      RegExp(r'[?&](?:erjaId|ErjaId|erja)=(\d+)').firstMatch(link) ??
       RegExp(r'[?&](?:id|Id|ID)=(\d+)').firstMatch(link);
   if (q != null) return int.tryParse(q.group(1)!);
   final seg = link.split('/').where((e) => e.isNotEmpty).toList();
@@ -140,15 +333,21 @@ String? parseEntityKind(Map<String, dynamic> j) {
     j['formName'],
     j['link'],
   ].map((e) => e?.toString() ?? '').join(' ').toLowerCase();
-  if (hay.contains('workorder') || hay.contains('work-order') ||
-      hay.contains('دستور کار') || hay.contains('دستورکار')) {
+  if (hay.contains('workorder') ||
+      hay.contains('work-order') ||
+      hay.contains('دستور کار') ||
+      hay.contains('دستورکار')) {
     return 'wo';
   }
-  if (hay.contains('minute') || hay.contains('صورت‌جلسه') ||
-      hay.contains('صورتجلسه') || hay.contains('meeting')) {
+  if (hay.contains('minute') ||
+      hay.contains('صورت‌جلسه') ||
+      hay.contains('صورتجلسه') ||
+      hay.contains('meeting')) {
     return 'minutes';
   }
-  if (hay.contains('letter') || hay.contains('نامه') || hay.contains('ارجاع') ||
+  if (hay.contains('letter') ||
+      hay.contains('نامه') ||
+      hay.contains('ارجاع') ||
       hay.contains('کارتابل')) {
     return 'letter';
   }
@@ -172,12 +371,10 @@ class NotificationItem {
     this.entityKind,
     this.companyId,
     this.companyName,
+    this.category,
   });
 
   final int id;
-
-  /// عنوان اعلان — سرور معمولاً همیشه می‌فرستد؛ اگر خالی بود [displayTitle]
-  /// جایگزین امن برمی‌گرداند تا کارت هرگز «خالی» دیده نشود.
   final String title;
   final String? body;
   final String? fromName;
@@ -185,21 +382,16 @@ class NotificationItem {
   final String? link;
   final bool isRead;
   final DateTime? createdAt;
-
-  /// شناسهٔ رکورد مقصد (دستور کار / صورت‌جلسه / نامه) — از سرور یا از link
   final int? entityId;
-
-  /// نوع مقصد: wo | minutes | letter | email | null
   final String? entityKind;
-
-  /// شرکتِ اعلان (`null` = عمومی) — سرور فقط اعلان‌های شرکت فعال را می‌دهد
   final int? companyId;
   final String? companyName;
 
-  /// مسیر وب اعلان — برای استخراج شناسه وقتی فیلد مستقیم نیامده
+  /// main = اقدام اصلی | sub = پیگیری فرعی
+  final String? category;
+
   String? get targetLink => link;
 
-  /// عنوانی که همیشه چیزی برای نشان‌دادن دارد.
   String get displayTitle {
     final t = title.trim();
     if (t.isNotEmpty) return t;
@@ -210,8 +402,6 @@ class NotificationItem {
     return 'اعلان سازمانی';
   }
 
-  /// متن دوم کارت: بدنه، و اگر نبود نام فرستنده؛ اگر هر دو خالی بود `null`
-  /// تا کارت بدون خط خالی رندر شود.
   String? get displayBody {
     final b = (body ?? '').trim();
     if (b.isNotEmpty) return b;
@@ -219,8 +409,23 @@ class NotificationItem {
     return f.isEmpty ? null : f;
   }
 
+  /// تشخیص سمت کلاینت برای سرورهایی که فیلد category را نمی‌فرستند.
+  bool get isFollowUp {
+    final c = (category ?? '').toLowerCase();
+    if (c == 'sub') return true;
+    if (c == 'main') return false;
+    final hay = '$title ${body ?? ''}'.toLowerCase();
+    return hay.contains('تأیید') ||
+        hay.contains('تایید') ||
+        hay.contains('رد شد') ||
+        hay.contains('پاسخ') ||
+        hay.contains('کامنت') ||
+        hay.contains('بسته شد') ||
+        hay.contains('تمدید') ||
+        hay.contains('وضعیت');
+  }
+
   factory NotificationItem.fromJson(Map<String, dynamic> j) {
-    // سرور بعضی اعلان‌ها را با کلیدهای بزرگ (PascalCase) می‌فرستد؛ هر دو پوشش.
     T? pick<T>(String a, String b) => (j[a] ?? j[b]) as T?;
     return NotificationItem(
       id: (j['id'] as num?)?.toInt() ?? (j['Id'] as num?)?.toInt() ?? 0,
@@ -232,17 +437,17 @@ class NotificationItem {
       isRead: j['isRead'] == true || j['IsRead'] == true,
       createdAt: DateTime.tryParse(
         (pick<String>('createdAt', 'CreatedAt') ?? '').toString(),
-      ),
+      )?.toLocal(),
       entityId: parseEntityId(j),
       entityKind: parseEntityKind(j),
       companyId:
           (j['companyId'] as num?)?.toInt() ??
           (j['CompanyId'] as num?)?.toInt(),
       companyName: pick<String>('companyName', 'CompanyName')?.toString(),
+      category: pick<String>('category', 'Category')?.toString(),
     );
   }
 
-  /// نسخهٔ «خوانده‌شده»ی همین اعلان — برای به‌روزرسانی خوش‌بینانه در فهرست.
   NotificationItem asRead() => NotificationItem(
     id: id,
     title: title,
@@ -256,6 +461,7 @@ class NotificationItem {
     entityKind: entityKind,
     companyId: companyId,
     companyName: companyName,
+    category: category,
   );
 
   @override
@@ -265,7 +471,7 @@ class NotificationItem {
   int get hashCode => id.hashCode;
 }
 
-/// یک ردیف ریز داخل کارت گزارش روزانه.
+/// یک ردیف ریز داخل کارت گزارش عملکرد.
 class KpiRow {
   const KpiRow(this.label, this.value, {this.hint});
   final String label;
@@ -273,10 +479,7 @@ class KpiRow {
   final String? hint;
 }
 
-/// یک کارت «گزارش روزانه» — یک ماژول با شمارش امروز.
-///
-/// کلید [widgetKey] همان کلید ویجت در `WidgetCatalog.cs` سرور است
-/// (مثل `fac-sales-today`) تا دادهٔ واقعی از همان endpoint خوانده شود.
+/// یک کارت «شاخص کلیدی و گزارش عملکرد».
 class HomeKpi {
   const HomeKpi({
     required this.widgetKey,
@@ -287,6 +490,7 @@ class HomeKpi {
     required this.to,
     required this.unit,
     required this.rows,
+    this.targetKey = '',
     this.spark = const [],
     this.value = 0,
     this.deltaPercent,
@@ -300,6 +504,7 @@ class HomeKpi {
   final Color to;
   final String unit;
   final List<KpiRow> rows;
+  final String targetKey;
   final List<double> spark;
   final double value;
   final double? deltaPercent;
@@ -310,40 +515,58 @@ class HomeKpi {
     end: Alignment.bottomLeft,
   );
 
-  HomeKpi copyWith({double? value, double? deltaPercent, List<double>? spark}) =>
-      HomeKpi(
-        widgetKey: widgetKey,
-        moduleName: moduleName,
-        moduleSubtitle: moduleSubtitle,
-        icon: icon,
-        from: from,
-        to: to,
-        unit: unit,
-        rows: rows,
-        spark: spark ?? this.spark,
-        value: value ?? this.value,
-        deltaPercent: deltaPercent ?? this.deltaPercent,
-      );
+  HomeKpi copyWith({
+    double? value,
+    double? deltaPercent,
+    List<double>? spark,
+  }) => HomeKpi(
+    widgetKey: widgetKey,
+    moduleName: moduleName,
+    moduleSubtitle: moduleSubtitle,
+    icon: icon,
+    from: from,
+    to: to,
+    unit: unit,
+    rows: rows,
+    targetKey: targetKey,
+    spark: spark ?? this.spark,
+    value: value ?? this.value,
+    deltaPercent: deltaPercent ?? this.deltaPercent,
+  );
 }
 
-/// یک کاشی در گرید ماژول‌ها.
+/// یک کاشی در گرید ماژول‌های سازمان (هم‌نام با نسخهٔ وب).
 class ModuleTile {
   const ModuleTile({
+    required this.id,
     required this.name,
     required this.subtitle,
     required this.icon,
     required this.color,
+    this.gradientEnd,
+    this.category = 'all',
+    this.keywords = const [],
     this.badge,
+    this.liveCount = 0,
+    this.liveLabel,
     this.locked = false,
     this.tabIndex,
     this.onTapName,
   });
 
+  final String id;
   final String name;
   final String subtitle;
   final IconData icon;
   final Color color;
+  final Color? gradientEnd;
+
+  /// office | commerce | tech | hr
+  final String category;
+  final List<String> keywords;
   final String? badge;
+  final int liveCount;
+  final String? liveLabel;
 
   /// کاربر مجوز این ماژول را ندارد — فقط نمایش، بدون ورود.
   final bool locked;
@@ -353,4 +576,32 @@ class ModuleTile {
 
   /// کلید ناوبری برای ماژول‌هایی که صفحهٔ مستقل دارند.
   final String? onTapName;
+
+  LinearGradient get iconGradient => LinearGradient(
+    colors: [color, gradientEnd ?? Color.lerp(color, Colors.black, 0.22)!],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  ModuleTile copyWith({
+    int? liveCount,
+    String? liveLabel,
+    String? badge,
+    bool? locked,
+  }) => ModuleTile(
+    id: id,
+    name: name,
+    subtitle: subtitle,
+    icon: icon,
+    color: color,
+    gradientEnd: gradientEnd,
+    category: category,
+    keywords: keywords,
+    badge: badge ?? this.badge,
+    liveCount: liveCount ?? this.liveCount,
+    liveLabel: liveLabel ?? this.liveLabel,
+    locked: locked ?? this.locked,
+    tabIndex: tabIndex,
+    onTapName: onTapName,
+  );
 }

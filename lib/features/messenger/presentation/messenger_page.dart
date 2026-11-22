@@ -123,7 +123,7 @@ class _MessengerPageState extends State<MessengerPage> {
             ),
             const SizedBox(width: 9),
             const Text(
-              'پیام‌رسان',
+              'پیام رسان میها',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
