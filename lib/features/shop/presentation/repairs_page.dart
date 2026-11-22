@@ -1935,6 +1935,7 @@ class _RepairFormPageState extends State<RepairFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       onChanged: (v) {
                         final f = formatNumText(v);
                         d.quote = f;
@@ -2178,6 +2179,7 @@ class _RepairFormPageState extends State<RepairFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       onChanged: (v) {
                         it.cost = formatNumText(v);
                         setState(() {});
@@ -2203,6 +2205,7 @@ class _RepairFormPageState extends State<RepairFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       onChanged: (v) {
                         it.price = formatNumText(v);
                         setState(() {});
@@ -3178,18 +3181,8 @@ class _RepairInvoiceSheetState extends State<RepairInvoiceSheet> {
                         controller: _cash,
                         keyboardType: TextInputType.number,
                         textDirection: TextDirection.ltr,
-                        onChanged: (v) {
-                          final f = formatNumText(v);
-                          if (f != v) {
-                            _cash.value = TextEditingValue(
-                              text: f,
-                              selection: TextSelection.collapsed(
-                                offset: f.length,
-                              ),
-                            );
-                          }
-                          setState(() {});
-                        },
+                        inputFormatters: moneyInputFormatters,
+                        onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           isDense: true,
                           hintText: 'مبلغ پیش‌پرداخت (ریال)',

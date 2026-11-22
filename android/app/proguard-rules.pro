@@ -13,6 +13,10 @@
 -keep class com.crazecoder.openfile.** { *; }
 -keep class io.flutter.plugins.imagepicker.** { *; }
 -keep class com.csdcorp.speech_to_text.** { *; }
+-keep class dev.steenbakker.mobile_scanner.** { *; }
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.odml.** { *; }
+-keep class androidx.camera.** { *; }
 
 # flutter_local_notifications + GSON TypeToken (جلوگیری از خطای R8 fullMode روی اکشن‌های اعلان)
 -keep class com.dexterous.flutterlocalnotifications.** { *; }

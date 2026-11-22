@@ -869,15 +869,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                 controller: _amount,
                 keyboardType: TextInputType.number,
                 textDirection: TextDirection.ltr,
-                onChanged: (v) {
-                  final f = formatNumText(v);
-                  if (f != v) {
-                    _amount.value = TextEditingValue(
-                      text: f,
-                      selection: TextSelection.collapsed(offset: f.length),
-                    );
-                  }
-                },
+                inputFormatters: moneyInputFormatters,
                 decoration: const InputDecoration(isDense: true),
                 style: const TextStyle(fontSize: 12.5),
               ),

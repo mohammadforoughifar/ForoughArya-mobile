@@ -12,7 +12,6 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
@@ -603,7 +602,7 @@ class _PaySheetState extends State<_PaySheet> {
               child: TextField(
                 controller: _amountCtrl,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                inputFormatters: moneyInputFormatters,
                 textDirection: TextDirection.ltr,
                 style: const TextStyle(fontSize: 12.5),
                 decoration: _dec(),

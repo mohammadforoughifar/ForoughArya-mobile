@@ -558,7 +558,10 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
       _card.text = a.cardNumber ?? '';
       _opening.text = a.openingBalance == 0
           ? ''
-          : a.openingBalance.toStringAsFixed(0);
+          : formatNumText(
+              a.openingBalance.toStringAsFixed(0),
+              allowNegative: true,
+            );
       _desc.text = a.description ?? '';
       _kind = a.kind;
       _accountId = a.accountId;
@@ -923,6 +926,8 @@ class _TrsAccountFormPageState extends State<TrsAccountFormPage> {
               child: TextField(
                 controller: _opening,
                 keyboardType: TextInputType.number,
+                textDirection: TextDirection.ltr,
+                inputFormatters: signedMoneyInputFormatters,
                 style: const TextStyle(fontSize: 12.5),
                 decoration: const InputDecoration(isDense: true),
               ),

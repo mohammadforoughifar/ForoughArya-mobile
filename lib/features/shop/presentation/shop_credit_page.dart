@@ -776,15 +776,8 @@ class _ShopCreditPageState extends State<ShopCreditPage> {
                 TextField(
                   controller: amtCtrl,
                   keyboardType: TextInputType.number,
-                  onChanged: (v) {
-                    final f = formatNumText(v);
-                    if (f != v) {
-                      amtCtrl.value = TextEditingValue(
-                        text: f,
-                        selection: TextSelection.collapsed(offset: f.length),
-                      );
-                    }
-                  },
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   decoration: const InputDecoration(
                     labelText: 'مبلغ چک جایگزین (ریال) *',
                   ),

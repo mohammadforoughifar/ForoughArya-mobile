@@ -1407,7 +1407,9 @@ class _TrsChequeFormPageState extends State<TrsChequeFormPage> {
     if (c != null) {
       _number.text = c.number;
       _sayad.text = c.sayadId ?? '';
-      _amount.text = c.amount == 0 ? '' : c.amount.toStringAsFixed(0);
+      _amount.text = c.amount == 0
+          ? ''
+          : formatNumText(c.amount.toStringAsFixed(0));
       _bank.text = c.bankName ?? '';
       _branch.text = c.branchName ?? '';
       _accountNumber.text = c.accountNumber ?? '';
@@ -1573,6 +1575,8 @@ class _TrsChequeFormPageState extends State<TrsChequeFormPage> {
                   child: TextField(
                     controller: _amount,
                     keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    inputFormatters: moneyInputFormatters,
                     style: const TextStyle(fontSize: 12.5),
                     decoration: const InputDecoration(isDense: true),
                   ),

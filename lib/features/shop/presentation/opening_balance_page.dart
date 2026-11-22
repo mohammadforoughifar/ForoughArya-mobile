@@ -322,6 +322,8 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
               child: TextField(
                 controller: _amount,
                 keyboardType: TextInputType.number,
+                textDirection: TextDirection.ltr,
+                inputFormatters: moneyInputFormatters,
                 onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 12.5),
                 decoration: const InputDecoration(isDense: true),
@@ -732,6 +734,8 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
                     child: TextField(
                       controller: _chqAmount,
                       keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       style: const TextStyle(fontSize: 12.5),
                       decoration: const InputDecoration(isDense: true),
                     ),
@@ -1037,6 +1041,8 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
                 child: TextField(
                   controller: _instTotal,
                   keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   onChanged: (_) => setState(() {}),
                   style: const TextStyle(fontSize: 12.5),
                   decoration: const InputDecoration(isDense: true),
@@ -1353,6 +1359,8 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
                     child: TextField(
                       controller: _stkPrice,
                       keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       style: const TextStyle(fontSize: 12.5),
                       decoration: const InputDecoration(isDense: true),
                     ),

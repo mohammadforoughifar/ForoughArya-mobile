@@ -29,6 +29,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/widgets/barcode_scanner_sheet.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/shop_models.dart';
@@ -1127,7 +1128,26 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       child: TextField(
                         controller: _barcode,
                         textDirection: TextDirection.ltr,
-                        decoration: _dec('بارکد کالا'),
+                        decoration: _dec('بارکد کالا').copyWith(
+                          suffixIcon: IconButton(
+                            tooltip: 'اسکن بارکد با دوربین',
+                            icon: const Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 19,
+                              color: ShopColors.seed,
+                            ),
+                            onPressed: () async {
+                              final code = await showBarcodeScannerSheet(
+                                context,
+                              );
+                              if (code != null &&
+                                  code.trim().isNotEmpty &&
+                                  mounted) {
+                                setState(() => _barcode.text = code.trim());
+                              }
+                            },
+                          ),
+                        ),
                         style: const TextStyle(fontSize: 13),
                       ),
                     ),

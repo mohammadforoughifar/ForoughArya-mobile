@@ -714,6 +714,8 @@ class _VisitFormPageState extends State<VisitFormPage> {
                 child: TextField(
                   controller: l.priceCtrl,
                   keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   onChanged: (_) => _recalc(l),
                   style: const TextStyle(fontSize: 11.5),
                   decoration: const InputDecoration(
@@ -733,6 +735,10 @@ class _VisitFormPageState extends State<VisitFormPage> {
                 child: TextField(
                   controller: l.discountCtrl,
                   keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: l.discountIsAmount
+                      ? moneyInputFormatters
+                      : percentOrMoneyInputFormatters,
                   onChanged: (_) {
                     if (l.discountIsAmount) {
                       l.discountAmount = parseNum(l.discountCtrl.text);
@@ -898,7 +904,12 @@ class _LineVm {
     this.unit,
     this.unitPrice = 0,
     this.stock = 0,
-  });
+  }) {
+    if (unitPrice > 0) {
+      priceCtrl.text = formatNumText(unitPrice.toStringAsFixed(0));
+      lineTotal = unitPrice;
+    }
+  }
 
   int id;
   int productId;
@@ -931,7 +942,9 @@ class _LineVm {
 
   void syncDiscountText() {
     discountCtrl.text = discountIsAmount
-        ? (discountAmount == 0 ? '' : discountAmount.toStringAsFixed(0))
+        ? (discountAmount == 0
+              ? ''
+              : formatNumText(discountAmount.toStringAsFixed(0)))
         : (discountPercent == 0
               ? ''
               : discountPercent.toStringAsFixed(2));
@@ -949,7 +962,7 @@ class _LineVm {
         : l.quantity.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
     vm.priceCtrl.text = l.unitPrice == 0
         ? ''
-        : l.unitPrice.toStringAsFixed(0);
+        : formatNumText(l.unitPrice.toStringAsFixed(0));
     vm.discountPercent = l.discountPercent;
     vm.discountAmount = l.discountAmount;
     vm.discountIsAmount = l.discountIsAmount;

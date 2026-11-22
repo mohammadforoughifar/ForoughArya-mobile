@@ -149,11 +149,13 @@ class _TrsVoucherFormPageState extends State<TrsVoucherFormPage> {
         _refCtrl.text = doc.refNumber ?? '';
         _fromAccountId = doc.fromAccountId;
         _toAccountId = doc.toAccountId;
-        if (doc.feeAmount != 0) _feeCtrl.text = doc.feeAmount.toStringAsFixed(0);
+        if (doc.feeAmount != 0) {
+          _feeCtrl.text = formatNumText(doc.feeAmount.toStringAsFixed(0));
+        }
         if (doc.isTransfer) {
           _transferAmount.text = doc.totalAmount == 0
               ? ''
-              : doc.totalAmount.toStringAsFixed(0);
+              : formatNumText(doc.totalAmount.toStringAsFixed(0));
         } else {
           _lines
             ..clear()
@@ -819,6 +821,8 @@ class _TrsVoucherFormPageState extends State<TrsVoucherFormPage> {
                   controller: _transferAmount,
                   enabled: !_locked,
                   keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   onChanged: (_) => setState(() {}),
                   style: const TextStyle(fontSize: 12.5),
                   decoration: const InputDecoration(isDense: true),
@@ -833,6 +837,8 @@ class _TrsVoucherFormPageState extends State<TrsVoucherFormPage> {
                   controller: _feeCtrl,
                   enabled: !_locked,
                   keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   style: const TextStyle(fontSize: 12.5),
                   decoration: const InputDecoration(isDense: true),
                 ),
@@ -1052,6 +1058,8 @@ class _TrsVoucherFormPageState extends State<TrsVoucherFormPage> {
                   controller: line.amountCtrl,
                   enabled: !_locked,
                   keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   onChanged: (_) => setState(() => _syncSingleAllocation(line)),
                   style: const TextStyle(fontSize: 11.5),
                   decoration: const InputDecoration(
@@ -1346,7 +1354,9 @@ class _LineVm {
       accountId: l.trsAccountId,
       accountName: l.trsAccountName,
     );
-    vm.amountCtrl.text = l.amount == 0 ? '' : l.amount.toStringAsFixed(0);
+    vm.amountCtrl.text = l.amount == 0
+        ? ''
+        : formatNumText(l.amount.toStringAsFixed(0));
     vm.refCtrl.text = l.refNumber ?? '';
     vm.chequeNumberCtrl.text = l.chequeNumber ?? '';
     vm.sayadCtrl.text = l.sayadId ?? '';

@@ -689,7 +689,8 @@ class _VisitFinancePageState extends State<VisitFinancePage> {
               child: TextField(
                 controller: _cashCtrl,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                textDirection: TextDirection.ltr,
+                inputFormatters: moneyInputFormatters,
                 onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 12),
                 decoration: _dec('0'),
@@ -960,7 +961,8 @@ class _VisitFinancePageState extends State<VisitFinancePage> {
                   child: TextField(
                     controller: c.amountCtrl,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    textDirection: TextDirection.ltr,
+                    inputFormatters: moneyInputFormatters,
                     style: const TextStyle(fontSize: 12),
                     onChanged: (_) => setState(() {}),
                     decoration: _dec('0'),
@@ -1053,7 +1055,8 @@ class _VisitFinancePageState extends State<VisitFinancePage> {
             child: TextField(
               controller: r.amountCtrl,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textDirection: TextDirection.ltr,
+              inputFormatters: moneyInputFormatters,
               style: const TextStyle(fontSize: 11.5),
               onChanged: (_) => setState(() {}),
               decoration: _dec('مبلغ'),

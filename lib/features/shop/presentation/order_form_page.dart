@@ -22,6 +22,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/widgets/barcode_scanner_sheet.dart';
 import '../data/fa_num.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
@@ -687,7 +688,26 @@ class _OrderFormPageState extends State<OrderFormPage> {
     }
   }
 
-  void _addByBarcode([String? rawInput]) {
+  Future<void> _scanBarcodeWithCamera() async {
+    final scanned = await showBarcodeScannerSheet(
+      context,
+      title: _isProforma
+          ? 'اسکن بارکد کالا (پیش‌فاکتور)'
+          : (_isSale ? 'اسکن بارکد کالا (فاکتور فروش)' : 'اسکن بارکد کالا (فاکتور خرید)'),
+    );
+    if (scanned == null || !mounted) return;
+    final clean = scanned.trim();
+    if (clean.isEmpty) return;
+    setState(() {
+      _barcodeCtrl.value = TextEditingValue(
+        text: clean,
+        selection: TextSelection.collapsed(offset: clean.length),
+      );
+    });
+    _addByBarcode(clean, false);
+  }
+
+  void _addByBarcode([String? rawInput, bool clearField = true]) {
     final code = toEnDigits((rawInput ?? _barcodeCtrl.text).trim()).toLowerCase();
     if (code.isEmpty) return;
     final pool = _selectableProducts;
@@ -697,10 +717,12 @@ class _OrderFormPageState extends State<OrderFormPage> {
       return (bc.isNotEmpty && bc == code) || (pc.isNotEmpty && pc == code);
     }).firstOrNull;
     if (match == null) {
-      _toast('کالایی با بارکد یا کد «$code» در این انبار یافت نشد.');
+      _toast('بارکد «$code» ثبت شد؛ کالایی با این بارکد یا کد یافت نشد.');
       return;
     }
-    _barcodeCtrl.clear();
+    if (clearField) {
+      _barcodeCtrl.clear();
+    }
     final existing = _lines.where((l) => l.productId == match.id).firstOrNull;
     if (existing != null) {
       setState(() {
@@ -708,6 +730,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
         existing.qty = nextQty.toString().replaceAll(RegExp(r'\.0$'), '');
         _recalcDiscount(existing);
       });
+      if (!clearField) {
+        _toast('«${match.name}» از روی بارکد خوانده شد (مقدار +۱).', ok: true);
+      }
       return;
     }
     final emptyLine = _lines.where((l) => l.productId == 0).firstOrNull;
@@ -717,6 +742,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
       final nl = _Line();
       setState(() => _lines.add(nl));
       _onProductPicked(nl, match.id);
+    }
+    if (!clearField) {
+      _toast('«${match.name}» از روی بارکد به اقلام اضافه شد.', ok: true);
     }
   }
 
@@ -1064,13 +1092,13 @@ class _OrderFormPageState extends State<OrderFormPage> {
     }
   }
 
-  void _toast(String msg) {
+  void _toast(String msg, {bool ok = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(fontSize: 12)),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: ShopColors.danger,
+        backgroundColor: ok ? ShopColors.ok : ShopColors.danger,
       ),
     );
   }
@@ -1884,16 +1912,8 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 controller: _cashAmountCtrl,
                 keyboardType: TextInputType.number,
                 textDirection: TextDirection.ltr,
-                onChanged: (v) {
-                  final f = formatNumText(v);
-                  if (f != v) {
-                    _cashAmountCtrl.value = TextEditingValue(
-                      text: f,
-                      selection: TextSelection.collapsed(offset: f.length),
-                    );
-                  }
-                  setState(() {});
-                },
+                inputFormatters: moneyInputFormatters,
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   isDense: true,
                   hintText: '0',
@@ -2424,6 +2444,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       onChanged: (v) {
                         c.amount = formatNumText(v);
                         setState(() {});
@@ -2619,6 +2640,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     ),
                   keyboardType: TextInputType.number,
                   textDirection: TextDirection.ltr,
+                  inputFormatters: moneyInputFormatters,
                   onChanged: (v) {
                     r.amount = formatNumText(v);
                     setState(() {});
@@ -2781,21 +2803,50 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 style: TextStyle(fontSize: 9.8, color: ShopColors.inkFaint),
               ),
             ),
-          // نوار افزودن سریع با بارکد یا کد کالا
+          // نوار اسکن با دوربین و افزودن سریع با بارکد یا کد کالا
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
+                FilledButton.tonalIcon(
+                  onPressed: _scanBarcodeWithCamera,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                  label: const Text(
+                    'اسکن بارکد',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Expanded(
                   child: TextField(
                     controller: _barcodeCtrl,
                     textDirection: TextDirection.ltr,
-                    onSubmitted: _addByBarcode,
-                    decoration: const InputDecoration(
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (v) => _addByBarcode(v),
+                    decoration: InputDecoration(
                       isDense: true,
-                      prefixIcon: Icon(Icons.qr_code_scanner_rounded, size: 17),
-                      hintText: 'افزودن سریع با بارکد یا کد کالا + Enter',
-                      hintStyle: TextStyle(
+                      prefixIcon: IconButton(
+                        onPressed: _scanBarcodeWithCamera,
+                        tooltip: 'اسکن بارکد با دوربین',
+                        icon: const Icon(
+                          Icons.camera_alt_outlined,
+                          size: 17,
+                          color: ShopColors.seed,
+                        ),
+                      ),
+                      suffixIcon: _barcodeCtrl.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () => setState(_barcodeCtrl.clear),
+                              tooltip: 'پاک کردن بارکد',
+                              icon: const Icon(Icons.close_rounded, size: 16),
+                            ),
+                      hintText: 'بارکد یا کد کالا…',
+                      hintStyle: const TextStyle(
                         fontSize: 11,
                         color: ShopColors.inkFaint,
                       ),
@@ -2805,7 +2856,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 ),
                 const SizedBox(width: 6),
                 IconButton.filledTonal(
-                  onPressed: _addByBarcode,
+                  onPressed: () => _addByBarcode(),
                   icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
                   tooltip: 'افزودن کالا با بارکد/کد',
                 ),
@@ -3033,6 +3084,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       onChanged: (v) {
                         l.manualPrice = true;
                         l.price = formatNumText(v);
@@ -3084,8 +3136,16 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: l.discountIsAmount
+                          ? moneyInputFormatters
+                          : percentOrMoneyInputFormatters,
                       onChanged: (v) {
-                        _onDiscountInput(l, v);
+                        _onDiscountInput(
+                          l,
+                          (l.discountIsAmount || parseNum(v) > 100)
+                              ? formatNumText(v)
+                              : v,
+                        );
                         setState(() {});
                       },
                       decoration: const InputDecoration(
@@ -3111,6 +3171,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         ),
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: percentOrMoneyInputFormatters,
                       onChanged: (v) {
                         final n = parseNum(v);
                         l.vat = n > 100 ? formatNumText(v) : v;
@@ -3148,7 +3209,11 @@ class _OrderFormPageState extends State<OrderFormPage> {
                       ),
                     keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
-                    onChanged: (v) => l.newSalePrice = formatNumText(v),
+                    inputFormatters: moneyInputFormatters,
+                    onChanged: (v) {
+                      l.newSalePrice = formatNumText(v);
+                      setState(() {});
+                    },
                     decoration: const InputDecoration(
                       isDense: true,
                       hintText: 'قیمت فروش جدید',
@@ -3359,14 +3424,41 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
             TextField(
               controller: _q,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 hintText: 'جستجوی نام، کد یا بارکد…',
-                hintStyle: TextStyle(
+                hintStyle: const TextStyle(
                   fontSize: 11.5,
                   color: ShopColors.inkFaint,
                 ),
-                prefixIcon: Icon(Icons.search_rounded, size: 18),
+                prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                suffixIcon: IconButton(
+                  tooltip: 'اسکن بارکد با دوربین',
+                  icon: const Icon(
+                    Icons.qr_code_scanner_rounded,
+                    size: 19,
+                    color: ShopColors.seed,
+                  ),
+                  onPressed: () async {
+                    final scanned = await showBarcodeScannerSheet(context);
+                    if (scanned == null || !context.mounted) return;
+                    final code = toEnDigits(scanned.trim()).toLowerCase();
+                    if (code.isEmpty) return;
+                    final exact = widget.products.where((p) {
+                      final bc = toEnDigits(
+                        (p.barcode ?? '').trim(),
+                      ).toLowerCase();
+                      final pc = toEnDigits(p.code.trim()).toLowerCase();
+                      return (bc.isNotEmpty && bc == code) ||
+                          (pc.isNotEmpty && pc == code);
+                    }).firstOrNull;
+                    if (exact != null) {
+                      Navigator.pop(context, exact.id);
+                    } else {
+                      setState(() => _q.text = scanned.trim());
+                    }
+                  },
+                ),
               ),
               style: const TextStyle(fontSize: 12.5),
             ),
@@ -3573,16 +3665,8 @@ class _CalcSheetState extends State<_CalcSheet> {
               controller: _base,
               keyboardType: TextInputType.number,
               textDirection: TextDirection.ltr,
-              onChanged: (v) {
-                final f = formatNumText(v);
-                if (f != v) {
-                  _base.value = TextEditingValue(
-                    text: f,
-                    selection: TextSelection.collapsed(offset: f.length),
-                  );
-                }
-                setState(() {});
-              },
+              inputFormatters: moneyInputFormatters,
+              onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(isDense: true),
               style: const TextStyle(fontSize: 12.5),
             ),
@@ -4067,15 +4151,7 @@ class _QuickBankSheetState extends State<QuickBankSheet> {
                 controller: _opening,
                 keyboardType: TextInputType.number,
                 textDirection: TextDirection.ltr,
-                onChanged: (v) {
-                  final f = formatNumText(v);
-                  if (f != v) {
-                    _opening.value = TextEditingValue(
-                      text: f,
-                      selection: TextSelection.collapsed(offset: f.length),
-                    );
-                  }
-                },
+                inputFormatters: signedMoneyInputFormatters,
                 decoration: _dec('0'),
                 style: const TextStyle(fontSize: 12.5),
               ),

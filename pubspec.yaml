@@ -2,7 +2,7 @@ name: forough_mobile
 description: "Forough Arya mobile client for authentication and work orders."
 publish_to: 'none'
 
-version: 1.64.2+72
+version: 1.64.3+73
 
 environment:
   sdk: ^3.13.7
@@ -27,6 +27,7 @@ dependencies:
   image_picker: ^1.2.4
   flutter_local_notifications: ^22.0.0
   web_socket_channel: ^3.0.3
+  mobile_scanner: ^7.5.0
 
 dev_dependencies:
   flutter_test:

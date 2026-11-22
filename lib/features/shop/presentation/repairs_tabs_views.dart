@@ -339,6 +339,7 @@ class _RepairCreditSheetState extends State<_RepairCreditSheet> {
                               controller: _amountCtrl,
                               keyboardType: TextInputType.number,
                               textDirection: TextDirection.ltr,
+                              inputFormatters: moneyInputFormatters,
                               decoration: const InputDecoration(
                                 labelText: 'مبلغ دریافتی (ریال) *',
                                 isDense: true,
@@ -1465,10 +1466,13 @@ class _ShopWarrantyFormPageState extends State<_ShopWarrantyFormPage> {
                       Expanded(
                         child: TextFormField(
                           initialValue: _items[i].unitCost > 0
-                              ? _items[i].unitCost.round().toString()
+                              ? formatNumText(
+                                  _items[i].unitCost.round().toString(),
+                                )
                               : '',
                           keyboardType: TextInputType.number,
                           textDirection: TextDirection.ltr,
+                          inputFormatters: moneyInputFormatters,
                           decoration: const InputDecoration(
                             labelText: 'هزینه داخلی واحد',
                             isDense: true,
@@ -1537,10 +1541,13 @@ class _ShopWarrantyFormPageState extends State<_ShopWarrantyFormPage> {
                   if (_items[i].isChargeable)
                     TextFormField(
                       initialValue: _items[i].customerUnitPrice != null
-                          ? _items[i].customerUnitPrice!.round().toString()
+                          ? formatNumText(
+                              _items[i].customerUnitPrice!.round().toString(),
+                            )
                           : '',
                       keyboardType: TextInputType.number,
                       textDirection: TextDirection.ltr,
+                      inputFormatters: moneyInputFormatters,
                       decoration: const InputDecoration(
                         labelText: 'قیمت واحد مشتری (ریال) *',
                         isDense: true,
@@ -1795,6 +1802,7 @@ class _ShopTradeInTabViewState extends State<ShopTradeInTabView> {
                     controller: valCtrl,
                     keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
+                    inputFormatters: moneyInputFormatters,
                     decoration: const InputDecoration(
                       labelText: 'ارزش تعیین‌شده (ریال) *',
                       isDense: true,
@@ -2032,6 +2040,7 @@ class _ShopTradeInTabViewState extends State<ShopTradeInTabView> {
                     controller: amountCtrl,
                     keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
+                    inputFormatters: moneyInputFormatters,
                     decoration: const InputDecoration(
                       labelText: 'مبلغ عملیات (ریال) *',
                       isDense: true,

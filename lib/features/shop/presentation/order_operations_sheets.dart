@@ -299,17 +299,7 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                         controller: _amountCtrl,
                         keyboardType: TextInputType.number,
                         textDirection: TextDirection.ltr,
-                        onChanged: (v) {
-                          final f = formatNumText(v);
-                          if (f != v) {
-                            _amountCtrl.value = TextEditingValue(
-                              text: f,
-                              selection: TextSelection.collapsed(
-                                offset: f.length,
-                              ),
-                            );
-                          }
-                        },
+                        inputFormatters: moneyInputFormatters,
                         decoration: InputDecoration(
                           isDense: true,
                           labelText: widget.order.isSale
@@ -911,17 +901,7 @@ class _ChequeReturnSheetState extends State<_ChequeReturnSheet> {
                           controller: _repAmountCtrl,
                           keyboardType: TextInputType.number,
                           textDirection: TextDirection.ltr,
-                          onChanged: (v) {
-                            final f = formatNumText(v);
-                            if (f != v) {
-                              _repAmountCtrl.value = TextEditingValue(
-                                text: f,
-                                selection: TextSelection.collapsed(
-                                  offset: f.length,
-                                ),
-                              );
-                            }
-                          },
+                          inputFormatters: moneyInputFormatters,
                           decoration: const InputDecoration(
                             isDense: true,
                             labelText: 'مبلغ چک جایگزین (ریال)',
@@ -1160,15 +1140,7 @@ class _CreditSettlementSheetState extends State<_CreditSettlementSheet> {
                     controller: _amountCtrl,
                     keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
-                    onChanged: (v) {
-                      final f = formatNumText(v);
-                      if (f != v) {
-                        _amountCtrl.value = TextEditingValue(
-                          text: f,
-                          selection: TextSelection.collapsed(offset: f.length),
-                        );
-                      }
-                    },
+                    inputFormatters: moneyInputFormatters,
                     decoration: const InputDecoration(
                       isDense: true,
                       labelText: 'مبلغ (ریال)',
