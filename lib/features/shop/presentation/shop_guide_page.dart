@@ -31,7 +31,7 @@ class ShopGuidePage extends StatelessWidget {
         foregroundColor: ShopColors.ink,
         elevation: 0.5,
         title: const Text(
-          'راهنمای سامانه فروشگاهی',
+          'راهنمای فروشگاهی کایر',
           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
         ),
       ),
@@ -82,12 +82,12 @@ class ShopGuidePage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 30),
               children: [
                 ShopHeader(
-                  title: 'راهنمای سامانه فروشگاهی',
+                  title: 'راهنمای جامع فروشگاهی کایر',
                   subtitle:
                       'از تعریف اطلاعات پایه و ثبت خرید و فروش تا تسویه، چاپ فاکتور، بیجک، تعمیرات و گزارش‌ها؛ '
-                      'همهٔ بخش‌های سامانه فروشگاهی را گام‌به‌گام ببینید.',
+                      'همهٔ بخش‌های فروشگاهی کایر را گام‌به‌گام ببینید.',
                   icon: Icons.school_rounded,
-                  badge: 'سامانه فروشگاهی / راهنمای کاربری',
+                  badge: 'فروشگاهی کایر / راهنمای کاربری',
                 ),
                 const SizedBox(height: 10),
                 _quickStart(),

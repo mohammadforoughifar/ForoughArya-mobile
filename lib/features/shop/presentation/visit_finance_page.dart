@@ -454,7 +454,7 @@ class _VisitFinancePageState extends State<VisitFinancePage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
-                    'با این تأیید، سند فروش در فهرست «فروش» سامانه فروشگاهی ثبت می‌شود، '
+                    'با این تأیید، سند فروش در فهرست «فروش» فروشگاهی کایر ثبت می‌شود، '
                     'موجودی انبار کم می‌شود و سند حسابداری خودکار صادر می‌گردد.',
                     style: TextStyle(fontSize: 10, color: ShopColors.indigo),
                   ),
