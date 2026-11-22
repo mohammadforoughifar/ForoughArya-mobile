@@ -142,6 +142,8 @@ class _OrderFormPageState extends State<OrderFormPage> {
   DateTime? _creditDue;
   List<TrsAccount> _accounts = const [];
   SaleChequeChargeInput? _chequeCharge;
+  double _saleChequeIncome = 0;
+  double _chargeInvoiceBase = 0;
 
   final List<_ChequeRow> _cheques = [];
   final List<_InstRow> _insts = [];
@@ -168,8 +170,17 @@ class _OrderFormPageState extends State<OrderFormPage> {
   }
 
   bool get _hasNonCash => _useCheque || _useInst || _useCredit;
+  bool get _hasChequeIncomeArticle =>
+      _isSale &&
+      (_chequeCharge != null ||
+          (_isEdit && (widget.source?.hasChequeCharge ?? false)) ||
+          _saleChequeIncome > 0);
 
-  double get _grandTotal => _lines.fold(0, (s, l) => s + l.total);
+  Iterable<_Line> get _validLines =>
+      _lines.where((l) => l.productId > 0 && l.qtyValue > 0);
+
+  double get _goodsTotal => _lines.fold(0, (s, l) => s + l.total);
+  double get _grandTotal => _goodsTotal + (_isSale ? _saleChequeIncome : 0);
   double get _cashPart => !_hasNonCash ? _grandTotal : parseNum(_cashAmountCtrl.text);
   double get _chequeSum =>
       !_useCheque ? 0 : _cheques.fold<double>(0, (s, c) => s + c.amountValue);
@@ -332,6 +343,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
         _trsAccountId = src.trsAccountId;
         _creditDue = src.dueDate;
         _chequeCharge = src.chequeChargeSnapshot;
+        _saleChequeIncome = src.chequeIncomeAmount;
         _useCheque =
             src.cheques.isNotEmpty || src.paymentMethod == PayMethod.cheque;
         _useInst = src.installments.isNotEmpty ||
@@ -381,6 +393,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
           }));
         _instCount = _insts.isEmpty ? 3 : _insts.length;
         _populateLinesFrom(src.lines, keepLineId: true);
+        _chargeInvoiceBase = _goodsTotal;
         _ensureInactiveLookups(src);
       } else if (tpl != null) {
         // ---- کپی از فاکتور قبلی یا تبدیل پیش‌فاکتور به فروش ----
@@ -572,15 +585,33 @@ class _OrderFormPageState extends State<OrderFormPage> {
   void _onDiscountInput(_Line l, String raw) {
     l.discount = raw;
     final val = parseNum(raw);
-    if (val <= 100) {
+    if (l.discountIsAmount || val > 100) {
+      l.discountIsAmount = true;
+      l.discountAmount = val < 0 ? 0 : val;
+      l.discountPercent = 0;
+    } else {
       l.discountIsAmount = false;
       l.discountPercent = val < 0 ? 0 : val;
       l.discountAmount = 0;
-    } else {
-      l.discountIsAmount = true;
-      l.discountAmount = val;
     }
     _recalcDiscount(l);
+  }
+
+  void _toggleDiscountMode(_Line l) {
+    setState(() {
+      l.discountIsAmount = !l.discountIsAmount;
+      final val = parseNum(l.discount);
+      if (l.discountIsAmount) {
+        l.discountAmount = val < 0 ? 0 : val;
+        l.discountPercent = 0;
+      } else {
+        final pct = val.clamp(0, 100).toDouble();
+        l.discountPercent = pct;
+        l.discountAmount = 0;
+        if (val > 100) l.discount = pct.toStringAsFixed(0);
+      }
+      _recalcDiscount(l);
+    });
   }
 
   void _onProductPicked(_Line l, int id) {
@@ -701,7 +732,18 @@ class _OrderFormPageState extends State<OrderFormPage> {
     setState(() {
       _useCheque = !_useCheque;
       if (_useCheque && _cheques.isEmpty) _addCheque();
-      if (!_useCheque) _chequeCharge = null;
+      if (!_useCheque) {
+        _chequeCharge = null;
+        if (!_isEdit) _saleChequeIncome = 0;
+      }
+    });
+  }
+
+  void _removeSaleChequeCharge() {
+    setState(() {
+      _chequeCharge = null;
+      _saleChequeIncome = 0;
+      _chargeInvoiceBase = 0;
     });
   }
 
@@ -750,7 +792,10 @@ class _OrderFormPageState extends State<OrderFormPage> {
     }
     setState(() {
       _insts.clear();
-      final baseAmount = (totalDue / _instCount).floorToDouble();
+      const roundUnit = 10000.0;
+      final baseAmount = totalDue >= roundUnit * _instCount
+          ? (totalDue / _instCount / roundUnit).floorToDouble() * roundUnit
+          : (totalDue / _instCount).floorToDouble();
       for (var i = 0; i < _instCount; i++) {
         final amount = i == _instCount - 1
             ? totalDue - baseAmount * (_instCount - 1)
@@ -1080,12 +1125,18 @@ class _OrderFormPageState extends State<OrderFormPage> {
     }
   }
 
-  Future<void> _openQuickBank({int? chequeIndex}) async {
+  Future<void> _openQuickBank({int? chequeIndex, int? initialKind}) async {
+    final defaultKind = initialKind ??
+        (chequeIndex != null
+            ? AccountKind.bank
+            : (_cashKind == CashKind.cash
+                  ? AccountKind.cash
+                  : AccountKind.bank));
     final created = await showModalBottomSheet<TrsAccount>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => QuickBankSheet(repo: _repo),
+      builder: (_) => QuickBankSheet(repo: _repo, initialKind: defaultKind),
     );
     if (created == null || !mounted) return;
     setState(() {
@@ -1124,9 +1175,132 @@ class _OrderFormPageState extends State<OrderFormPage> {
     );
   }
 
-  Future<void> _openCalc(bool forCheque) async {
+  /// همان دکمهٔ «آخرین خرید کالاها (F8)» در بالای جدول اقلام وب
+  Future<void> _showAllLastPurchases() async {
+    final ids = _lines
+        .map((l) => l.productId)
+        .where((id) => id > 0 && !(_productOf(id)?.isService ?? false))
+        .toSet()
+        .toList();
+    if (ids.isEmpty) {
+      _toast('ابتدا حداقل یک کالای غیرخدماتی در اقلام فاکتور انتخاب کنید.');
+      return;
+    }
+    if (ids.length == 1) {
+      await _showLastPurchase(ids.first);
+      return;
+    }
+    final items = <({Product product, ShopOrder? order})>[];
+    for (final id in ids) {
+      final prod = _productOf(id);
+      if (prod == null) continue;
+      ShopOrder? ord;
+      try {
+        ord = await _repo.lastPurchase(id);
+      } catch (_) {}
+      items.add((product: prod, order: ord));
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+          decoration: const BoxDecoration(
+            color: ShopColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ShopColors.line,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'آخرین خرید کالاهای فاکتور',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w900,
+                  color: ShopColors.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(height: 10, color: ShopColors.line),
+                  itemBuilder: (_, idx) {
+                    final e = items[idx];
+                    final line = e.order?.lines
+                        .where((x) => x.productId == e.product.id)
+                        .firstOrNull;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${e.product.code} — ${e.product.name}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: ShopColors.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          if (e.order == null || line == null)
+                            const Text(
+                              'فاکتور خریدی برای این کالا ثبت نشده است.',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: ShopColors.inkFaint,
+                              ),
+                            )
+                          else
+                            Text(
+                              'فاکتور ${Fa.digits(e.order!.number)} · ${e.order!.partyName} · '
+                              '${e.order!.date != null ? jalaliShort(e.order!.date!) : '—'} · '
+                              'فی خرید: ${Fa.number(line.price)} ریال · مقدار: ${Fa.number(line.quantity)}',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                color: ShopColors.inkSoft,
+                                height: 1.6,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCalc(bool forCheque, {bool interestOnly = false}) async {
+    final cashWithoutAll = _hasNonCash ? parseNum(_cashAmountCtrl.text) : 0.0;
     final rawRemain = forCheque
-        ? _grandTotal - _cashPart - _instSum
+        ? _goodsTotal - cashWithoutAll - _instSum
         : _grandTotal - _cashPart - _chequeSum;
     final baseRemain = rawRemain < 0 ? 0.0 : rawRemain;
     final result = await showModalBottomSheet<_CalcResult>(
@@ -1138,26 +1312,38 @@ class _OrderFormPageState extends State<OrderFormPage> {
         initialStart:
             _instFirstDue ?? DateTime.now().add(const Duration(days: 30)),
         initialInterval: _instInterval,
+        initialMonths: interestOnly && _cheques.isNotEmpty
+            ? _cheques.length
+            : 3,
+        interestOnly: interestOnly,
       ),
     );
     if (result == null || !mounted) return;
     setState(() {
       if (forCheque) {
-        _cheques.clear();
-        for (var i = 0; i < result.months; i++) {
-          _cheques.add(
-            _ChequeRow()
-              ..amount = formatNumText(result.amounts[i].toStringAsFixed(0))
-              ..dueDate = result.start.add(Duration(days: i * result.interval)),
-          );
+        if (!interestOnly) {
+          _cheques.clear();
+          for (var i = 0; i < result.months; i++) {
+            _cheques.add(
+              _ChequeRow()
+                ..amount = formatNumText(result.amounts[i].toStringAsFixed(0))
+                ..dueDate = result.start.add(
+                  Duration(days: i * result.interval),
+                ),
+            );
+          }
         }
-        _chequeCharge = SaleChequeChargeInput(
-          calculatorBaseAmount: result.baseAmount,
-          calculatorRatePercent: result.ratePercent,
-          calculatorMonths: result.months,
-          adjustmentRatePercent: result.ratePercent,
-          adjustmentPeriodDays: result.interval > 0 ? result.interval : 30,
-        );
+        if (_isSale) {
+          _chequeCharge = SaleChequeChargeInput(
+            calculatorBaseAmount: result.baseAmount,
+            calculatorRatePercent: result.ratePercent,
+            calculatorMonths: result.months,
+            adjustmentRatePercent: result.ratePercent,
+            adjustmentPeriodDays: result.interval > 0 ? result.interval : 30,
+          );
+          _saleChequeIncome = result.interest;
+          _chargeInvoiceBase = _goodsTotal;
+        }
       } else {
         _insts.clear();
         for (var i = 0; i < result.months; i++) {
@@ -1175,7 +1361,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
     });
     _toast(
       forCheque
-          ? '${Fa.number(result.months)} چک ساخته شد — مبلغ نهایی ${Fa.number(result.total)} ریال (شامل ${Fa.number(result.interest)} سود). شماره و بانک هر چک را تکمیل کنید.'
+          ? (interestOnly
+                ? 'تاخیر تادیه چک (${Fa.number(result.interest)} ریال) محاسبه و به مبلغ نهایی فاکتور افزوده شد.'
+                : '${Fa.number(result.months)} چک ساخته شد — مبلغ نهایی ${Fa.number(result.total)} ریال (شامل ${Fa.number(result.interest)} سود). شماره و بانک هر چک را تکمیل کنید.')
           : 'دفترچه ${Fa.number(result.months)} قسطی ساخته شد — مبلغ نهایی ${Fa.number(result.total)} ریال (شامل ${Fa.number(result.interest)} سود).',
     );
   }
@@ -1199,6 +1387,11 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryBtnLabel = _isProforma
+        ? 'ثبت پیش‌فاکتور'
+        : _isEdit
+        ? 'ذخیره تغییرات'
+        : (_isSale ? 'ثبت فاکتور فروش' : 'ثبت فاکتور خرید');
     return Scaffold(
       backgroundColor: ShopColors.bg,
       appBar: AppBar(
@@ -1215,15 +1408,18 @@ class _OrderFormPageState extends State<OrderFormPage> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
               children: [
+                // ۱. اطلاعات فاکتور (سربرگ) — هم در خرید و هم در فروش مثل وب
                 _headerCard(),
+                const SizedBox(height: 10),
+                // ۲. اقلام فاکتور (کالاها و خدمات) — بالاتر از روش پرداخت هم در خرید و هم در فروش
+                _linesCard(),
+                if (_isSale && (_canSeeProfit || _referrerId > 0))
+                  _profitBox(),
+                // ۳. خلاصهٔ فاکتور و روش پرداخت ترکیبی — پایین‌تر از بخش کالا مثل وب
                 if (!_isProforma) ...[
                   const SizedBox(height: 10),
                   _paymentCard(),
                 ],
-                const SizedBox(height: 10),
-                _linesCard(),
-                if (_isSale && (_canSeeProfit || _referrerId > 0))
-                  _profitBox(),
               ],
             ),
       bottomNavigationBar: SafeArea(
@@ -1244,22 +1440,27 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 ),
                 child: const Text('انصراف', style: TextStyle(fontSize: 12)),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _saving ? null : () => _save(printAfter: true),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                    foregroundColor: ShopColors.teal,
-                    side: const BorderSide(color: ShopColors.teal),
-                  ),
-                  icon: const Icon(Icons.print_rounded, size: 17),
-                  label: const Text(
-                    'ثبت و چاپ',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              if (!_isProforma) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _saving ? null : () => _save(printAfter: true),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      foregroundColor: ShopColors.teal,
+                      side: const BorderSide(color: ShopColors.teal),
+                    ),
+                    icon: const Icon(Icons.print_rounded, size: 17),
+                    label: Text(
+                      _isEdit ? 'ذخیره و چاپ' : 'ثبت و چاپ',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
@@ -1279,10 +1480,8 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         )
                       : const Icon(Icons.check_rounded, size: 18),
                   label: Text(
-                    _isProforma
-                        ? 'ثبت پیش‌فاکتور'
-                        : (_isEdit ? 'ذخیره تغییرات' : 'ثبت سند'),
-                    style: const TextStyle(fontSize: 12.5),
+                    primaryBtnLabel,
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
               ),
@@ -1329,6 +1528,51 @@ class _OrderFormPageState extends State<OrderFormPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            _isProforma
+                ? 'اطلاعات پیش‌فاکتور'
+                : (_isSale ? 'اطلاعات فاکتور فروش' : 'اطلاعات فاکتور خرید'),
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+              color: ShopColors.ink,
+            ),
+          ),
+          if (widget.copyTemplate != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: ShopColors.teal.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: ShopColors.teal.withValues(alpha: 0.35),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.copy_all_rounded,
+                    size: 15,
+                    color: ShopColors.teal,
+                  ),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'این فاکتور جدید است؛ اقلام را بازبینی کنید. اطلاعات پرداخت و گردش فاکتور قبلی کپی نشده است.',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: ShopColors.inkSoft,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
           _label('انبار', required: true),
           DropdownButtonFormField<int>(
             initialValue: _warehouseId == 0 ? null : _warehouseId,
@@ -1477,6 +1721,22 @@ class _OrderFormPageState extends State<OrderFormPage> {
   }
 
   Widget _paymentCard() {
+    final partyName =
+        _parties.where((p) => p.id == _partyId).map((p) => p.name).firstOrNull ??
+        '—';
+    final whName =
+        _warehouses
+            .where((w) => w.id == _warehouseId)
+            .map((w) => w.name)
+            .firstOrNull ??
+        '—';
+    final instLabel = _isSale ? 'اقساط' : 'اعلامیه پرداخت';
+    final instTabLabel = _isSale ? 'اقساطی' : 'اعلامیه پرداخت';
+    final remainLabel = _finalRemaining > 1
+        ? (_useCredit ? 'مانده نسیه' : 'باقی‌مانده')
+        : _finalRemaining < -1
+        ? 'مازاد پرداخت'
+        : 'باقی‌مانده';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1487,6 +1747,87 @@ class _OrderFormPageState extends State<OrderFormPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ---------- خلاصهٔ فاکتور و پرداخت (هم‌تراز با purchase-summary وب) ----------
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: ShopColors.bg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ShopColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _summaryMeta(
+                        _isSale ? 'مشتری' : 'تأمین‌کننده',
+                        partyName,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: _summaryMeta('انبار', whName)),
+                    const SizedBox(width: 8),
+                    _summaryMeta(
+                      'اقلام',
+                      '${Fa.number(_validLines.length)} سطر',
+                    ),
+                  ],
+                ),
+                const Divider(height: 12, color: ShopColors.line),
+                _sumLine(
+                  'مبلغ نهایی فاکتور',
+                  '${Fa.number(_grandTotal)} ریال',
+                  ShopColors.seed,
+                  bold: true,
+                ),
+                if (_hasChequeIncomeArticle)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'کالا با ارزش افزوده ${Fa.number(_goodsTotal)} + تاخیر تادیه چک ${Fa.number(_saleChequeIncome)} ریال',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: ShopColors.inkSoft,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                _sumLine('نقد', Fa.number(_cashPart), ShopColors.ok),
+                _sumLine('چک', Fa.number(_chequeSum), ShopColors.ink),
+                _sumLine(instLabel, Fa.number(_instSum), ShopColors.ink),
+                _sumLine(
+                  remainLabel,
+                  Fa.number(_finalRemaining.abs()),
+                  _finalRemaining < -1
+                      ? ShopColors.warn
+                      : _finalRemaining > 1
+                      ? ShopColors.danger
+                      : ShopColors.ok,
+                  bold: true,
+                ),
+                if (_finalRemaining.abs() > 1) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _finalRemaining < -1
+                        ? 'جمع پرداخت‌ها بیشتر از مبلغ فاکتور است.'
+                        : _useCredit
+                        ? 'مانده فاکتور به نسیه می‌رود؛ تاریخ سررسید را بررسی کنید.'
+                        : 'برای مانده فاکتور، پرداخت دیگری اضافه کنید یا نسیه و سررسید آن را مشخص کنید.',
+                    style: TextStyle(
+                      fontSize: 9.8,
+                      color: _finalRemaining < -1
+                          ? ShopColors.warn
+                          : ShopColors.danger,
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           const Text(
             'روش پرداخت (ترکیبی)',
             style: TextStyle(
@@ -1496,9 +1837,9 @@ class _OrderFormPageState extends State<OrderFormPage> {
             ),
           ),
           const SizedBox(height: 3),
-          const Text(
-            'می‌توانید چند جزء را هم‌زمان فعال کنید (نقد + چک + اقساط + نسیه)؛ باقی‌ماندهٔ هر سطر بر اساس سطرهای قبلی و مبلغ نقدی محاسبه می‌شود.',
-            style: TextStyle(
+          Text(
+            'می‌توانید چند جزء را هم‌زمان فعال کنید (نقد + چک + $instLabel + نسیه)؛ باقی‌ماندهٔ هر سطر بر اساس سطرهای قبلی و مبلغ نقدی محاسبه می‌شود.',
+            style: const TextStyle(
               fontSize: 9.5,
               color: ShopColors.inkFaint,
               height: 1.7,
@@ -1510,43 +1851,25 @@ class _OrderFormPageState extends State<OrderFormPage> {
             runSpacing: 6,
             children: [
               _payTab('نقدی', Icons.payments_rounded, _useCash, _toggleCash),
-              _payTab('چک', Icons.account_balance_rounded, _useCheque, _toggleCheque),
-              _payTab('اقساطی', Icons.event_note_rounded, _useInst, _toggleInst),
-              _payTab('نسیه', Icons.hourglass_bottom_rounded, _useCredit, _toggleCredit),
+              _payTab(
+                'چک',
+                Icons.account_balance_rounded,
+                _useCheque,
+                _toggleCheque,
+              ),
+              _payTab(
+                instTabLabel,
+                Icons.event_note_rounded,
+                _useInst,
+                _toggleInst,
+              ),
+              _payTab(
+                'نسیه',
+                Icons.hourglass_bottom_rounded,
+                _useCredit,
+                _toggleCredit,
+              ),
             ],
-          ),
-          const SizedBox(height: 10),
-          // ---------- خلاصهٔ پرداخت ----------
-          Container(
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              color: ShopColors.bg,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Column(
-              children: [
-                _sumLine(
-                  'مبلغ ${_isSale ? 'فاکتور' : 'سند'}',
-                  Fa.number(_grandTotal),
-                  ShopColors.seed,
-                ),
-                _sumLine('نقد', Fa.number(_cashPart), ShopColors.ok),
-                _sumLine('چک', Fa.number(_chequeSum), ShopColors.ink),
-                _sumLine('اقساط', Fa.number(_instSum), ShopColors.ink),
-                _sumLine(
-                  _finalRemaining < -1
-                      ? 'مازاد (سود مدت‌دار)'
-                      : 'باقی‌مانده',
-                  Fa.number(_finalRemaining.abs()),
-                  _finalRemaining < -1
-                      ? ShopColors.warn
-                      : _finalRemaining > 1
-                      ? ShopColors.danger
-                      : ShopColors.ok,
-                  bold: true,
-                ),
-              ],
-            ),
           ),
           // ---------- جزء نقدی ----------
           if (_useCash) ...[
@@ -1579,9 +1902,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
               ),
               const SizedBox(height: 8),
             ],
-            _label(
-              'نوع ${_isSale ? 'دریافت' : 'پرداخت'} نقدی',
-            ),
+            _label('نوع ${_isSale ? 'دریافت' : 'پرداخت'} نقدی'),
             DropdownButtonFormField<String>(
               initialValue: _cashType,
               isExpanded: true,
@@ -1603,25 +1924,6 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 }
               }),
             ),
-            if (_cashKind == CashKind.cardTransfer) ...[
-              const SizedBox(height: 8),
-              _label('کد رهگیری کارت به کارت', required: _isSale),
-              TextField(
-                controller: _cashTrackingCtrl,
-                textDirection: TextDirection.ltr,
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: _isSale
-                      ? 'شماره پیگیری واریز مشتری (الزامی)'
-                      : 'شماره پیگیری واریز (اختیاری)',
-                  hintStyle: const TextStyle(
-                    fontSize: 11,
-                    color: ShopColors.inkFaint,
-                  ),
-                ),
-                style: const TextStyle(fontSize: 12.5),
-              ),
-            ],
             const SizedBox(height: 8),
             _label('بانک/صندوق'),
             Row(
@@ -1631,9 +1933,11 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     initialValue: _trsAccountId,
                     isExpanded: true,
                     decoration: const InputDecoration(isDense: true),
-                    hint: const Text(
-                      '— انتخاب بانک —',
-                      style: TextStyle(fontSize: 11.5),
+                    hint: Text(
+                      _cashKind == CashKind.cash
+                          ? '— انتخاب صندوق —'
+                          : '— انتخاب بانک —',
+                      style: const TextStyle(fontSize: 11.5),
                     ),
                     style: const TextStyle(
                       fontSize: 12,
@@ -1661,14 +1965,36 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     foregroundColor: ShopColors.seed,
                     side: const BorderSide(color: ShopColors.line),
                   ),
-                  child: const Text('تعریف بانک', style: TextStyle(fontSize: 11)),
+                  child: Text(
+                    _cashKind == CashKind.cash ? 'تعریف صندوق' : 'تعریف بانک',
+                    style: const TextStyle(fontSize: 11),
+                  ),
                 ),
               ],
             ),
+            if (_cashKind == CashKind.cardTransfer) ...[
+              const SizedBox(height: 8),
+              _label('شماره پیگیری پرداخت', required: _isSale),
+              TextField(
+                controller: _cashTrackingCtrl,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: _isSale
+                      ? 'شماره پیگیری پرداخت (الزامی)'
+                      : 'شماره پیگیری پرداخت (اختیاری)',
+                  hintStyle: const TextStyle(
+                    fontSize: 11,
+                    color: ShopColors.inkFaint,
+                  ),
+                ),
+                style: const TextStyle(fontSize: 12.5),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               _hasNonCash
-                  ? 'باقی‌مانده پس از نقد: ${Fa.number(_remainingAfterCash)}'
+                  ? 'باقی‌مانده پس از نقد: ${Fa.number(_remainingAfterCash)} ریال'
                   : 'تمام مبلغ نقدی است.',
               style: const TextStyle(fontSize: 10, color: ShopColors.inkFaint),
             ),
@@ -1676,46 +2002,154 @@ class _OrderFormPageState extends State<OrderFormPage> {
           // ---------- جزء چک ----------
           if (_useCheque) ...[
             const SizedBox(height: 10),
-            Row(
+            Text(
+              _isSale
+                  ? 'چک‌های دریافتی از مشتری'
+                  : 'چک‌های پرداختی به تأمین‌کننده',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: ShopColors.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
               children: [
-                Expanded(
-                  child: Text(
-                    _isSale
-                        ? 'چک‌های دریافتی از مشتری'
-                        : 'چک‌های پرداختی به تأمین‌کننده',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: ShopColors.inkSoft,
+                if (_isSale)
+                  OutlinedButton.icon(
+                    onPressed: () => _openCalc(true, interestOnly: true),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                    ),
+                    icon: const Icon(Icons.percent_rounded, size: 14),
+                    label: const Text(
+                      'محاسبه سود چک‌های دستی',
+                      style: TextStyle(fontSize: 10.5),
                     ),
                   ),
-                ),
-                TextButton.icon(
+                OutlinedButton.icon(
                   onPressed: () => _openCalc(true),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
                   icon: const Icon(Icons.calculate_rounded, size: 14),
                   label: const Text(
                     'محاسبه اقساطِ چک',
                     style: TextStyle(fontSize: 10.5),
                   ),
                 ),
-                TextButton.icon(
+                OutlinedButton.icon(
                   onPressed: () => setState(_addCheque),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
                   icon: const Icon(Icons.add_rounded, size: 14),
-                  label: const Text('افزودن چک', style: TextStyle(fontSize: 10.5)),
+                  label: const Text(
+                    'افزودن چک',
+                    style: TextStyle(fontSize: 10.5),
+                  ),
                 ),
               ],
             ),
             if (_cheques.isEmpty)
-              const Text(
-                'هنوز چکی اضافه نشده است؛ با «افزودن چک» ردیف جدید با مبلغ باقی‌مانده ساخته می‌شود.',
-                style: TextStyle(fontSize: 10, color: ShopColors.inkFaint),
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'هنوز چکی اضافه نشده است؛ با «افزودن چک» ردیف جدید با مبلغ باقی‌مانده ساخته می‌شود.',
+                  style: TextStyle(fontSize: 10, color: ShopColors.inkFaint),
+                ),
               ),
-            for (var i = 0; i < _cheques.length; i++)
-              _chequeRow(i),
+            for (var i = 0; i < _cheques.length; i++) _chequeRow(i),
+            if (_hasChequeIncomeArticle) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: ShopColors.bg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: ShopColors.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'تاخیر تادیه چک',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: ShopColors.ink,
+                            ),
+                          ),
+                        ),
+                        if (!_isEdit && _chequeCharge != null)
+                          TextButton(
+                            onPressed: _removeSaleChequeCharge,
+                            style: TextButton.styleFrom(
+                              foregroundColor: ShopColors.danger,
+                              minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'حذف ردیف سود',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'بدهکار مشتری: ${Fa.number(_saleChequeIncome)} ریال · بستانکار فروشگاه: ${Fa.number(_saleChequeIncome)} ریال',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: ShopColors.inkSoft,
+                      ),
+                    ),
+                    if (_chequeCharge != null &&
+                        (_chargeInvoiceBase - _goodsTotal).abs() > 1)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          'مبلغ کالا تغییر کرده است؛ پیش از ثبت، تاخیر تادیه چک را دوباره محاسبه کنید.',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: ShopColors.danger,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ],
-          // ---------- جزء اقساط ----------
+          // ---------- جزء اقساط / اعلامیه پرداخت ----------
           if (_useInst) ...[
             const SizedBox(height: 10),
+            Text(
+              _isSale ? 'دفترچه اقساط' : 'اعلامیه پرداخت',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: ShopColors.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
@@ -1817,6 +2251,11 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            const Text(
+              'رند اقساط: ۱۰٬۰۰۰ ریال؛ جمع دقیق حفظ می‌شود.',
+              style: TextStyle(fontSize: 9.8, color: ShopColors.inkFaint),
+            ),
             const SizedBox(height: 6),
             if (_insts.isEmpty)
               const Text(
@@ -1826,7 +2265,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
             else ...[
               for (var i = 0; i < _insts.length; i++) _instRow(i),
               Text(
-                'جمع اقساط: ${Fa.number(_instSum)} — باقی‌ماندهٔ تجمعی: ${Fa.number(_finalRemaining)}',
+                'جمع $instLabel: ${Fa.number(_instSum)} — باقی‌ماندهٔ تجمعی: ${Fa.number(_finalRemaining)}',
                 style: const TextStyle(fontSize: 10, color: ShopColors.inkSoft),
               ),
             ],
@@ -1896,6 +2335,27 @@ class _OrderFormPageState extends State<OrderFormPage> {
       ),
     );
   }
+
+  Widget _summaryMeta(String k, String v) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        k,
+        style: const TextStyle(fontSize: 9.5, color: ShopColors.inkFaint),
+      ),
+      const SizedBox(height: 1),
+      Text(
+        v,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: ShopColors.ink,
+        ),
+      ),
+    ],
+  );
 
   Widget _chequeRow(int i) {
     final c = _cheques[i];
@@ -2294,6 +2754,15 @@ class _OrderFormPageState extends State<OrderFormPage> {
                   ),
                 ),
               ),
+              if (_isSale && _canSeeProfit)
+                TextButton.icon(
+                  onPressed: _showAllLastPurchases,
+                  icon: const Icon(Icons.history_rounded, size: 15),
+                  label: const Text(
+                    'آخرین خرید کالاها',
+                    style: TextStyle(fontSize: 10.8),
+                  ),
+                ),
               TextButton.icon(
                 onPressed: () => setState(() => _lines.add(_Line())),
                 icon: const Icon(Icons.add_rounded, size: 15),
@@ -2304,6 +2773,14 @@ class _OrderFormPageState extends State<OrderFormPage> {
               ),
             ],
           ),
+          if (_isSale)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 6),
+              child: Text(
+                'تغییر تاریخ، قیمت سطرهای موجود را خودکار عوض نمی‌کند.',
+                style: TextStyle(fontSize: 9.8, color: ShopColors.inkFaint),
+              ),
+            ),
           // نوار افزودن سریع با بارکد یا کد کالا
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -2364,8 +2841,10 @@ class _OrderFormPageState extends State<OrderFormPage> {
                   ),
                 const Divider(height: 10, color: ShopColors.line),
                 _sumLine(
-                  _isProforma ? 'مبلغ نهایی پیش‌فاکتور' : 'مبلغ نهایی فاکتور',
-                  '${Fa.number(_grandTotal)} ریال',
+                  _isProforma
+                      ? 'مبلغ نهایی پیش‌فاکتور'
+                      : 'مبلغ کالا با ارزش افزوده',
+                  '${Fa.number(_goodsTotal)} ریال',
                   ShopColors.seed,
                   bold: true,
                 ),
@@ -2571,7 +3050,33 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _label(l.discountIsAmount ? 'تخفیف (ریال)' : 'تخفیف (٪)'),
+                    GestureDetector(
+                      onTap: () => _toggleDiscountMode(l),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          children: [
+                            Text(
+                              l.discountIsAmount
+                                  ? 'تخفیف (ریال)'
+                                  : 'تخفیف (٪)',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: ShopColors.seed,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 12,
+                              color: ShopColors.seed,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     TextField(
                       controller: TextEditingController(text: l.discount)
                         ..selection = TextSelection.collapsed(
@@ -2630,7 +3135,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                 const Expanded(
                   flex: 2,
                   child: Text(
-                    'بروزرسانی فی فروش کالا در کاتالوگ (اختیاری):',
+                    'قیمت فروش جدید (اختیاری · ریال):',
                     style: TextStyle(fontSize: 10.5, color: ShopColors.inkSoft),
                   ),
                 ),
@@ -2646,7 +3151,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     onChanged: (v) => l.newSalePrice = formatNumText(v),
                     decoration: const InputDecoration(
                       isDense: true,
-                      hintText: 'فی فروش جدید',
+                      hintText: 'قیمت فروش جدید',
                       hintStyle: TextStyle(fontSize: 10.5),
                     ),
                     style: const TextStyle(fontSize: 12),
@@ -2661,31 +3166,48 @@ class _OrderFormPageState extends State<OrderFormPage> {
             runSpacing: 2,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(
-                'مبلغ کل: ${Fa.number(l.total)} ریال',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: ShopColors.seed,
-                ),
-              ),
-              if (l.discountAmount > 0)
+              if (l.gross > 0 && (l.discountAmount > 0 || l.vatAmount > 0))
                 Text(
-                  'تخفیف ${Fa.number(l.discountAmount)}',
+                  'ناخالص: ${Fa.number(l.gross)}',
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    color: ShopColors.inkSoft,
+                  ),
+                ),
+              if (l.discountAmount > 0) ...[
+                Text(
+                  'تخفیف: ${Fa.number(l.discountAmount)}',
                   style: const TextStyle(
                     fontSize: 9.5,
                     color: ShopColors.danger,
                   ),
                 ),
+                Text(
+                  'پس از تخفیف: ${Fa.number(l.afterDiscount)}',
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    color: ShopColors.inkSoft,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
               if (l.vatAmount > 0)
                 Text(
-                  'ارزش افزوده ${Fa.number(l.vatAmount)}',
+                  'ارزش افزوده: ${Fa.number(l.vatAmount)}',
                   style: const TextStyle(
                     fontSize: 9.5,
                     color: ShopColors.teal,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+              Text(
+                'کل پس از ارزش افزوده: ${Fa.number(l.total)} ریال',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: ShopColors.seed,
+                ),
+              ),
               if (_isSale && _canSeeProfit && l.productId > 0)
                 Text(
                   'سود ${Fa.number(_lineProfit(l))}',
@@ -2947,11 +3469,15 @@ class _CalcSheet extends StatefulWidget {
     required this.initialBase,
     required this.initialStart,
     required this.initialInterval,
+    this.initialMonths = 3,
+    this.interestOnly = false,
   });
 
   final double initialBase;
   final DateTime initialStart;
   final int initialInterval;
+  final int initialMonths;
+  final bool interestOnly;
 
   @override
   State<_CalcSheet> createState() => _CalcSheetState();
@@ -2961,7 +3487,7 @@ class _CalcSheetState extends State<_CalcSheet> {
   late final _base =
       TextEditingController(text: formatNumText(widget.initialBase.toStringAsFixed(0)));
   final _rate = TextEditingController(text: '');
-  late int _months = 3;
+  late int _months = widget.initialMonths < 1 ? 3 : widget.initialMonths;
   late int _interval = widget.initialInterval;
   late DateTime _start = widget.initialStart;
 
@@ -2976,7 +3502,13 @@ class _CalcSheetState extends State<_CalcSheet> {
   double get _rateVal => parseNum(_rate.text);
   double get _interest => (_baseVal * _rateVal / 100 * _months).roundToDouble();
   double get _total => _baseVal + _interest;
-  double get _perMonth => _months > 0 ? (_total / _months).floorToDouble() : 0;
+  double get _perMonth {
+    if (_months <= 0) return 0;
+    const roundUnit = 10000.0;
+    return _total >= roundUnit * _months
+        ? (_total / _months / roundUnit).floorToDouble() * roundUnit
+        : (_total / _months).floorToDouble();
+  }
 
   void _apply() {
     if (_baseVal <= 0 || _months < 1) return;
@@ -3016,10 +3548,15 @@ class _CalcSheetState extends State<_CalcSheet> {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'محاسبه اقساط با سود',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                    widget.interestOnly
+                        ? 'محاسبه سود چک‌های دستی'
+                        : 'محاسبه اقساط با سود',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -3235,9 +3772,14 @@ class _CalcSheetState extends State<_CalcSheet> {
 //  تعریف سریع بانک/صندوق — آینهٔ QuickBankModal وب
 // ============================================================
 class QuickBankSheet extends StatefulWidget {
-  const QuickBankSheet({super.key, required this.repo});
+  const QuickBankSheet({
+    super.key,
+    required this.repo,
+    this.initialKind = AccountKind.bank,
+  });
 
   final ShopRepository repo;
+  final int initialKind;
 
   @override
   State<QuickBankSheet> createState() => _QuickBankSheetState();
@@ -3280,7 +3822,7 @@ class _QuickBankSheetState extends State<QuickBankSheet> {
   final _opening = TextEditingController(text: '0');
   final _description = TextEditingController();
 
-  int _kind = AccountKind.bank;
+  late int _kind = widget.initialKind;
   bool _isDefault = false;
   bool _saving = false;
 

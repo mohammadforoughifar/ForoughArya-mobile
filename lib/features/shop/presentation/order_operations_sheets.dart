@@ -107,13 +107,14 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
   }
 
   Future<void> _submitReceipt() async {
+    final isSale = widget.order.isSale;
     final amount = parseNum(_amountCtrl.text);
     if (amount <= 0) {
-      _toast('مبلغ دریافتی را وارد کنید.');
+      _toast('مبلغ ${isSale ? 'دریافتی' : 'پرداختی'} را وارد کنید.');
       return;
     }
     if ((_accountId ?? 0) <= 0) {
-      _toast('حساب صندوق/بانک مقصد را انتخاب کنید.');
+      _toast('حساب صندوق/بانک را انتخاب کنید.');
       return;
     }
     setState(() => _busy = true);
@@ -125,7 +126,7 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
         date: _date,
       );
       _changed = true;
-      _toast('دریافت نسیه ثبت شد.', ok: true);
+      _toast('${isSale ? 'دریافت' : 'پرداخت'} نسیه ثبت شد.', ok: true);
       await _load();
     } catch (e) {
       _toast(e.toString());
@@ -249,7 +250,9 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                       child: Column(
                         children: [
                           _kv(
-                            'مانده نسیه قابل دریافت',
+                            widget.order.isSale
+                                ? 'مانده نسیه قابل دریافت'
+                                : 'مانده نسیه قابل پرداخت',
                             '${Fa.number(_state.outstanding)} ریال',
                             bold: true,
                             color: _state.outstanding > 0
@@ -263,7 +266,9 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                             ),
                           if (_state.reservedForInstallments > 0)
                             _kv(
-                              'رزروشده بابت اقساط',
+                              widget.order.isSale
+                                  ? 'رزروشده بابت اقساط'
+                                  : 'رزروشده بابت اعلامیه پرداخت',
                               '${Fa.number(_state.reservedForInstallments)} ریال',
                             ),
                           if (_state.availableCredit > 0)
@@ -280,9 +285,11 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                         !_state.isCancelled &&
                         _state.outstanding > 0) ...[
                       const SizedBox(height: 12),
-                      const Text(
-                        'ثبت دریافت جدید روی این فاکتور',
-                        style: TextStyle(
+                      Text(
+                        widget.order.isSale
+                            ? 'ثبت دریافت جدید روی این فاکتور'
+                            : 'ثبت پرداخت جدید روی این فاکتور',
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                         ),
@@ -303,9 +310,11 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                             );
                           }
                         },
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          labelText: 'مبلغ دریافتی (ریال)',
+                          labelText: widget.order.isSale
+                              ? 'مبلغ دریافتی (ریال)'
+                              : 'مبلغ پرداختی (ریال)',
                         ),
                         style: const TextStyle(fontSize: 12.5),
                       ),
@@ -313,9 +322,11 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                       DropdownButtonFormField<int>(
                         initialValue: _accountId,
                         isExpanded: true,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          labelText: 'صندوق / بانک مقصد',
+                          labelText: widget.order.isSale
+                              ? 'صندوق / بانک مقصد'
+                              : 'صندوق / بانک مبدأ',
                         ),
                         items: [
                           for (final a in _accounts)
@@ -335,7 +346,9 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                           final d = await showJalaliDatePicker(
                             context,
                             initial: _date,
-                            title: 'تاریخ دریافت',
+                            title: widget.order.isSale
+                                ? 'تاریخ دریافت'
+                                : 'تاریخ پرداخت',
                           );
                           if (d != null && mounted) setState(() => _date = d);
                         },
@@ -355,7 +368,7 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                               const Icon(Icons.event_rounded, size: 16),
                               const SizedBox(width: 6),
                               Text(
-                                'تاریخ دریافت: ${jalaliShort(_date)}',
+                                'تاریخ ${widget.order.isSale ? 'دریافت' : 'پرداخت'}: ${jalaliShort(_date)}',
                                 style: const TextStyle(fontSize: 12),
                               ),
                             ],
@@ -370,13 +383,17 @@ class _OrderCreditSheetState extends State<_OrderCreditSheet> {
                           minimumSize: const Size.fromHeight(44),
                         ),
                         icon: const Icon(Icons.add_task_rounded, size: 18),
-                        label: const Text('ثبت دریافت'),
+                        label: Text(
+                          widget.order.isSale ? 'ثبت دریافت' : 'ثبت پرداخت',
+                        ),
                       ),
                     ],
                     const SizedBox(height: 12),
-                    const Text(
-                      'سوابق دریافت‌های ثبت‌شده',
-                      style: TextStyle(
+                    Text(
+                      widget.order.isSale
+                          ? 'سوابق دریافت‌های ثبت‌شده'
+                          : 'سوابق پرداخت‌های ثبت‌شده',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),

@@ -1008,15 +1008,13 @@ class _OrderCard extends StatelessWidget {
               _act('مشاهده', Icons.visibility_outlined, ShopColors.seed, onView),
               const SizedBox(width: 5),
               _act('چاپ', Icons.print_outlined, ShopColors.teal, onPrint),
-              if (!isPurchase) ...[
-                const SizedBox(width: 5),
-                _act(
-                  'نسیه',
-                  Icons.account_balance_wallet_outlined,
-                  ShopColors.warn,
-                  onCreditLedger,
-                ),
-              ],
+              const SizedBox(width: 5),
+              _act(
+                'نسیه',
+                Icons.account_balance_wallet_outlined,
+                ShopColors.warn,
+                onCreditLedger,
+              ),
               const SizedBox(width: 4),
               PopupMenuButton<String>(
                 tooltip: 'سایر عملیات سند',
