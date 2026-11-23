@@ -243,16 +243,110 @@ class OfficeAutomationRepository {
         .data,
   );
 
-  /// کارتابل دبیرخانه
+  /// کارتابل دبیرخانه با پشتیبانی کامل از ۱۲ فیلتر پیشرفتهٔ وب (`OutgoingDabirkhane.razor`)
   Future<Paged<LetterListItem>> dabirkhane({
     int page = 1,
     int pageSize = 20,
     String? search,
+    bool? registeredOnly,
+    bool? archivedOnly,
+    String? sendMethod,
+    int? creatorUserId,
+    int? companyId,
+    String? receiverOrganization,
+    String? mahramanegi,
+    String? foriat,
+    bool? hasAttachment,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async => _list(
-    (await _api.get(outgoingRoot + '/dabirkhane',
-            query: _page(page: page, pageSize: pageSize, search: search)))
+    (await _api.get(
+          outgoingRoot + '/dabirkhane',
+          query: {
+            ..._page(page: page, pageSize: pageSize, search: search),
+            if (registeredOnly != null) 'registeredOnly': registeredOnly,
+            if (archivedOnly != null) 'archivedOnly': archivedOnly,
+            if (sendMethod != null && sendMethod.trim().isNotEmpty)
+              'sendMethod': sendMethod.trim(),
+            if (creatorUserId != null && creatorUserId > 0)
+              'creatorUserId': creatorUserId,
+            if (companyId != null && companyId > 0) 'companyId': companyId,
+            if (receiverOrganization != null &&
+                receiverOrganization.trim().isNotEmpty)
+              'receiverOrganization': receiverOrganization.trim(),
+            if (mahramanegi != null && mahramanegi.trim().isNotEmpty)
+              'mahramanegi': mahramanegi.trim(),
+            if (foriat != null && foriat.trim().isNotEmpty)
+              'foriat': foriat.trim(),
+            if (hasAttachment != null) 'hasAttachment': hasAttachment,
+            if (fromDate != null) 'fromDate': fromDate.toIso8601String(),
+            if (toDate != null) 'toDate': toDate.toIso8601String(),
+          },
+        ))
         .data,
   );
+
+  /// آمار زندهٔ دبیرخانه یکپارچه نامه‌های صادره (`GET /api/outgoing-letters/dabirkhane/stats`)
+  Future<DabirkhaneStats> dabirkhaneStats() async {
+    final r = await _api.get('$outgoingRoot/dabirkhane/stats');
+    return DabirkhaneStats.fromJson(asMap(r.data));
+  }
+
+  /// فهرست ثبت‌کنندگان نامه‌های صادره برای فیلتر پیشرفته دبیرخانه
+  Future<List<LetterRecipient>> dabirkhaneCreators() async => _recipients(
+    (await _api.get('$outgoingRoot/dabirkhane/creators', query: {'take': 500}))
+        .data,
+  );
+
+  /// درخت بایگانی اختصاصی دبیرخانه (`GET /api/outgoing-letters/dabirkhane/bayegani/tree`)
+  Future<List<ArchiveNode>> dabirkhaneArchiveTree() async {
+    final r = await _api.get(
+      '$outgoingRoot/dabirkhane/bayegani/tree',
+      query: {'take': 2000},
+    );
+    final raw = r.data is List ? r.data : (asMap(r.data)['items'] ?? []);
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((e) => ArchiveNode.fromJson(asMap(e))).toList();
+  }
+
+  Future<void> addDabirkhaneFolder(
+    String title, {
+    bool sub = false,
+    int parentId = 0,
+  }) => _api.post(
+    '$outgoingRoot/dabirkhane/bayegani/${sub ? 'sub-category' : 'main-category'}',
+    {'title': title, 'parentId': parentId, 'typeBayegani': 2},
+  );
+
+  Future<void> renameDabirkhaneFolder(int id, String title) =>
+      _api.put('$outgoingRoot/dabirkhane/bayegani/folder/$id', {
+        'title': title,
+        'parentId': 0,
+        'typeBayegani': 2,
+      });
+
+  Future<void> deleteDabirkhaneFolder(int id) =>
+      _api.delete('$outgoingRoot/dabirkhane/bayegani/$id');
+
+  Future<void> archiveDabirkhaneLetters({
+    required int folderId,
+    required List<int> letterIds,
+  }) => _api.post('$outgoingRoot/dabirkhane/bayegani/letters', {
+    'folderId': folderId,
+    'letterIds': letterIds,
+    'outgoingLetterIds': letterIds,
+  });
+
+  Future<void> unarchiveDabirkhaneLetter(int letterId) =>
+      _api.delete('$outgoingRoot/dabirkhane/bayegani/letter/$letterId');
+
+  Future<void> moveDabirkhaneLetter({
+    required int letterId,
+    required int targetFolderId,
+  }) => _api.post('$outgoingRoot/dabirkhane/bayegani/move-letter', {
+    'letterId': letterId,
+    'targetFolderId': targetFolderId,
+  });
 
   Future<OutgoingLetterDetail> outgoingDetail(int id) async =>
       OutgoingLetterDetail.fromJson(asMap((await _api.get('$outgoingRoot/$id')).data));
@@ -386,6 +480,25 @@ class OfficeAutomationRepository {
     return raw.whereType<Map>().map((e) => asMap(e)).toList();
   }
 
+  /// لیست تایپ‌شدهٔ شماره‌های رزرو اندیکاتور (`GET /api/incoming-letters/reservations`)
+  Future<List<LetterNumberReservation>> listReservations({
+    int typeForm = 3,
+  }) async {
+    final raw = await reservations(typeForm);
+    return raw.map(LetterNumberReservation.fromJson).toList();
+  }
+
+  /// رزرو دسته‌ای شماره اندیکاتور (`POST /api/incoming-letters/reserve-number`)
+  Future<void> reserveNumbers({
+    int typeForm = 3,
+    int count = 1,
+  }) async {
+    await _api.post('$incomingRoot/reserve-number', {
+      'typeForm': typeForm,
+      'count': count.clamp(1, 20),
+    });
+  }
+
   // ------------------------------------------------------------
   //  ارجاع و گردش — مشترک هر سه نوع نامه
   //  مسیرها یکسان‌اند؛ فقط ریشه فرق می‌کند.
@@ -481,6 +594,99 @@ class OfficeAutomationRepository {
     if (raw is! List) return const [];
     return raw.whereType<Map>().map((e) => Amalgar.fromJson(asMap(e))).toList();
   }
+
+  /// ذخیره یا ویرایش گروه گیرندگان نامه (`POST /api/letters/groups`)
+  Future<void> saveGroup({
+    int groupId = 0,
+    required String nameGroup,
+    required List<int> memberUserIds,
+  }) => _api.post('$innerRoot/groups', {
+    'groupId': groupId,
+    'nameGroup': nameGroup.trim(),
+    'memberUserIds': memberUserIds,
+  });
+
+  /// حذف گروه گیرندگان نامه (`DELETE /api/letters/groups/{id}`)
+  Future<void> deleteGroup(int groupId) =>
+      _api.delete('$innerRoot/groups/$groupId');
+
+  /// ایجاد عنوان/عملگر جدید ارجاع (`POST {root}/amalgars`)
+  Future<void> createAmalgar(
+    LetterKind kind, {
+    required String title,
+    bool requiresSign = false,
+  }) => _api.post('${_rootOf(kind)}/amalgars', {
+    'title': title.trim(),
+    'taeedEmza': requiresSign ? 'امضا' : '',
+  });
+
+  /// دریافت ساختار شماره نامه / اندیکاتور (`GET /api/letter-structures`)
+  Future<List<LetterStructureItem>> getLetterStructures() async {
+    final r = await _api.get('/api/letter-structures');
+    final j = asMap(r.data);
+    final raw = pick(j, ['items', 'Items']) ?? r.data;
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => LetterStructureItem.fromJson(asMap(e)))
+        .toList();
+  }
+
+  /// ذخیره ساختار شماره نامه (`PUT /api/letter-structures/{typeForm}`)
+  Future<LetterStructureItem> updateLetterStructure(
+    int typeForm,
+    List<String> parts,
+  ) async {
+    final r = await _api.put('/api/letter-structures/$typeForm', {
+      'parts': parts,
+    });
+    return LetterStructureItem.fromJson(asMap(r.data));
+  }
+
+  // ------------------------------------------------------------
+  //  بایگانی شخصی من — `/api/archive/*` (`MyArchive.razor`)
+  // ------------------------------------------------------------
+
+  Future<List<PersonalArchiveFolder>> personalArchiveFolders() async {
+    final r = await _api.get('/api/archive/folders');
+    final raw = r.data is List ? r.data : (asMap(r.data)['items'] ?? []);
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => PersonalArchiveFolder.fromJson(asMap(e)))
+        .toList();
+  }
+
+  Future<void> createPersonalArchiveFolder(
+    String title, {
+    int? parentId,
+  }) => _api.post('/api/archive/folders', {
+    'title': title.trim(),
+    'name': title.trim(),
+    if (parentId != null) 'parentId': parentId,
+  });
+
+  Future<void> renamePersonalArchiveFolder(int id, String title) =>
+      _api.put('/api/archive/folders/$id', {
+        'title': title.trim(),
+        'name': title.trim(),
+      });
+
+  Future<void> deletePersonalArchiveFolder(int id) =>
+      _api.delete('/api/archive/folders/$id');
+
+  Future<List<PersonalArchiveItem>> personalArchiveItems(int folderId) async {
+    final r = await _api.get('/api/archive/items/$folderId');
+    final raw = r.data is List ? r.data : (asMap(r.data)['items'] ?? []);
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => PersonalArchiveItem.fromJson(asMap(e)))
+        .toList();
+  }
+
+  Future<void> deletePersonalArchiveItem(int id) =>
+      _api.delete('/api/archive/items/$id');
 
   // ------------------------------------------------------------
   //  پیوست‌ها — هر سه نوع

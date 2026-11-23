@@ -1,7 +1,12 @@
 // ============================================================
-//  صفحهٔ اصلی ماژول اتوماسیون اداری
-//  داشبورد گرادیانی + کارتابل‌های داخلی/صادره/وارده + دبیرخانه + امضا
-//  طراحی هم‌زبان با ماژول دستور کار (office_style.dart)
+//  میز فرماندهی «اتوماسیون اداری و دبیرخانه یکپارچه توکا»
+//  طراحی اجرایی فوق‌حرفه‌ای هم‌تراز با وب (`NavMenu.razor` + `Pages/Office/*`)
+//  و معماری چندتب زنده (`IndexedStack`) + نمای دوگانهٔ بنتو / پوشه‌ای:
+//    • هدر یکپارچهٔ یاقوتی-نیلی بدون تکرار اپ‌بار در تب‌های توکار
+//    • تب‌های زنده با حفظ وضعیت: میز فرماندهی | داخلی | صادره | وارده | دبیرخانه | ایمیل | ایمیل شخصی
+//    • نوار نبض زندهٔ کارتابل (خوانده‌نشده، نوبت امضا، صف ثبت دبیرخانه، ایمیل)
+//    • داک اقدام فوری (ایجاد نامه داخلی/صادره/وارده، ثبت دبیرخانه، ارسال ایمیل)
+//    • دسترسی کامل به تمام آیتم‌های وب با رعایت ۱۰۰٪ مجوزهای RBAC
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -11,18 +16,81 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
-import '../../../core/widgets/common.dart';
+import '../../it_assets/presentation/doc_archive_cartable_page.dart';
 import '../../misc/presentation/minutes_list_page.dart';
-import '../../office_automation/data/email_repository.dart';
-import '../../office_automation/models/email_models.dart';
+import '../data/email_repository.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
-import '../models/office_common.dart';
+import 'email_page.dart';
 import 'letter_detail_page.dart';
 import 'letter_editor_page.dart';
-import 'email_page.dart';
 import 'letter_mailbox_page.dart';
+import 'office_dabirkhane_page.dart';
 import 'office_style.dart';
+import 'office_tools_pages.dart';
+import 'office_widgets.dart';
+
+enum _OfficeLayoutMode { bento, folders }
+
+class _WorkspaceTabSpec {
+  const _WorkspaceTabSpec({
+    required this.id,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.builder,
+    this.badge = 0,
+  });
+
+  final String id;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final int badge;
+  final Widget Function() builder;
+}
+
+class _HubItemSpec {
+  const _HubItemSpec({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.badge,
+    this.featured = false,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final String? badge;
+  final bool featured;
+}
+
+class _HubGroupSpec {
+  const _HubGroupSpec({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.items,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final List<_HubItemSpec> items;
+}
 
 class OfficeAutomationPage extends StatefulWidget {
   const OfficeAutomationPage({super.key});
@@ -31,1113 +99,957 @@ class OfficeAutomationPage extends StatefulWidget {
   State<OfficeAutomationPage> createState() => _OfficeAutomationPageState();
 }
 
-class _OfficeAutomationPageState extends State<OfficeAutomationPage>
-    with TickerProviderStateMixin {
-  late TabController _tabs;
+class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
   OfficeAutomationRepository get _repo =>
       Provider.of<OfficeAutomationRepository?>(context, listen: false) ??
       OfficeAutomationRepository(context.read<ApiClient>());
 
-  AutomationStats _stats = const AutomationStats();
-  bool _statsLoading = true;
+  EmailRepository get _emailRepo =>
+      Provider.of<EmailRepository?>(context, listen: false) ??
+      EmailRepository(context.read<ApiClient>());
 
-  final _scroll = <String, ScrollController>{};
-  final _items = <String, List<LetterListItem>>{};
-  final _loading = <String, bool>{};
-  final _error = <String, String?>{};
-  final _page = <String, int>{};
-  final _hasMore = <String, bool>{};
-  final _search = <String, String>{};
+  String _activeTabId = 'hub';
+  _OfficeLayoutMode _layoutMode = _OfficeLayoutMode.bento;
+  final Set<String> _expandedGroups = {
+    'correspondence',
+    'secretariat',
+    'email',
+  };
 
-  /// تب جاری برای همگام‌سازی تب کشویی با TabBarView
-  int _tabIndex = 0;
-
-  List<({String label, IconData icon, String key})> _visibleTabs(
-    WebAccess access,
-  ) => [
-    const (label: 'داشبورد', icon: Icons.dashboard_outlined, key: 'dashboard'),
-    if (access.canSeeInnerLetters)
-      const (label: 'داخلی', icon: Icons.edit_note, key: 'inner'),
-    if (access.canSeeOutgoingLetters)
-      const (label: 'صادره', icon: Icons.north_east, key: 'outgoing'),
-    if (access.canSeeIncomingLetters)
-      const (label: 'وارده', icon: Icons.south_west, key: 'incoming'),
-    if (access.canSeeEmail)
-      const (
-        label: 'ایمیل سازمانی',
-        icon: Icons.alternate_email,
-        key: 'email_corporate',
-      ),
-    if (access.canSeeEmail && access.canSeePersonalEmail)
-      const (
-        label: 'ایمیل شخصی',
-        icon: Icons.person_outline,
-        key: 'email_personal',
-      ),
-  ];
-
-  List<({String label, IconData icon, String key})> _currentTabs = const [
-    (label: 'داشبورد', icon: Icons.dashboard_outlined, key: 'dashboard'),
-    (label: 'داخلی', icon: Icons.edit_note, key: 'inner'),
-    (label: 'صادره', icon: Icons.north_east, key: 'outgoing'),
-    (label: 'وارده', icon: Icons.south_west, key: 'incoming'),
-    (label: 'ایمیل سازمانی', icon: Icons.alternate_email, key: 'email_corporate'),
-    (label: 'ایمیل شخصی', icon: Icons.person_outline, key: 'email_personal'),
-  ];
-
-  void _attachTabListener() {
-    _tabs.addListener(() {
-      if (_tabs.index != _tabIndex && mounted) {
-        setState(() => _tabIndex = _tabs.index);
-      }
-      if (_tabs.indexIsChanging) return;
-      final k = _tabKey(_tabs.index);
-      if (k.startsWith('email_') || k == 'dashboard') return;
-      _ensureLoaded(k);
-    });
-  }
-
-  void _syncTabs(List<({String label, IconData icon, String key})> nextTabs) {
-    final same =
-        _currentTabs.length == nextTabs.length &&
-        List.generate(
-          nextTabs.length,
-          (i) => _currentTabs[i].key == nextTabs[i].key,
-        ).every((e) => e);
-    if (same) return;
-    final prevKey = _tabIndex < _currentTabs.length
-        ? _currentTabs[_tabIndex].key
-        : 'dashboard';
-    _tabs.dispose();
-    _currentTabs = nextTabs;
-    final restoredIdx = nextTabs.indexWhere((t) => t.key == prevKey);
-    _tabIndex = restoredIdx >= 0 ? restoredIdx : 0;
-    _tabs = TabController(
-      length: nextTabs.length,
-      initialIndex: _tabIndex,
-      vsync: this,
-    );
-    _attachTabListener();
-  }
+  bool _pulseLoading = false;
+  int _innerUnread = 0;
+  int _outgoingUnread = 0;
+  int _signingPending = 0;
+  int _incomingUnread = 0;
+  int _dabirkhanePending = 0;
+  int _dabirkhaneTotal = 0;
+  int _emailUnread = 0;
+  List<({LetterKind kind, LetterListItem item})> _urgentFeed = const [];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: _currentTabs.length, vsync: this);
-    _attachTabListener();
-    _loadStats();
-    _ensureLoaded('inner_inbox');
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshPulse());
   }
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    for (final c in _scroll.values) {
-      c.dispose();
-    }
-    super.dispose();
-  }
+  Future<void> _refreshPulse() async {
+    if (!mounted || _pulseLoading) return;
+    final session = Provider.of<AuthController?>(
+      context,
+      listen: false,
+    )?.session;
+    final access = WebAccess(session, unrestrictedWhenNull: true);
 
-  String _tabKey(int index) {
-    if (index < 0 || index >= _currentTabs.length) return 'dashboard';
-    return switch (_currentTabs[index].key) {
-      'inner' => 'inner_inbox',
-      'outgoing' => 'outgoing_inbox',
-      'incoming' => 'incoming_inbox',
-      final k => k,
-    };
-  }
-
-  /// شمارندهٔ روی هر تب کشویی
-  Map<String, int> get _counts => {
-    'inner_inbox': _stats.inbox,
-    'outgoing_inbox': _stats.sent,
-    // شمارندهٔ نامهٔ وارده در آمار سرور موجود نیست → بج نمایش داده نمی‌شود
-    'signing': _stats.signingPending,
-    'dabirkhane': _stats.dabirkhane,
-    'archive': _stats.archive,
-    'drafts': _stats.pishnevis,
-  };
-
-  /// آمار تفکیکی هر ماژول (برای عدد کنار هر کارتابل)
-  ModuleMailboxCounts _innerCounts = const ModuleMailboxCounts();
-  ModuleMailboxCounts _outgoingCounts = const ModuleMailboxCounts();
-  ModuleMailboxCounts _incomingCounts = const ModuleMailboxCounts();
-  int _emailToday = 0;
-
-  Future<void> _loadStats() async {
-    if (mounted) setState(() => _statsLoading = true);
-    final s = await _repo.dashboardStats();
-    if (!mounted) return;
-    setState(() {
-      _stats = s;
-      _statsLoading = false;
-    });
-    // آمار تفکیکی برای کارت هر ماژول:
-    //   ۱) /stats هر کارتابل (اگر کلیدها را برگرداند)
-    //   ۲) شمارش واقعی از خودِ endpoint هر کارتابل — منبع اصلی اعداد
-    //   ۳) اگر هر دو خالی بود، طول لیستِ همان کارتابل
-    Future<void> load(LetterKind kind, void Function(ModuleMailboxCounts) set) async {
-      var merged = const ModuleMailboxCounts();
-      try {
-        final st = await switch (kind) {
-          LetterKind.inner => _repo.innerStats(),
-          LetterKind.outgoing => _repo.outgoingStats(),
-          LetterKind.incoming => _repo.incomingStats(),
-        };
-        merged = ModuleMailboxCounts.fromStats(st);
-      } catch (_) {}
-      try {
-        final real = await _repo.mailboxCounts(kind);
-        merged = ModuleMailboxCounts(
-          inbox: real.inbox > 0 ? real.inbox : merged.inbox,
-          sent: real.sent > 0 ? real.sent : merged.sent,
-          drafts: real.drafts > 0 ? real.drafts : merged.drafts,
-          archive: real.archive > 0 ? real.archive : merged.archive,
-          signing: real.signing > 0 ? real.signing : merged.signing,
-          dabirkhane: real.dabirkhane > 0 ? real.dabirkhane : merged.dabirkhane,
-          unread: merged.unread,
-        );
-      } catch (_) {}
-      if (!mounted) return;
-      setState(() => set(merged));
-    }
-
-    await Future.wait([
-      load(LetterKind.inner, (v) => _innerCounts = v),
-      load(LetterKind.outgoing, (v) => _outgoingCounts = v),
-      load(LetterKind.incoming, (v) => _incomingCounts = v),
-      _loadEmailToday(),
-    ]);
-  }
-
-  void _ensureLoaded(String key) {
-    if (_items.containsKey(key) || _loading[key] == true) return;
-    _load(key, reset: true);
-  }
-
-  Future<void> _load(String key, {bool reset = false}) async {
-    if (_loading[key] == true) return;
-    setState(() {
-      _loading[key] = true;
-      if (reset) {
-        _error[key] = null;
-        _page[key] = 1;
-        _hasMore[key] = true;
-        _items[key] = [];
-      }
-    });
-    final page = _page[key] ?? 1;
-    final q = _search[key];
+    setState(() => _pulseLoading = true);
     try {
-      final Paged<LetterListItem> result = switch (key) {
-        'inner_inbox' => await _repo.innerInbox(page: page, search: q),
-        'outgoing_inbox' => await _repo.outgoingInbox(page: page, search: q),
-        'incoming_inbox' => await _repo.incomingInbox(page: page, search: q),
-        'signing' => await _repo.signingInbox(page: page, search: q),
-        'dabirkhane' => await _repo.dabirkhane(page: page, search: q),
-        _ => await _repo.innerInbox(page: page, search: q),
-      };
+      int innerUnread = 0;
+      int outgoingUnread = 0;
+      int signingPending = 0;
+      int incomingUnread = 0;
+      int dabirkhanePending = 0;
+      int dabirkhaneTotal = 0;
+      int emailUnread = 0;
+      final feed = <({LetterKind kind, LetterListItem item})>[];
+
+      final futures = <Future<void>>[];
+
+      if (access.canSeeInnerLetters) {
+        futures.add(() async {
+          try {
+            final p = await _repo.innerInbox(
+              page: 1,
+              pageSize: 4,
+              unreadOnly: true,
+            );
+            innerUnread = p.totalCount;
+            for (final it in p.items.take(2)) {
+              feed.add((kind: LetterKind.inner, item: it));
+            }
+          } catch (_) {}
+        }());
+      }
+
+      if (access.canSeeOutgoingLetters) {
+        futures.add(() async {
+          try {
+            final p = await _repo.outgoingInbox(
+              page: 1,
+              pageSize: 3,
+              unreadOnly: true,
+            );
+            outgoingUnread = p.totalCount;
+            for (final it in p.items.take(2)) {
+              feed.add((kind: LetterKind.outgoing, item: it));
+            }
+          } catch (_) {}
+          try {
+            final s = await _repo.signingInbox(page: 1, pageSize: 1);
+            signingPending = s.totalCount;
+          } catch (_) {}
+        }());
+      }
+
+      if (access.canSeeIncomingLetters) {
+        futures.add(() async {
+          try {
+            final p = await _repo.incomingInbox(
+              page: 1,
+              pageSize: 3,
+              unreadOnly: true,
+            );
+            incomingUnread = p.totalCount;
+            for (final it in p.items.take(2)) {
+              feed.add((kind: LetterKind.incoming, item: it));
+            }
+          } catch (_) {}
+        }());
+      }
+
+      if (access.canSeeOutgoingDabirkhane) {
+        futures.add(() async {
+          try {
+            final st = await _repo.dabirkhaneStats();
+            dabirkhanePending = st.pending;
+            dabirkhaneTotal = st.total;
+          } catch (_) {}
+        }());
+      }
+
+      if (access.canSeeEmail) {
+        futures.add(() async {
+          try {
+            final res = await _emailRepo.inbox(pageSize: 1);
+            emailUnread += res.unreadCount;
+          } catch (_) {}
+        }());
+      }
+
+      await Future.wait(futures);
       if (!mounted) return;
       setState(() {
-        _items[key] = [...(_items[key] ?? []), ...result.items];
-        _hasMore[key] =
-            result.items.length >= (result.pageSize == 0 ? 20 : result.pageSize) &&
-            result.items.isNotEmpty;
-        _page[key] = page + 1;
+        _innerUnread = innerUnread;
+        _outgoingUnread = outgoingUnread;
+        _signingPending = signingPending;
+        _incomingUnread = incomingUnread;
+        _dabirkhanePending = dabirkhanePending;
+        _dabirkhaneTotal = dabirkhaneTotal;
+        _emailUnread = emailUnread;
+        _urgentFeed = feed.take(5).toList();
+        _pulseLoading = false;
       });
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error[key] = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error[key] = 'خطا در دریافت کارتابل: $e');
-    } finally {
-      if (mounted) setState(() => _loading[key] = false);
+    } catch (_) {
+      if (mounted) setState(() => _pulseLoading = false);
     }
   }
 
-  LetterKind _kindOf(String key) => switch (key) {
-    'outgoing_inbox' || 'signing' || 'dabirkhane' => LetterKind.outgoing,
-    'incoming_inbox' => LetterKind.incoming,
-    _ => LetterKind.inner,
-  };
+  void _pushPage(Widget page) {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => page))
+        .then((_) => _refreshPulse());
+  }
 
-  Future<void> _openDetail(LetterListItem item, String key) async {
-    final changed = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LetterDetailPage(
-          kind: _kindOf(key),
-          letterId: item.letterId,
-          erjaId: item.erjaId,
+  void _switchTab(String tabId, List<_WorkspaceTabSpec> tabs) {
+    if (tabs.any((t) => t.id == tabId)) {
+      setState(() => _activeTabId = tabId);
+    }
+  }
+
+  List<_WorkspaceTabSpec> _buildTabs(WebAccess access) {
+    return [
+      _WorkspaceTabSpec(
+        id: 'hub',
+        label: 'میز فرماندهی',
+        subtitle: 'نمای کلان مکاتبات، دبیرخانه یکپارچه و ابزارهای اتوماسیون',
+        icon: Icons.space_dashboard_rounded,
+        accent: const Color(0xff4f46e5),
+        builder: () => _buildHubBody(access),
+      ),
+      if (access.canSeeInnerLetters)
+        _WorkspaceTabSpec(
+          id: 'inner',
+          label: 'داخلی',
+          subtitle: 'کارتابل نامه‌های داخلی، ارجاع، هامش و بایگانی درختی',
+          icon: Icons.mark_email_read_rounded,
+          accent: OfficeColors.inner,
+          badge: _innerUnread,
+          builder: () => const LetterMailboxPage(
+            kind: LetterKind.inner,
+            embedded: true,
+          ),
         ),
+      if (access.canSeeOutgoingLetters)
+        _WorkspaceTabSpec(
+          id: 'outgoing',
+          label: 'صادره',
+          subtitle: 'کارتابل نامه‌های صادره، زنجیره امضای دیجیتال و پیش‌نویس‌ها',
+          icon: Icons.outbox_rounded,
+          accent: OfficeColors.outgoing,
+          badge: _outgoingUnread + _signingPending,
+          builder: () => const LetterMailboxPage(
+            kind: LetterKind.outgoing,
+            embedded: true,
+          ),
+        ),
+      if (access.canSeeIncomingLetters)
+        _WorkspaceTabSpec(
+          id: 'incoming',
+          label: 'وارده',
+          subtitle: 'کارتابل نامه‌های وارده، شماره اندیکاتور و ارجاع سازمانی',
+          icon: Icons.move_to_inbox_rounded,
+          accent: OfficeColors.incoming,
+          badge: _incomingUnread,
+          builder: () => const LetterMailboxPage(
+            kind: LetterKind.incoming,
+            embedded: true,
+          ),
+        ),
+      if (access.canSeeDabirkhane)
+        _WorkspaceTabSpec(
+          id: 'dabirkhane',
+          label: 'دبیرخانه',
+          subtitle: 'دبیرخانه یکپارچه صادره و وارده، چاپ سربرگ و رزرو اندیکاتور',
+          icon: Icons.markunread_mailbox_rounded,
+          accent: const Color(0xff4338ca),
+          badge: _dabirkhanePending,
+          builder: () => OfficeDabirkhanePage(
+            embedded: true,
+            initialMode: access.canSeeOutgoingDabirkhane
+                ? DabirkhaneMode.sadere
+                : DabirkhaneMode.varede,
+          ),
+        ),
+      if (access.canSeeEmail)
+        _WorkspaceTabSpec(
+          id: 'email',
+          label: 'ایمیل',
+          subtitle: 'پست الکترونیک سازمانی و حساب‌های رسمی دبیرخانه',
+          icon: Icons.alternate_email_rounded,
+          accent: OfficeColors.email,
+          badge: _emailUnread,
+          builder: () => const EmailPage(
+            initialScope: EmailScope.corporate,
+            embedded: true,
+          ),
+        ),
+      if (access.canSeePersonalEmail)
+        _WorkspaceTabSpec(
+          id: 'personal_email',
+          label: 'ایمیل شخصی',
+          subtitle: 'صندوق پست الکترونیک اختصاصی کاربر',
+          icon: Icons.person_pin_circle_rounded,
+          accent: OfficeColors.emailPersonal,
+          builder: () => const EmailPage(
+            initialScope: EmailScope.personal,
+            embedded: true,
+          ),
+        ),
+    ];
+  }
+
+  List<_HubGroupSpec> _buildHubGroups(
+    WebAccess access,
+    List<_WorkspaceTabSpec> tabs,
+  ) {
+    final groups = <_HubGroupSpec>[];
+
+    // ۱) کارتابل مکاتبات رسمی
+    final corrItems = <_HubItemSpec>[
+      if (access.canSeeInnerLetters)
+        _HubItemSpec(
+          id: 'cartable_inner',
+          title: 'کارتابل نامه‌های داخلی',
+          subtitle: 'دریافتی، ارسالی، پیش‌نویس، نشان‌شده و بایگانی درختی',
+          icon: Icons.mark_email_read_rounded,
+          color: OfficeColors.inner,
+          featured: true,
+          badge: _innerUnread > 0 ? '${Fa.digits(_innerUnread)} جدید' : null,
+          onTap: () => _switchTab('inner', tabs),
+        ),
+      if (access.canSeeOutgoingLetters)
+        _HubItemSpec(
+          id: 'cartable_outgoing',
+          title: 'کارتابل نامه‌های صادره',
+          subtitle: 'پیش‌نویس، پیگیری صدور شماره و مکاتبات برون‌سازمانی',
+          icon: Icons.outbox_rounded,
+          color: OfficeColors.outgoing,
+          featured: true,
+          badge: _outgoingUnread > 0
+              ? '${Fa.digits(_outgoingUnread)} جدید'
+              : null,
+          onTap: () => _switchTab('outgoing', tabs),
+        ),
+      if (access.canSeeOutgoingLetters)
+        _HubItemSpec(
+          id: 'signing_queue',
+          title: 'زنجیره امضای دیجیتال من',
+          subtitle: 'نامه‌های صادره در نوبت بررسی و امضای شما',
+          icon: Icons.draw_rounded,
+          color: OfficeColors.signing,
+          badge: _signingPending > 0
+              ? '${Fa.digits(_signingPending)} امضا'
+              : null,
+          onTap: () => _pushPage(
+            const LetterMailboxPage(
+              kind: LetterKind.outgoing,
+              initialBox: LetterBox.signing,
+            ),
+          ),
+        ),
+      if (access.canSeeIncomingLetters)
+        _HubItemSpec(
+          id: 'cartable_incoming',
+          title: 'کارتابل نامه‌های وارده',
+          subtitle: 'نامه‌های رسیده از سازمان‌های بیرونی و ارجاعات من',
+          icon: Icons.move_to_inbox_rounded,
+          color: OfficeColors.incoming,
+          featured: true,
+          badge: _incomingUnread > 0
+              ? '${Fa.digits(_incomingUnread)} جدید'
+              : null,
+          onTap: () => _switchTab('incoming', tabs),
+        ),
+    ];
+    if (corrItems.isNotEmpty) {
+      groups.add(
+        _HubGroupSpec(
+          id: 'correspondence',
+          title: 'کارتابل مکاتبات رسمی',
+          subtitle: 'گردش مکاتبات درون‌سازمانی، برون‌سازمانی و امضای دیجیتال',
+          icon: Icons.inbox_rounded,
+          accent: const Color(0xff2563eb),
+          items: corrItems,
+        ),
+      );
+    }
+
+    // ۲) دبیرخانه یکپارچه و اندیکاتور
+    final secItems = <_HubItemSpec>[
+      if (access.canSeeOutgoingDabirkhane)
+        _HubItemSpec(
+          id: 'sec_outgoing',
+          title: 'دبیرخانه نامه‌های صادره',
+          subtitle:
+              'ثبت روش ارسال، کد رهگیری، چاپ سربرگ A4/A5 و بایگانی دبیرخانه',
+          icon: Icons.markunread_mailbox_rounded,
+          color: const Color(0xff4338ca),
+          featured: true,
+          badge: _dabirkhanePending > 0
+              ? '${Fa.digits(_dabirkhanePending)} در انتظار'
+              : (_dabirkhaneTotal > 0 ? Fa.digits(_dabirkhaneTotal) : null),
+          onTap: () => _pushPage(
+            const OfficeDabirkhanePage(initialMode: DabirkhaneMode.sadere),
+          ),
+        ),
+      if (access.canSeeIncomingDabirkhane)
+        _HubItemSpec(
+          id: 'sec_incoming',
+          title: 'دبیرخانه یکپارچه نامه‌های وارده',
+          subtitle: 'ثبت، ارجاع سازمانی، نمودار گردش و بایگانی گروهی وارده',
+          icon: Icons.domain_verification_rounded,
+          color: const Color(0xff0d9488),
+          featured: true,
+          onTap: () => _pushPage(
+            const OfficeDabirkhanePage(initialMode: DabirkhaneMode.varede),
+          ),
+        ),
+      if (access.canCreateIncomingLetter || access.canSeeIncomingDabirkhane)
+        _HubItemSpec(
+          id: 'sec_reservations',
+          title: 'رزرو شماره اندیکاتور',
+          subtitle: 'رزرو تکی و دسته‌ای شماره ثبت برای نامه‌های وارده فیزیکی',
+          icon: Icons.confirmation_number_rounded,
+          color: const Color(0xffd97706),
+          onTap: () => _pushPage(
+            const OfficeDabirkhanePage(
+              initialMode: DabirkhaneMode.varede,
+              openReservationsOnStart: true,
+            ),
+          ),
+        ),
+      if (access.canSeeLetterStructures)
+        _HubItemSpec(
+          id: 'letter_structures',
+          title: 'ساختار شماره نامه و اندیکاتور',
+          subtitle: 'چیدمان فرمت «سال / واحد / شماره» در کل سازمان',
+          icon: Icons.format_list_numbered_rtl_rounded,
+          color: const Color(0xff7c3aed),
+          onTap: () => _pushPage(const LetterStructurePage()),
+        ),
+    ];
+    if (secItems.isNotEmpty) {
+      groups.add(
+        _HubGroupSpec(
+          id: 'secretariat',
+          title: 'دبیرخانه یکپارچه و اندیکاتور',
+          subtitle: 'ثبت رسمی مرسولات، چاپ سربرگ و مدیریت شماره‌گذاری',
+          icon: Icons.account_balance_rounded,
+          accent: const Color(0xff4338ca),
+          items: secItems,
+        ),
+      );
+    }
+
+    // ۳) پست الکترونیک سازمانی و شخصی
+    final emailItems = <_HubItemSpec>[
+      if (access.canSeeEmail)
+        _HubItemSpec(
+          id: 'corp_email',
+          title: 'پست الکترونیک سازمانی',
+          subtitle: 'مدیریت حساب‌های رسمی شرکت، دبیرخانه و پیوست‌ها',
+          icon: Icons.alternate_email_rounded,
+          color: OfficeColors.email,
+          featured: true,
+          badge: _emailUnread > 0 ? '${Fa.digits(_emailUnread)} جدید' : null,
+          onTap: () => _switchTab('email', tabs),
+        ),
+      if (access.canSeePersonalEmail)
+        _HubItemSpec(
+          id: 'personal_email',
+          title: 'ایمیل شخصی من',
+          subtitle: 'صندوق پست الکترونیک اختصاصی متصل به حساب کاربری شما',
+          icon: Icons.mail_lock_rounded,
+          color: OfficeColors.emailPersonal,
+          onTap: () => _switchTab('personal_email', tabs),
+        ),
+    ];
+    if (emailItems.isNotEmpty) {
+      groups.add(
+        _HubGroupSpec(
+          id: 'email',
+          title: 'پست الکترونیک رسمی و شخصی',
+          subtitle: 'ارتباطات ایمیلی برون‌سازمانی و صندوق شخصی',
+          icon: Icons.forward_to_inbox_rounded,
+          accent: OfficeColors.email,
+          items: emailItems,
+        ),
+      );
+    }
+
+    // ۴) بایگانی، الگوها و تنظیمات مکاتبات
+    final canAnyLetters =
+        access.canSeeInnerLetters ||
+        access.canSeeOutgoingLetters ||
+        access.canSeeIncomingLetters;
+    final toolItems = <_HubItemSpec>[
+      if (access.canSee('MyArchive'))
+        _HubItemSpec(
+          id: 'personal_archive',
+          title: 'بایگانی شخصی من',
+          subtitle: 'پوشه‌بندی اختصاصی نامه‌ها و مستندات فردی',
+          icon: Icons.folder_special_rounded,
+          color: const Color(0xff0284c7),
+          onTap: () => _pushPage(const PersonalArchivePage()),
+        ),
+      if (access.canSeeInnerLetters || access.canManageLetterGroups)
+        _HubItemSpec(
+          id: 'recipient_groups',
+          title: 'گروه‌های گیرندگان نامه',
+          subtitle: 'تعریف گروه برای انتخاب یک‌ضرب در گیرنده، ارجاع و هامش',
+          icon: Icons.groups_2_rounded,
+          color: const Color(0xff4f46e5),
+          onTap: () => _pushPage(const LetterGroupsPage()),
+        ),
+      if (canAnyLetters)
+        _HubItemSpec(
+          id: 'amalgars',
+          title: 'عناوین و دستورات ارجاع',
+          subtitle: 'مدیریت قالب‌های دستور ارجاع («جهت اقدام»، «فوری» و ...)',
+          icon: Icons.alt_route_rounded,
+          color: const Color(0xff059669),
+          onTap: () => _pushPage(const AmalgarsManagerPage()),
+        ),
+      if (access.canSeeDocArchive)
+        _HubItemSpec(
+          id: 'doc_cartable',
+          title: 'کارتابل آرشیو اسناد',
+          subtitle: 'تأیید نسخه‌های مدارک و اعلان‌های آرشیو فنی و اداری',
+          icon: Icons.inventory_rounded,
+          color: const Color(0xffe11d48),
+          onTap: () => _pushPage(const DocArchiveCartablePage()),
+        ),
+    ];
+    if (toolItems.isNotEmpty) {
+      groups.add(
+        _HubGroupSpec(
+          id: 'tools',
+          title: 'بایگانی، گروه‌ها و قالب‌های ارجاع',
+          subtitle: 'ابزارهای شتاب‌دهندهٔ مکاتبات و سازمان‌دهی پرونده‌ها',
+          icon: Icons.tune_rounded,
+          accent: const Color(0xff0284c7),
+          items: toolItems,
+        ),
+      );
+    }
+
+    // ۵) صورتجلسات و راهنما
+    final coordItems = <_HubItemSpec>[
+      if (access.canSeeMinutes)
+        _HubItemSpec(
+          id: 'meeting_minutes',
+          title: 'صورتجلسات سازمانی',
+          subtitle: 'ثبت جلسات، امضای حاضرین و ارسال مصوبات در قالب نامه/ایمیل',
+          icon: Icons.assignment_rounded,
+          color: const Color(0xff9333ea),
+          onTap: () => _pushPage(const MinutesListPage()),
+        ),
+      _HubItemSpec(
+        id: 'office_guide',
+        title: 'راهنمای جامع اتوماسیون اداری',
+        subtitle: 'مرجع فرآیندهای مکاتبات، امضا و گردش کار دبیرخانه',
+        icon: Icons.menu_book_rounded,
+        color: const Color(0xff475569),
+        onTap: () => _pushPage(const OfficeGuidePage()),
+      ),
+    ];
+    groups.add(
+      _HubGroupSpec(
+        id: 'coordination',
+        title: 'جلسات و راهنمای اتوماسیون',
+        subtitle: 'هماهنگی مصوبات جلسات و مستندات آموزشی سیستم',
+        icon: Icons.hub_rounded,
+        accent: const Color(0xff9333ea),
+        items: coordItems,
       ),
     );
-    if (changed == true) {
-      setState(() => _items.remove(key));
-      _load(key, reset: true);
-      _loadStats();
-    }
+
+    return groups;
   }
 
-  Future<void> _newLetter(LetterKind kind) async {
-    final created = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => LetterEditorPage(kind: kind)),
-    );
-    if (created == true) {
-      final key = switch (kind) {
-        LetterKind.inner => 'inner_inbox',
-        LetterKind.outgoing => 'outgoing_inbox',
-        LetterKind.incoming => 'incoming_inbox',
-      };
-      setState(() => _items.remove(key));
-      _load(key, reset: true);
-      _loadStats();
-    }
-  }
+  void _openQuickCommandSheet(
+    WebAccess access,
+    List<_WorkspaceTabSpec> tabs,
+  ) {
+    final groups = _buildHubGroups(access, tabs);
+    final allItems = [
+      for (final g in groups)
+        for (final it in g.items) (group: g.title, item: it),
+    ];
+    String q = '';
 
-  Future<void> _toggleNeshan(String key, LetterListItem item) async {
-    try {
-      final kind = _kindOf(key);
-      if (item.erjaId != null) {
-        await _repo.toggleErjaNeshan(kind, item.erjaId!);
-      } else if (kind == LetterKind.incoming) {
-        await _repo.toggleIncomingNeshan(item.letterId);
-      } else {
-        await _repo.toggleInnerNeshan(item.letterId);
-      }
-      setState(() => _items.remove(key));
-      _load(key, reset: true);
-    } on ApiException catch (e) {
-      if (mounted) showMessage(context, e.message, error: true);
-    }
-  }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final filtered = allItems.where((entry) {
+            if (q.trim().isEmpty) return true;
+            final needle = q.trim().toLowerCase();
+            return entry.item.title.toLowerCase().contains(needle) ||
+                entry.item.subtitle.toLowerCase().contains(needle) ||
+                entry.group.toLowerCase().contains(needle);
+          }).toList();
 
-  void _goTab(int i) {
-    if (i < 0 || i >= _currentTabs.length) return;
-    _tabs.animateTo(i);
-    final k = _tabKey(i);
-    if (k.startsWith('email_') || k == 'dashboard') return;
-    _ensureLoaded(k);
-  }
-
-  void _goTabByKey(String key) {
-    final idx = _currentTabs.indexWhere((t) => t.key == key);
-    if (idx >= 0) _goTab(idx);
-  }
-
-  bool _canCreateForTab(WebAccess access, String tabKey) => switch (tabKey) {
-    'outgoing_inbox' => access.canCreateOutgoingLetter,
-    'incoming_inbox' => access.canCreateIncomingLetter,
-    'inner_inbox' => access.canCreateInnerLetter,
-    _ => access.canCreateAnyLetter,
-  };
-
-  LetterKind _defaultCreateKind(WebAccess access, String tabKey) {
-    if (tabKey == 'outgoing_inbox' && access.canCreateOutgoingLetter) {
-      return LetterKind.outgoing;
-    }
-    if (tabKey == 'incoming_inbox' && access.canCreateIncomingLetter) {
-      return LetterKind.incoming;
-    }
-    if (access.canCreateInnerLetter) return LetterKind.inner;
-    if (access.canCreateOutgoingLetter) return LetterKind.outgoing;
-    return LetterKind.incoming;
-  }
-
-  // ============================================================
-  //  ساختار صفحه
-  // ============================================================
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthController>();
-    final access = WebAccess(auth.session, unrestrictedWhenNull: true);
-    final nextTabs = _visibleTabs(access);
-    _syncTabs(nextTabs);
-    final name = auth.session?.displayName ?? '';
-    final activeKey = _tabKey(_tabIndex);
-
-    return Scaffold(
-      backgroundColor: OfficeColors.bg,
-      body: Column(
-        children: [
-          // ---------- هدر گرادیانی ----------
-          Container(
-            decoration: BoxDecoration(
-              gradient: OfficeColors.heroGradient,
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
-              boxShadow: [
-                BoxShadow(
-                  color: OfficeColors.deep.withValues(alpha: .25),
-                  blurRadius: 22,
-                  offset: const Offset(0, 8),
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  14,
+                  16,
+                  MediaQuery.of(ctx).viewInsets.bottom + 16,
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
-              child: SafeArea(
-                bottom: false,
-                child: Stack(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Positioned(
-                      left: -40,
-                      top: -60,
-                      child: Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [Colors.white.withValues(alpha: .08), Colors.transparent],
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xffcbd5e1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      autofocus: true,
+                      onChanged: (v) => setS(() => q = v),
+                      decoration: InputDecoration(
+                        hintText:
+                            'جستجوی سریع بخش‌ها (دبیرخانه، اندیکاتور، گروه گیرندگان، امضا…)',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xfff8fafc),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xffe2e8f0),
                           ),
                         ),
                       ),
                     ),
-                    Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Colors.white24, Colors.white10],
-                                  ),
-                                  borderRadius: BorderRadius.circular(13),
-                                  border: Border.all(color: Colors.white24),
-                                ),
-                                child: const Icon(
-                                  Icons.account_balance_outlined,
-                                  size: 20,
-                                  color: Colors.white,
-                                ),
+                    const SizedBox(height: 10),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(ctx).size.height * 0.55,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final entry = filtered[i];
+                          final it = entry.item;
+                          return ListTile(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            leading: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: it.color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(11),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      'اتوماسیون اداری توکا',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    Text(
-                                      name.isEmpty ? 'فروغ آریا' : name,
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: .75),
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              child: Icon(it.icon, color: it.color, size: 20),
+                            ),
+                            title: Text(
+                              it.title,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
                               ),
-                              _HeaderBtn(
-                                icon: Icons.refresh,
-                                tooltip: 'به‌روزرسانی',
-                                onTap: () {
-                                  setState(() => _items.clear());
-                                  _loadStats();
-                                  if (!_tabKey(_tabs.index).startsWith('email_')) {
-                                    _ensureLoaded(_tabKey(_tabs.index));
-                                  }
-                                },
-                              ),
-                              if (access.canCreateAnyLetter)
-                                _HeaderBtn(
-                                  icon: Icons.add_circle_outline,
-                                  tooltip: 'نامهٔ جدید',
-                                  onTap: () => _newLetterSheet(access),
-                                ),
-                              _HeaderBtn(
-                                icon: Icons.account_circle_outlined,
-                                tooltip: 'حساب کاربری',
-                                onTap: () => _accountSheet(auth),
-                              ),
-                            ],
-                          ),
-                        ),
-                        OfficeSlidingTabs(
-                          items: _currentTabs,
-                          index: _tabIndex,
-                          onChanged: _goTab,
-                          background: Colors.transparent,
-                          pillColor: OfficeColors.seed,
-                          showCounts: true,
-                          counts: _counts,
-                          accentFor: (i) {
-                            if (i < 0 || i >= _currentTabs.length) {
-                              return OfficeColors.seed;
-                            }
-                            return switch (_currentTabs[i].key) {
-                              'inner' => OfficeColors.inner,
-                              'outgoing' => OfficeColors.outgoing,
-                              'incoming' => OfficeColors.incoming,
-                              'email_corporate' => OfficeColors.email,
-                              'email_personal' => OfficeColors.emailPersonal,
-                              _ => OfficeColors.seed,
-                            };
-                          },
-                        ),
-                      ],
+                            ),
+                            subtitle: Text(
+                              '${entry.group} • ${it.subtitle}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              it.onTap();
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-          // ---------- بدنهٔ تب‌ها ----------
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: [
-                for (final t in _currentTabs)
-                  switch (t.key) {
-                    'inner' => const LetterMailboxPage(
-                      kind: LetterKind.inner,
-                      embedded: true,
-                    ),
-                    'outgoing' => const LetterMailboxPage(
-                      kind: LetterKind.outgoing,
-                      embedded: true,
-                    ),
-                    'incoming' => const LetterMailboxPage(
-                      kind: LetterKind.incoming,
-                      embedded: true,
-                    ),
-                    'email_corporate' => const EmailPage(
-                      initialScope: EmailScope.corporate,
-                      embedded: true,
-                    ),
-                    'email_personal' => const EmailPage(
-                      initialScope: EmailScope.personal,
-                      embedded: true,
-                    ),
-                    _ => _dashboardTab(access),
-                  },
-              ],
-            ),
-          ),
-        ],
+          );
+        },
       ),
-      floatingActionButton: activeKey.startsWith('email_') ||
-              !_canCreateForTab(access, activeKey)
-          ? null
-          : FloatingActionButton.extended(
-              heroTag: 'office_new_letter_fab',
-              onPressed: () => _newLetter(_defaultCreateKind(access, activeKey)),
-              backgroundColor: OfficeColors.seed,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'نامهٔ جدید',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
     );
   }
 
-  /// برد ماژول‌های مجاز نامه؛ داخل هر کارت، کارتابل‌های واقعی همان ماژول
-  Widget _buildModuleBoard(WebAccess access) {
-    return Column(
-      children: [
-        if (access.canSeeInnerLetters) ...[
-          _ModuleCard(
-            title: 'نامهٔ داخلی',
-            subtitle: 'ارتباط درون‌سازمانی',
-            icon: Icons.edit_note,
-            color: OfficeColors.inner,
-            boxes: const [
-              LetterBox.inbox,
-              LetterBox.sent,
-              LetterBox.drafts,
-              LetterBox.archive,
-            ],
-            counts: _innerCounts,
-            onOpenBox: (b) => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => LetterMailboxPage(
-                  kind: LetterKind.inner,
-                  initialBox: b,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-        if (access.canSeeOutgoingLetters) ...[
-          _ModuleCard(
-            title: 'نامهٔ صادره',
-            subtitle: 'مکاتبات برون‌سازمانی و امضا',
-            icon: Icons.north_east,
-            color: OfficeColors.outgoing,
-            boxes: const [
-              LetterBox.inbox,
-              LetterBox.sent,
-              LetterBox.signing,
-              LetterBox.dabirkhane,
-              LetterBox.archive,
-            ],
-            counts: _outgoingCounts,
-            onOpenBox: (b) => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => LetterMailboxPage(
-                  kind: LetterKind.outgoing,
-                  initialBox: b,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-        if (access.canSeeIncomingLetters)
-          _ModuleCard(
-            title: 'نامهٔ وارده',
-            subtitle: 'ثبت و ارجاع نامه‌های رسیده',
-            icon: Icons.south_west,
-            color: OfficeColors.incoming,
-            boxes: const [
-              LetterBox.inbox,
-              LetterBox.sent,
-              LetterBox.drafts,
-              LetterBox.archive,
-            ],
-            counts: _incomingCounts,
-            onOpenBox: (b) => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => LetterMailboxPage(
-                  kind: LetterKind.incoming,
-                  initialBox: b,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final session = Provider.of<AuthController?>(context)?.session;
+    final access = WebAccess(session, unrestrictedWhenNull: true);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  /// تعداد ایمیل‌های امروز کارتابل سازمانی — از لیست واقعی ایمیل‌ها
-  Future<void> _loadEmailToday() async {
-    try {
-      final repo =
-          Provider.of<EmailRepository?>(context, listen: false) ??
-          EmailRepository(context.read<ApiClient>());
-      // شمارش ایمیل‌های امروز از بازهٔ تاریخ (نه فقط صفحهٔ اول) — داده واقعی
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final res = await repo.inbox(
-        pageSize: 100,
-        dateFrom: startOfDay,
-        dateTo: now,
-        personal: false,
-      );
-      if (!mounted) return;
-      setState(() => _emailToday = res.totalCount);
-    } catch (_) {}
-  }
-
-  // ============================================================
-  //  داشبورد
-  // ============================================================
-
-  Widget _dashboardTab(WebAccess access) {
-    final s = _stats;
-    final quickTiles = <Widget>[
-      if (access.canCreateInnerLetter)
-        _QuickTile(
-          label: 'نامهٔ داخلی',
-          icon: Icons.edit_note,
-          color: OfficeColors.inner,
-          onTap: () => _newLetter(LetterKind.inner),
-        ),
-      if (access.canCreateOutgoingLetter)
-        _QuickTile(
-          label: 'نامهٔ صادره',
-          icon: Icons.north_east,
-          color: OfficeColors.outgoing,
-          onTap: () => _newLetter(LetterKind.outgoing),
-        ),
-      if (access.canCreateIncomingLetter)
-        _QuickTile(
-          label: 'نامهٔ وارده',
-          icon: Icons.south_west,
-          color: OfficeColors.incoming,
-          onTap: () => _newLetter(LetterKind.incoming),
-        ),
-      if (access.canSeeMinutes)
-        _QuickTile(
-          label: 'صورتجلسه',
-          icon: Icons.description_outlined,
-          color: OfficeColors.minutes,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const MinutesListPage(),
-            ),
-          ),
-        ),
-    ];
-    return RefreshIndicator(
-      onRefresh: _loadStats,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 108),
-        children: [
-          // --- کارت قهرمان ---
-          OFadeSlideIn(
-            index: 0,
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                gradient: OfficeColors.heroGradient,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: OfficeColors.seed.withValues(alpha: .26),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
+    if (!access.canSeeOfficeGroup && !access.canSeeMinutes) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: OfficeColors.bg,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.lock_person_outlined,
+                    size: 52,
+                    color: Color(0xff94a3b8),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'دسترسی به اتوماسیون اداری فعال نیست',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'نقش کاربری شما مجوز مشاهدهٔ کارتابل نامه‌ها، دبیرخانه یا ایمیل را ندارد.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Color(0xff64748b)),
                   ),
                 ],
               ),
-              child: Stack(
+            ),
+          ),
+        ),
+      );
+    }
+
+    final tabs = _buildTabs(access);
+    final activeIdx = tabs.indexWhere((t) => t.id == _activeTabId);
+    final safeIdx = activeIdx >= 0 ? activeIdx : 0;
+    final currentTab = tabs[safeIdx];
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: isDark
+            ? const Color(0xff0b1220)
+            : const Color(0xfff3f6fc),
+        body: Column(
+          children: [
+            _buildExecutiveHeader(
+              access: access,
+              tabs: tabs,
+              activeIndex: safeIdx,
+              currentTab: currentTab,
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: safeIdx,
+                children: [for (final t in tabs) t.builder()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  //  هدر یکپارچهٔ اجرایی یاقوتی-نیلی با تب‌های زنده
+  // ============================================================
+
+  Widget _buildExecutiveHeader({
+    required WebAccess access,
+    required List<_WorkspaceTabSpec> tabs,
+    required int activeIndex,
+    required _WorkspaceTabSpec currentTab,
+  }) {
+    final canPop = Navigator.of(context).canPop();
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xff090f1f), Color(0xff172554), Color(0xff3730a3)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x301e1b4b),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  Positioned(
-                    left: -30,
-                    bottom: -50,
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [Colors.white.withValues(alpha: .09), Colors.transparent],
-                        ),
+                  if (canPop) ...[
+                    _HeaderIconBtn(
+                      icon: Icons.arrow_back_rounded,
+                      tooltip: 'بازگشت',
+                      onTap: () => Navigator.of(context).maybePop(),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          currentTab.accent,
+                          const Color(0xff6366f1),
+                        ],
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25),
                       ),
                     ),
+                    child: Icon(currentTab.icon, color: Colors.white, size: 22),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.mark_email_unread_outlined,
-                                size: 15, color: Colors.white.withValues(alpha: .8)),
-                            const SizedBox(width: 6),
-                            Expanded(
+                            Flexible(
                               child: Text(
-                                'کارتابل امروز',
+                                currentTab.id == 'hub'
+                                    ? 'اتوماسیون اداری توکا'
+                                    : '${currentTab.label} • اتوماسیون توکا',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: .85),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 6),
-                            HeroBadge(
-                              label: Fa.date(DateTime.now().toIso8601String(), time: false),
-                              icon: Icons.today_outlined,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          _statsLoading
-                              ? 'در حال دریافت…'
-                              : '${Fa.digits(s.inboxUnread)} نامهٔ خوانده‌نشده • '
-                                  '${Fa.digits(_emailToday)} ایمیل امروز',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            height: 1.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            OfficeRing(
-                              value: s.inbox == 0
-                                  ? 0
-                                  : (s.inbox - s.inboxUnread) / s.inbox,
-                              label: 'خوانده‌شده',
-                              color: Colors.white,
-                              size: 58,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  _heroStat('دریافتی', s.inbox),
-                                  _heroStat('ارسالی', s.sent),
-                                  _heroStat('بایگانی', s.archive),
-                                  _heroStat('امضا', s.signingPending),
-                                ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.13),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'PRO',
+                                style: TextStyle(
+                                  color: Color(0xffa5b4fc),
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.6,
+                                ),
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          currentTab.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.74),
+                            fontSize: 10.8,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // --- ماژول‌های نامه: هر ماژول با کارتابل‌های واقعی خودش ---
-          if (access.canSeeLettersAny) ...[
-            const _SectionLabel(
-              title: 'ماژول‌های نامه',
-              icon: Icons.folder_copy_outlined,
-            ),
-            OFadeSlideIn(index: 1, child: _buildModuleBoard(access)),
-            const SizedBox(height: 14),
-          ],
-
-          // --- دسترسی سریع ---
-          if (quickTiles.isNotEmpty) ...[
-            const _SectionLabel(title: 'دسترسی سریع', icon: Icons.bolt),
-            OFadeSlideIn(
-              index: 2,
-              child: GridView.count(
-                crossAxisCount: 4,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: .82,
-                children: quickTiles,
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
-
-          // --- شمارنده‌ها ---
-          const _SectionLabel(title: 'شمارنده‌ها', icon: Icons.insights_outlined),
-          OFadeSlideIn(
-            index: 2,
-            child: GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 2.35,
-              mainAxisSpacing: 9,
-              crossAxisSpacing: 9,
-              children: [
-                if (access.canSeeInnerLetters)
-                  _StatCard(
-                    label: 'دریافتی داخلی',
-                    value: s.inbox,
-                    sub: '${Fa.digits(s.inboxUnread)} خوانده‌نشده',
-                    icon: Icons.inbox_outlined,
-                    color: OfficeColors.inner,
-                    onTap: () => _goTabByKey('inner'),
+                  _HeaderIconBtn(
+                    icon: Icons.manage_search_rounded,
+                    tooltip: 'جستجوی سریع بخش‌ها',
+                    onTap: () => _openQuickCommandSheet(access, tabs),
                   ),
-                if (access.canSeeOutgoingLetters)
-                  _StatCard(
-                    label: 'ارسالی',
-                    value: s.sent,
-                    sub: 'نامهٔ صادره',
-                    icon: Icons.outbox_outlined,
-                    color: OfficeColors.outgoing,
-                    onTap: () => _goTabByKey('outgoing'),
-                  ),
-                _StatCard(
-                  label: 'نشان‌شده',
-                  value: s.neshan,
-                  sub: 'ستاره‌دار',
-                  icon: Icons.star_outline,
-                  color: OfficeColors.gold,
-                ),
-                _StatCard(
-                  label: 'پیش‌نویس',
-                  value: s.pishnevis,
-                  sub: 'ذخیره‌شده',
-                  icon: Icons.drafts_outlined,
-                  color: const Color(0xffb04fbf),
-                ),
-                if (access.canSeeOutgoingLetters) ...[
-                  _StatCard(
-                    label: 'در انتظار امضا',
-                    value: s.signingPending,
-                    sub: 'نیازمند اقدام',
-                    icon: Icons.draw_outlined,
-                    color: OfficeColors.signing,
-                    onTap: () => _goTabByKey('outgoing'),
-                  ),
-                  _StatCard(
-                    label: 'دبیرخانه',
-                    value: s.dabirkhane,
-                    sub: 'در صف ارسال',
-                    icon: Icons.account_balance_outlined,
-                    color: OfficeColors.dabirkhane,
-                    onTap: () => _goTabByKey('outgoing'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroStat(String label, int value) => Expanded(
-    child: Column(
-      children: [
-        Text(
-          Fa.digits(value),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 17.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: .78),
-            fontSize: 10,
-          ),
-        ),
-      ],
-    ),
-  );
-
-  // ============================================================
-  //  کارتابل‌ها
-  // ============================================================
-
-  void _newLetterSheet(WebAccess access) => showModalBottomSheet(
-    context: context,
-    backgroundColor: OfficeColors.bg,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (c) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.blueGrey.shade200,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'نامهٔ جدید',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            if (access.canCreateInnerLetter)
-              _SheetAction(
-                icon: Icons.edit_note,
-                color: OfficeColors.inner,
-                title: 'نامهٔ داخلی',
-                subtitle: 'مکاتبهٔ درون‌سازمانی بین کاربران و گروه‌ها',
-                onTap: () {
-                  Navigator.pop(c);
-                  _newLetter(LetterKind.inner);
-                },
-              ),
-            if (access.canCreateOutgoingLetter)
-              _SheetAction(
-                icon: Icons.north_east,
-                color: OfficeColors.outgoing,
-                title: 'نامهٔ صادره',
-                subtitle: 'نامهٔ خروجی با شمارهٔ صادره و دبیرخانه',
-                onTap: () {
-                  Navigator.pop(c);
-                  _newLetter(LetterKind.outgoing);
-                },
-              ),
-            if (access.canCreateIncomingLetter)
-              _SheetAction(
-                icon: Icons.south_west,
-                color: OfficeColors.incoming,
-                title: 'نامهٔ وارده',
-                subtitle: 'ثبت نامهٔ رسیده از سازمان بیرونی',
-                onTap: () {
-                  Navigator.pop(c);
-                  _newLetter(LetterKind.incoming);
-                },
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  void _filterSheet(String key, LetterKind kind) => showModalBottomSheet(
-    context: context,
-    backgroundColor: OfficeColors.bg,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (c) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.blueGrey.shade200,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'مرتب‌سازی و فیلتر',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'برای اعمال فیلتر، کلمهٔ کلیدی را در نوار جست‌وجو وارد کنید. '
-              'فیلترهای پیشرفته (محرمانگی، فوریت، بازهٔ تاریخ) در نسخهٔ بعدی به این شیت اضافه می‌شوند.',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.85,
-                color: Colors.blueGrey.shade600,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(c);
-                      setState(() => _search.remove(key));
-                      _load(key, reset: true);
-                    },
-                    icon: const Icon(Icons.refresh, size: 17),
-                    label: const Text('بازنشانی'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    onPressed: () => Navigator.pop(c),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: OfficeColors.forKind(kind),
-                    ),
-                    child: const Text('بستن'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  void _accountSheet(AuthController auth) {
-    final name = auth.session?.displayName ?? '';
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: OfficeColors.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (c) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.blueGrey.shade200,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                width: 64,
-                height: 64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: OfficeColors.heroGradient,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: OfficeColors.seed.withValues(alpha: .3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
+                  if (currentTab.id == 'hub') ...[
+                    const SizedBox(width: 6),
+                    _HeaderIconBtn(
+                      icon: _layoutMode == _OfficeLayoutMode.bento
+                          ? Icons.folder_copy_outlined
+                          : Icons.grid_view_rounded,
+                      tooltip: _layoutMode == _OfficeLayoutMode.bento
+                          ? 'نمای پوشه‌ای'
+                          : 'نمای بنتو',
+                      onTap: () => setState(() {
+                        _layoutMode = _layoutMode == _OfficeLayoutMode.bento
+                            ? _OfficeLayoutMode.folders
+                            : _OfficeLayoutMode.bento;
+                      }),
                     ),
                   ],
-                ),
-                child: Text(
-                  name.isNotEmpty ? name.characters.first : '؟',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+                  const SizedBox(width: 6),
+                  _HeaderIconBtn(
+                    icon: _pulseLoading
+                        ? Icons.hourglass_top_rounded
+                        : Icons.refresh_rounded,
+                    tooltip: 'به‌روزرسانی آمار زنده',
+                    onTap: _refreshPulse,
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                name,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                '${auth.session?.username ?? ''} • ${(auth.session?.roleNames ?? []).join('، ')}',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11.5, color: Colors.blueGrey.shade500),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: OfficeColors.line),
-                ),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              const SizedBox(height: 11),
+              // نوار تب‌های زندهٔ محیط کاری
+              SizedBox(
+                height: 38,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < tabs.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 6),
+                        Builder(
+                          builder: (_) {
+                            final t = tabs[i];
+                            final selected = i == activeIndex;
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => setState(() => _activeTabId = t.id),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                height: 38,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? Colors.white
+                                      : Colors.white.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: selected
+                                        ? Colors.white
+                                        : Colors.white.withValues(alpha: 0.14),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      t.icon,
+                                      size: 16,
+                                      color: selected
+                                          ? const Color(0xff1e1b4b)
+                                          : Colors.white70,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      t.label,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                        color: selected
+                                            ? const Color(0xff0f172a)
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                    if (t.badge > 0) ...[
+                                      const SizedBox(width: 5),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 1.5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: selected
+                                              ? t.accent
+                                              : const Color(0xffef4444),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          Fa.digits(t.badge),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
                   ),
-                  leading: const Icon(Icons.logout, color: OfficeColors.danger),
-                  title: const Text(
-                    'خروج از حساب',
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () {
-                    Navigator.pop(c);
-                    auth.logout();
-                  },
                 ),
               ),
             ],
@@ -1146,389 +1058,626 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
       ),
     );
   }
-}
 
-// ============================================================
-//  ویجت‌های کوچک محلی
-// ============================================================
+  // ============================================================
+  //  بدنهٔ تب ۰: میز فرماندهی اجرایی اتوماسیون اداری
+  // ============================================================
 
-class _HeaderBtn extends StatelessWidget {
-  const _HeaderBtn({
-    required this.icon,
-    required this.onTap,
-    required this.tooltip,
-  });
+  Widget _buildHubBody(WebAccess access) {
+    final tabs = _buildTabs(access);
+    final groups = _buildHubGroups(access, tabs);
+    final totalUnread = _innerUnread + _outgoingUnread + _incomingUnread;
 
-  final IconData icon;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(11),
-      child: Padding(
-        padding: const EdgeInsets.all(9),
-        child: Icon(icon, size: 21, color: Colors.white.withValues(alpha: .92)),
-      ),
-    ),
-  );
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.title, required this.icon});
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(2, 6, 2, 10),
-    child: Row(
-      children: [
-        Icon(icon, size: 15, color: OfficeColors.seed),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-        ),
-      ],
-    ),
-  );
-}
-
-class _QuickTile extends StatefulWidget {
-  const _QuickTile({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  State<_QuickTile> createState() => _QuickTileState();
-}
-
-class _QuickTileState extends State<_QuickTile> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTapDown: (d) => setState(() => _pressed = true),
-    onTapUp: (d) => setState(() => _pressed = false),
-    onTapCancel: () => setState(() => _pressed = false),
-    onTap: widget.onTap,
-    child: AnimatedScale(
-      scale: _pressed ? .94 : 1,
-      duration: const Duration(milliseconds: 120),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: OfficeColors.line),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blueGrey.withValues(alpha: .05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    widget.color.withValues(alpha: .18),
-                    widget.color.withValues(alpha: .07),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(widget.icon, size: 18, color: widget.color),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              widget.label,
-              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.icon,
-    required this.color,
-    this.onTap,
-  });
-
-  final String label;
-  final int value;
-  final String sub;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: OfficeColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blueGrey.withValues(alpha: .05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return RefreshIndicator(
+      onRefresh: _refreshPulse,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+        children: [
+          // ۱) کارت‌های نبض زنده کارتابل و دبیرخانه
+          _buildPulseStrip(
+            access: access,
+            tabs: tabs,
+            totalUnread: totalUnread,
           ),
+          const SizedBox(height: 14),
+
+          // ۲) داک اقدام فوری (فقط در صورت داشتن مجوز ثبت/عملیات)
+          if (_hasAnyQuickAction(access)) ...[
+            _buildQuickActionsDock(access),
+            const SizedBox(height: 16),
+          ],
+
+          // ۳) گروه‌های ماژول اتوماسیون (نمای بنتو یا پوشه‌ای)
+          if (_layoutMode == _OfficeLayoutMode.bento)
+            for (final g in groups) ...[
+              _buildBentoGroup(g),
+              const SizedBox(height: 16),
+            ]
+          else
+            for (final g in groups) ...[
+              _buildFolderGroup(g),
+              const SizedBox(height: 10),
+            ],
+
+          // ۴) فید سریع نامه‌های خوانده‌نشده در انتظار اقدام
+          if (_urgentFeed.isNotEmpty) _buildUnreadFeedCard(),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  color.withValues(alpha: .18),
-                  color.withValues(alpha: .06),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(11),
+    );
+  }
+
+  Widget _buildPulseStrip({
+    required WebAccess access,
+    required List<_WorkspaceTabSpec> tabs,
+    required int totalUnread,
+  }) {
+    final cards = <({
+      String title,
+      int count,
+      String unit,
+      IconData icon,
+      Color color,
+      VoidCallback? onTap,
+    })>[
+      if (access.canSeeInnerLetters ||
+          access.canSeeOutgoingLetters ||
+          access.canSeeIncomingLetters)
+        (
+          title: 'خوانده‌نشده کارتابل',
+          count: totalUnread,
+          unit: 'نامه منتظر بررسی',
+          icon: Icons.mark_email_unread_rounded,
+          color: const Color(0xff2563eb),
+          onTap: () {
+            if (access.canSeeInnerLetters) {
+              _switchTab('inner', tabs);
+            } else if (access.canSeeOutgoingLetters) {
+              _switchTab('outgoing', tabs);
+            } else if (access.canSeeIncomingLetters) {
+              _switchTab('incoming', tabs);
+            }
+          },
+        ),
+      if (access.canSeeOutgoingLetters)
+        (
+          title: 'در نوبت امضای من',
+          count: _signingPending,
+          unit: 'نامه آماده امضا',
+          icon: Icons.draw_rounded,
+          color: const Color(0xffd97706),
+          onTap: () => _pushPage(
+            const LetterMailboxPage(
+              kind: LetterKind.outgoing,
+              initialBox: LetterBox.signing,
             ),
-            child: Icon(icon, size: 17, color: color),
           ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      Fa.digits(value),
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
+        ),
+      if (access.canSeeDabirkhane)
+        (
+          title: 'صف ثبت دبیرخانه',
+          count: _dabirkhanePending,
+          unit: 'مرسوله منتظر ثبت',
+          icon: Icons.markunread_mailbox_rounded,
+          color: const Color(0xff4f46e5),
+          onTap: () => _switchTab('dabirkhane', tabs),
+        ),
+      if (access.canSeeEmail)
+        (
+          title: 'ایمیل خوانده‌نشده',
+          count: _emailUnread,
+          unit: 'پیام در صندوق رسمی',
+          icon: Icons.alternate_email_rounded,
+          color: const Color(0xff0d9488),
+          onTap: () => _switchTab('email', tabs),
+        ),
+    ];
+
+    if (cards.isEmpty) return const SizedBox.shrink();
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cols = cards.length == 1 ? 1 : 2;
+        final w = (c.maxWidth - (cols - 1) * 10) / cols;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final kpi in cards)
+              SizedBox(
+                width: w,
+                child: _PulseKpiCard(
+                  title: kpi.title,
+                  count: kpi.count,
+                  unit: kpi.unit,
+                  icon: kpi.icon,
+                  color: kpi.color,
+                  onTap: kpi.onTap,
                 ),
-                Text(
-                  sub,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool _hasAnyQuickAction(WebAccess access) =>
+      access.canCreateInnerLetter ||
+      access.canCreateOutgoingLetter ||
+      access.canCreateIncomingLetter ||
+      access.canSeeDabirkhane ||
+      access.canCreateEmail;
+
+  Widget _buildQuickActionsDock(WebAccess access) {
+    final actions = <({
+      String label,
+      IconData icon,
+      Color color,
+      VoidCallback onTap,
+    })>[
+      if (access.canCreateInnerLetter)
+        (
+          label: 'ثبت نامه داخلی',
+          icon: Icons.edit_document,
+          color: OfficeColors.inner,
+          onTap: () => _pushPage(const LetterEditorPage(kind: LetterKind.inner)),
+        ),
+      if (access.canCreateOutgoingLetter)
+        (
+          label: 'نگارش صادره',
+          icon: Icons.outbox_rounded,
+          color: OfficeColors.outgoing,
+          onTap: () =>
+              _pushPage(const LetterEditorPage(kind: LetterKind.outgoing)),
+        ),
+      if (access.canCreateIncomingLetter)
+        (
+          label: 'ثبت نامه وارده',
+          icon: Icons.move_to_inbox_rounded,
+          color: OfficeColors.incoming,
+          onTap: () =>
+              _pushPage(const LetterEditorPage(kind: LetterKind.incoming)),
+        ),
+      if (access.canSeeDabirkhane)
+        (
+          label: 'میز دبیرخانه',
+          icon: Icons.markunread_mailbox_rounded,
+          color: const Color(0xff4338ca),
+          onTap: () => _pushPage(
+            OfficeDabirkhanePage(
+              initialMode: access.canSeeOutgoingDabirkhane
+                  ? DabirkhaneMode.sadere
+                  : DabirkhaneMode.varede,
+            ),
+          ),
+        ),
+      if (access.canCreateEmail)
+        (
+          label: 'صندوق ایمیل',
+          icon: Icons.send_rounded,
+          color: OfficeColors.email,
+          onTap: () => _pushPage(const EmailPage()),
+        ),
+    ];
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xff111c33) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xff23324d) : const Color(0xffe2e8f0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.bolt_rounded, size: 17, color: Color(0xff4f46e5)),
+              SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  'اقدام فوری مکاتبات و دبیرخانه',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 9.5, color: Colors.blueGrey.shade400),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: actions.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final a = actions[i];
+                return Material(
+                  color: a.color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: a.onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: a.color.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(a.icon, size: 16, color: a.color),
+                          const SizedBox(width: 6),
+                          Text(
+                            a.label,
+                            style: TextStyle(
+                              fontSize: 11.8,
+                              fontWeight: FontWeight.w900,
+                              color: a.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
-class _SquareBtn extends StatelessWidget {
-  const _SquareBtn({required this.icon, required this.color, required this.onTap});
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(14),
-    child: Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: OfficeColors.line),
-      ),
-      child: Icon(icon, size: 19, color: color),
-    ),
-  );
-}
-
-class _SheetAction extends StatelessWidget {
-  const _SheetAction({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 9),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: OfficeColors.line),
-        ),
-        child: Row(
+  Widget _buildBentoGroup(_HubGroupSpec group) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
             Container(
-              width: 42,
-              height: 42,
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: .20),
-                    color.withValues(alpha: .08),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(13),
+                color: group.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
               ),
-              child: Icon(icon, size: 20, color: color),
+              child: Icon(group.icon, size: 16, color: group.accent),
             ),
-            const SizedBox(width: 11),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
-                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                    group.title,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      height: 1.6,
-                      color: Colors.blueGrey.shade500,
+                    group.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10.8,
+                      color: Color(0xff64748b),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_left, size: 19, color: Colors.blueGrey.shade300),
           ],
         ),
-      ),
-    ),
-  );
-}
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, c) {
+            final twoColWidth = (c.maxWidth - 10) / 2;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final it in group.items)
+                  SizedBox(
+                    width: group.items.length == 1 ? c.maxWidth : twoColWidth,
+                    child: _BentoModuleTile(item: it),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
 
-// ============================================================
-//  کارت ماژول نامه در داشبورد — با کارتابل‌های واقعی هر ماژول
-// ============================================================
+  Widget _buildFolderGroup(_HubGroupSpec group) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final open = _expandedGroups.contains(group.id);
 
-class _ModuleCard extends StatelessWidget {
-  const _ModuleCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.boxes,
-    required this.counts,
-    required this.onOpenBox,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final List<LetterBox> boxes;
-  final ModuleMailboxCounts counts;
-  final ValueChanged<LetterBox> onOpenBox;
-
-  /// عدد واقعی هر کارتابل — همیشه نمایش داده می‌شود (صفر هم یک عدد واقعی است)
-  int _countOf(LetterBox b) => switch (b) {
-    LetterBox.inbox => counts.inbox,
-    LetterBox.sent => counts.sent,
-    LetterBox.drafts => counts.drafts,
-    LetterBox.archive => counts.archive,
-    LetterBox.signing => counts.signing,
-    LetterBox.dabirkhane => counts.dabirkhane,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: OfficeColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.07),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+    return Material(
+      color: isDark ? const Color(0xff111c33) : Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isDark ? const Color(0xff23324d) : const Color(0xffe2e8f0),
           ),
+        ),
+        child: Column(
+          children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => setState(() {
+              if (!_expandedGroups.remove(group.id)) {
+                _expandedGroups.add(group.id);
+              }
+            }),
+            child: Padding(
+              padding: const EdgeInsets.all(13),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: group.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(group.icon, color: group.accent, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.title,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          '${Fa.digits(group.items.length)} زیربخش • ${group.subtitle}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.8,
+                            color: Color(0xff64748b),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    open
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Column(
+                children: [
+                  for (final it in group.items)
+                    ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      leading: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: it.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(it.icon, color: it.color, size: 18),
+                      ),
+                      title: Text(
+                        it.title,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: Text(
+                        it.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10.8),
+                      ),
+                      trailing: it.badge != null
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2.5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: it.color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                it.badge!,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: it.color,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.chevron_right_rounded, size: 18),
+                      onTap: it.onTap,
+                    ),
+                ],
+              ),
+            ),
         ],
+      ),
+      ),
+    );
+  }
+
+  Widget _buildUnreadFeedCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xff111c33) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xff23324d) : const Color(0xffe2e8f0),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
+            children: [
+              Icon(
+                Icons.notifications_active_outlined,
+                size: 18,
+                color: Color(0xff4f46e5),
+              ),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'نامه‌های خوانده‌نشده منتظر بررسی شما',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final entry in _urgentFeed)
+            LetterTile(
+              item: entry.item,
+              kind: entry.kind,
+              onTap: () => _pushPage(
+                LetterDetailPage(
+                  kind: entry.kind,
+                  letterId: entry.item.letterId,
+                  erjaId: entry.item.erjaId,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+//  ویجت‌های اختصاصی میز فرماندهی اتوماسیون
+// ============================================================
+
+class _HeaderIconBtn extends StatelessWidget {
+  const _HeaderIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(11),
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _PulseKpiCard extends StatelessWidget {
+  const _PulseKpiCard({
+    required this.title,
+    required this.count,
+    required this.unit,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
+
+  final String title;
+  final int count;
+  final String unit;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: isDark ? const Color(0xff111c33) : Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: count > 0
+                  ? color.withValues(alpha: 0.35)
+                  : (isDark
+                        ? const Color(0xff23324d)
+                        : const Color(0xffe2e8f0)),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: isDark ? 0.14 : 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color, Color.lerp(color, Colors.black, 0.22)!],
+                    colors: [color, color.withValues(alpha: 0.72)],
                     begin: Alignment.topRight,
                     end: Alignment.bottomLeft,
                   ),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(icon, color: Colors.white, size: 21),
+                child: Icon(icon, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1536,18 +1685,33 @@ class _ModuleCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
+                      Fa.digits(count),
+                      style: TextStyle(
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        color: OfficeColors.ink,
+                        color: count > 0
+                            ? color
+                            : (isDark ? Colors.white : const Color(0xff0f172a)),
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     Text(
-                      subtitle,
+                      unit,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11,
-                        color: OfficeColors.ink,
+                        fontSize: 9.8,
+                        color: Color(0xff64748b),
                       ),
                     ),
                   ],
@@ -1555,69 +1719,131 @@ class _ModuleCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 11),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              for (final b in boxes)
-                Material(
-                  color: color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(100),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(100),
-                    onTap: () => onOpenBox(b),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: color.withValues(alpha: 0.22)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(b.icon, size: 14, color: color),
-                          const SizedBox(width: 5),
-                          Text(
-                            b.label,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                              color: color,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Container(
-                            constraints: const BoxConstraints(minWidth: 18),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Text(
-                              Fa.digits(_countOf(b)),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BentoModuleTile extends StatelessWidget {
+  const _BentoModuleTile({required this.item});
+
+  final _HubItemSpec item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: isDark ? const Color(0xff111c33) : Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: item.onTap,
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: item.featured
+                ? LinearGradient(
+                    colors: [
+                      item.color.withValues(alpha: isDark ? 0.22 : 0.08),
+                      isDark ? const Color(0xff111c33) : Colors.white,
+                    ],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                  )
+                : null,
+            border: Border.all(
+              color: item.featured
+                  ? item.color.withValues(alpha: 0.30)
+                  : (isDark
+                        ? const Color(0xff23324d)
+                        : const Color(0xffe2e8f0)),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(
+                  0xff0f172a,
+                ).withValues(alpha: isDark ? 0.16 : 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
-        ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: item.color.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(item.icon, color: item.color, size: 20),
+                  ),
+                  const SizedBox(width: 6),
+                  if (item.badge != null)
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: item.color,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          item.badge!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9.8,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      size: 16,
+                      color: item.color.withValues(alpha: 0.7),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 11),
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.6,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                item.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.6,
+                  height: 1.45,
+                  color: isDark
+                      ? const Color(0xff94a3b8)
+                      : const Color(0xff64748b),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

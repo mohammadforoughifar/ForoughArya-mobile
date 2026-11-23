@@ -14,6 +14,8 @@ import 'package:share_plus/share_plus.dart';
 
 import 'dart:io';
 
+import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
@@ -45,7 +47,8 @@ class LetterDetailPage extends StatefulWidget {
 class _LetterDetailPageState extends State<LetterDetailPage>
     with SingleTickerProviderStateMixin {
   OfficeAutomationRepository get _repo =>
-      context.read<OfficeAutomationRepository>();
+      Provider.of<OfficeAutomationRepository?>(context, listen: false) ??
+      OfficeAutomationRepository(context.read<ApiClient>());
 
   bool _loading = true;
   String? _error;
@@ -1764,10 +1767,16 @@ class _LetterDetailPageState extends State<LetterDetailPage>
   // ------------------------------------------------------------
 
   Widget? _actionBar(Color accent) {
+    final session = Provider.of<AuthController?>(context)?.session;
+    final access = WebAccess(session, unrestrictedWhenNull: true);
     final canAnswer = _myErja != null;
     final o = _outgoing;
     final canSign = o != null && o.isMyTurnToSign;
-    final canDabirkhane = o != null && o.isIssued && !o.dabirkhaneSabt;
+    final canDabirkhane =
+        o != null &&
+        o.isIssued &&
+        !o.dabirkhaneSabt &&
+        access.canSeeOutgoingDabirkhane;
 
     if (!canAnswer && !canSign && !canDabirkhane) return null;
 
@@ -1912,7 +1921,8 @@ class _ErjaSheetState extends State<_ErjaSheet> {
   bool _loadingAmalgars = true;
 
   OfficeAutomationRepository get _repo =>
-      context.read<OfficeAutomationRepository>();
+      Provider.of<OfficeAutomationRepository?>(context, listen: false) ??
+      OfficeAutomationRepository(context.read<ApiClient>());
 
   @override
   void initState() {
@@ -2325,7 +2335,8 @@ class _DabirkhaneSheetState extends State<_DabirkhaneSheet> {
   bool _busy = false;
 
   OfficeAutomationRepository get _repo =>
-      context.read<OfficeAutomationRepository>();
+      Provider.of<OfficeAutomationRepository?>(context, listen: false) ??
+      OfficeAutomationRepository(context.read<ApiClient>());
 
   @override
   void dispose() {

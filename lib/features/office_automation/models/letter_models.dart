@@ -29,11 +29,29 @@ class LetterListItem {
     this.hasAnswer = false,
     // ویژهٔ نامه وارده
     this.senderOrganization,
-    // ویژهٔ نامه صادره
+    this.numberSabt,
+    this.numberLetterVarede,
+    this.dateErsal,
+    // ویژهٔ نامه صادره و دبیرخانه یکپارچه
     this.receiverOrganization,
+    this.receiverName,
     this.outgoingStatus = 0,
     this.sadereNumber,
+    this.dateSadere,
+    this.companyName,
     this.isSignedByMe = false,
+    this.dabirkhaneSabt = false,
+    this.sendMethod,
+    this.destRegNumber,
+    this.delivererName,
+    this.trackingCode,
+    this.destEmail,
+    this.destFax,
+    this.dateDabirkhane,
+    this.dabirkhaneUserName,
+    this.isArchived = false,
+    this.archiveFolderTitle,
+    this.hasWorkOrder = false,
   });
 
   final int letterId;
@@ -56,10 +74,28 @@ class LetterListItem {
   final int typeTaeed;
   final bool hasAnswer;
   final String? senderOrganization;
+  final String? numberSabt;
+  final String? numberLetterVarede;
+  final DateTime? dateErsal;
   final String? receiverOrganization;
+  final String? receiverName;
   final int outgoingStatus;
   final String? sadereNumber;
+  final DateTime? dateSadere;
+  final String? companyName;
   final bool isSignedByMe;
+  final bool dabirkhaneSabt;
+  final String? sendMethod;
+  final String? destRegNumber;
+  final String? delivererName;
+  final String? trackingCode;
+  final String? destEmail;
+  final String? destFax;
+  final DateTime? dateDabirkhane;
+  final String? dabirkhaneUserName;
+  final bool isArchived;
+  final String? archiveFolderTitle;
+  final bool hasWorkOrder;
 
   bool get isConfidential => mahramanegi != 'عادی';
   bool get isUrgent => foriat != 'عادی';
@@ -67,11 +103,34 @@ class LetterListItem {
   factory LetterListItem.fromJson(Map<String, dynamic> j) => LetterListItem(
     letterId: pickInt(j, ['letterId', 'LetterId', 'id', 'Id', 'sourceId']),
     title: pickStr(j, ['title', 'Title'], '(بدون عنوان)'),
-    letterNumber: pickStr(j, ['letterNumber', 'LetterNumber', 'number']),
+    letterNumber: pickStr(j, [
+      'letterNumber',
+      'LetterNumber',
+      'numberSabt',
+      'NumberSabt',
+      'number',
+    ]),
     erjaId: pickIntN(j, ['erjaId', 'ErjaId']),
-    sender: pickStr(j, ['sender', 'Sender', 'senderName', 'SenderName', 'creator']),
+    sender: pickStr(j, [
+      'sender',
+      'Sender',
+      'senderName',
+      'SenderName',
+      'creatorName',
+      'CreatorName',
+      'creator',
+      'ferestande',
+      'Ferestande',
+    ]),
     senderUserId: pickInt(j, ['senderUserId', 'SenderUserId', 'creatorUserId']),
-    receiver: pickStr(j, ['reciver', 'Reciver', 'reciverName', 'ReciverName']),
+    receiver: pickStr(j, [
+      'reciver',
+      'Reciver',
+      'reciverName',
+      'ReciverName',
+      'receiverName',
+      'ReceiverName',
+    ]),
     date: pickDate(j, ['date', 'Date', 'dateSabt', 'DateSabt']),
     mahramanegi: pickStr(j, ['mahramanegi', 'Mahramanegi'], 'عادی'),
     foriat: pickStr(j, ['foriat', 'Foriat'], 'عادی'),
@@ -84,12 +143,48 @@ class LetterListItem {
     receiverCount: pickInt(j, ['reciverCount', 'ReciverCount']),
     typeTaeed: pickInt(j, ['typeTaeed', 'TypeTaeed']),
     hasAnswer: pickBool(j, ['hasAnswer', 'HasAnswer']),
-    senderOrganization:
-        pickStrN(j, ['senderOrganization', 'SenderOrganization', 'ferestande']),
-    receiverOrganization: pickStrN(j, ['receiverOrganization', 'ReceiverOrganization']),
+    senderOrganization: pickStrN(j, [
+      'senderOrganization',
+      'SenderOrganization',
+      'ferestande',
+      'Ferestande',
+    ]),
+    numberSabt: pickStrN(j, ['numberSabt', 'NumberSabt']),
+    numberLetterVarede: pickStrN(j, [
+      'numberLetterVarede',
+      'NumberLetterVarede',
+    ]),
+    dateErsal: pickDate(j, ['dateErsal', 'DateErsal']),
+    receiverOrganization: pickStrN(j, [
+      'receiverOrganization',
+      'ReceiverOrganization',
+    ]),
+    receiverName: pickStrN(j, ['receiverName', 'ReceiverName']),
     outgoingStatus: pickInt(j, ['status', 'Status']),
     sadereNumber: pickStrN(j, ['sadereNumber', 'SadereNumber']),
+    dateSadere: pickDate(j, ['dateSadere', 'DateSadere']),
+    companyName: pickStrN(j, ['companyName', 'CompanyName']),
     isSignedByMe: pickBool(j, ['isSignedByMe', 'IsSignedByMe', 'mySigned']),
+    dabirkhaneSabt: pickBool(j, ['dabirkhaneSabt', 'DabirkhaneSabt']),
+    sendMethod: pickStrN(j, ['sendMethod', 'SendMethod']),
+    destRegNumber: pickStrN(j, ['destRegNumber', 'DestRegNumber']),
+    delivererName: pickStrN(j, ['delivererName', 'DelivererName']),
+    trackingCode: pickStrN(j, ['trackingCode', 'TrackingCode']),
+    destEmail: pickStrN(j, ['destEmail', 'DestEmail']),
+    destFax: pickStrN(j, ['destFax', 'DestFax']),
+    dateDabirkhane: pickDate(j, ['dateDabirkhane', 'DateDabirkhane']),
+    dabirkhaneUserName: pickStrN(j, [
+      'dabirkhaneUserName',
+      'DabirkhaneUserName',
+    ]),
+    isArchived: pickBool(j, ['isArchived', 'IsArchived']),
+    archiveFolderTitle: pickStrN(j, [
+      'archiveFolderTitle',
+      'ArchiveFolderTitle',
+    ]),
+    hasWorkOrder:
+        pickBool(j, ['hasWorkOrder', 'HasWorkOrder']) ||
+        (pickIntN(j, ['workOrderId', 'WorkOrderId']) ?? 0) > 0,
   );
 }
 
@@ -494,3 +589,206 @@ class DraftLetter {
     createdAt: pickDate(j, ['createdAt', 'CreatedAt', 'date']),
   );
 }
+
+// ============================================================
+//  مدل‌های «دبیرخانه یکپارچه اتوماسیون توکا»، «رزرو اندیکاتور»،
+//  «ساختار شماره نامه» و «بایگانی شخصی» (هم‌تراز ۱۰۰٪ با وب)
+// ============================================================
+
+/// آمار زندهٔ دبیرخانه یکپارچه نامه‌های صادره — معادل `DabirkhaneStatsDto`
+class DabirkhaneStats {
+  const DabirkhaneStats({
+    this.pending = 0,
+    this.registered = 0,
+    this.archived = 0,
+  });
+
+  final int pending;
+  final int registered;
+  final int archived;
+
+  int get total => pending + registered;
+
+  factory DabirkhaneStats.fromJson(Map<String, dynamic> j) => DabirkhaneStats(
+    pending: pickInt(j, ['pending', 'Pending']),
+    registered: pickInt(j, ['registered', 'Registered']),
+    archived: pickInt(j, ['archived', 'Archived']),
+  );
+}
+
+/// مشخصات فیلدهای پویا برای هر روش ارسال دبیرخانه — آینهٔ `LetterSendMethods.Spec` وب
+class LetterSendMethodSpec {
+  const LetterSendMethodSpec({
+    this.needsDelivererName = false,
+    this.needsTrackingCode = false,
+    this.needsFax = false,
+    this.needsDestEmail = false,
+    this.needsDestRegNumber = false,
+    this.hint = '',
+  });
+
+  final bool needsDelivererName;
+  final bool needsTrackingCode;
+  final bool needsFax;
+  final bool needsDestEmail;
+  final bool needsDestRegNumber;
+  final String hint;
+
+  static const List<String> allMethods = [
+    'پست',
+    'پست پیشتاز',
+    'پیک',
+    'ایمیل',
+    'فکس',
+    'تحویل حضوری',
+    'اتوماسیون (ECE)',
+  ];
+
+  static LetterSendMethodSpec of(String? method) => switch ((method ?? '').trim()) {
+    'پست' || 'پست پیشتاز' => const LetterSendMethodSpec(
+      needsDelivererName: true,
+      needsTrackingCode: true,
+      hint: 'نام مأمور پست یا گیرنده و کد رهگیری مرسوله پستی ثبت می‌شود.',
+    ),
+    'پیک' || 'تحویل حضوری' => const LetterSendMethodSpec(
+      needsDelivererName: true,
+      hint: 'نام پیک یا شخص تحویل‌گیرندهٔ فیزیکی نامه الزامی است.',
+    ),
+    'ایمیل' => const LetterSendMethodSpec(
+      needsDestEmail: true,
+      hint: 'فایل PDF رسمی نامه روی سربرگ شرکت همراه پیوست‌ها به ایمیل مقصد ارسال می‌شود.',
+    ),
+    'فکس' => const LetterSendMethodSpec(
+      needsFax: true,
+      hint: 'شماره دورنگار (فکس) سازمان مقصد جهت ثبت در پرونده الزامی است.',
+    ),
+    'اتوماسیون (ECE)' || 'اتوماسیون' => const LetterSendMethodSpec(
+      needsDestRegNumber: true,
+      hint: 'شماره ثبت دریافت‌شده از سامانه اتوماسیون سازمان مقصد را وارد کنید.',
+    ),
+    _ => const LetterSendMethodSpec(),
+  };
+}
+
+/// ردیف شمارهٔ رزروشدهٔ اندیکاتور — معادل `LetterNumberReservationDto`
+class LetterNumberReservation {
+  const LetterNumberReservation({
+    required this.id,
+    required this.numberSabt,
+    this.userName = '',
+    this.dateReservation,
+    this.isUsed = false,
+  });
+
+  final int id;
+  final String numberSabt;
+  final String userName;
+  final DateTime? dateReservation;
+  final bool isUsed;
+
+  factory LetterNumberReservation.fromJson(Map<String, dynamic> j) =>
+      LetterNumberReservation(
+        id: pickInt(j, ['id', 'Id', 'reservationId', 'ReservationId']),
+        numberSabt: pickStr(j, [
+          'numberSabt',
+          'NumberSabt',
+          'reservedNumber',
+          'ReservedNumber',
+          'letterNumber',
+          'LetterNumber',
+          'number',
+        ]),
+        userName: pickStr(j, ['userName', 'UserName', 'user', 'fullName']),
+        dateReservation: pickDate(j, [
+          'dateReservation',
+          'DateReservation',
+          'createdAt',
+          'date',
+        ]),
+        isUsed: pickBool(j, ['isUsed', 'IsUsed', 'used']),
+      );
+}
+
+/// ساختار شماره اندیکاتور هر نوع نامه — معادل `LetterStructureItemDto`
+class LetterStructureItem {
+  const LetterStructureItem({
+    required this.typeForm,
+    required this.title,
+    required this.parts,
+  });
+
+  final int typeForm;
+  final String title;
+  final List<String> parts;
+
+  static const List<String> availableParts = ['واحد', 'شماره', 'سال'];
+
+  factory LetterStructureItem.fromJson(Map<String, dynamic> j) =>
+      LetterStructureItem(
+        typeForm: pickInt(j, ['typeForm', 'TypeForm'], 1),
+        title: pickStr(j, ['title', 'Title']),
+        parts: (pick(j, ['parts', 'Parts']) as List?)
+                ?.map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList() ??
+            const [],
+      );
+}
+
+/// پوشهٔ بایگانی شخصی کاربر — معادل `/api/archive/folders`
+class PersonalArchiveFolder {
+  const PersonalArchiveFolder({
+    required this.id,
+    required this.title,
+    this.parentId,
+    this.itemCount = 0,
+  });
+
+  final int id;
+  final String title;
+  final int? parentId;
+  final int itemCount;
+
+  factory PersonalArchiveFolder.fromJson(Map<String, dynamic> j) =>
+      PersonalArchiveFolder(
+        id: pickInt(j, ['id', 'Id', 'folderId', 'FolderId']),
+        title: pickStr(j, ['title', 'Title', 'name', 'Name'], 'پوشه'),
+        parentId: pickIntN(j, ['parentId', 'ParentId']),
+        itemCount: pickInt(j, ['itemCount', 'ItemCount', 'count', 'Count']),
+      );
+}
+
+/// آیتم داخل پوشهٔ بایگانی شخصی — معادل `/api/archive/items/{folderId}`
+class PersonalArchiveItem {
+  const PersonalArchiveItem({
+    required this.id,
+    required this.title,
+    this.module = '',
+    this.refNumber = '',
+    this.note = '',
+    this.createdAt,
+  });
+
+  final int id;
+  final String title;
+  final String module;
+  final String refNumber;
+  final String note;
+  final DateTime? createdAt;
+
+  factory PersonalArchiveItem.fromJson(Map<String, dynamic> j) =>
+      PersonalArchiveItem(
+        id: pickInt(j, ['id', 'Id', 'itemId', 'ItemId']),
+        title: pickStr(j, ['title', 'Title', 'subject'], 'آیتم بایگانی'),
+        module: pickStr(j, ['module', 'Module', 'sourceType', 'type']),
+        refNumber: pickStr(j, [
+          'refNumber',
+          'RefNumber',
+          'number',
+          'letterNumber',
+        ]),
+        note: pickStr(j, ['note', 'Note', 'description', 'Description']),
+        createdAt: pickDate(j, ['createdAt', 'CreatedAt', 'date']),
+      );
+}
+

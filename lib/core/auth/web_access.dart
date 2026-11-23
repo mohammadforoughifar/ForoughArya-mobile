@@ -150,19 +150,52 @@ class WebAccess {
   bool get canAssignOthersWorkOrder =>
       !isReferrer && has('WorkOrders.AssignOthers');
 
-  // --- اتوماسیون اداری توکا و ایمیل ---
+  // --- اتوماسیون اداری توکا، دبیرخانه یکپارچه و ایمیل ---
   bool get canSeeInnerLetters => !isReferrer && canSee('InnerLetters');
   bool get canSeeOutgoingLetters => !isReferrer && canSee('OutgoingLetters');
   bool get canSeeIncomingLetters => !isReferrer && canSee('IncomingLetters');
   bool get canSeeLettersAny =>
       canSeeInnerLetters || canSeeOutgoingLetters || canSeeIncomingLetters;
-  bool get canSeeOfficeAutomation => canSeeLettersAny || canSeeMinutes;
+
+  /// دبیرخانه یکپارچه نامه‌های صادره (`OutgoingLetters.Dabirkhane` در `NavMenu.razor`)
+  bool get canSeeOutgoingDabirkhane =>
+      !isReferrer && (_openPreview || has('OutgoingLetters.Dabirkhane'));
+
+  /// دبیرخانه نامه‌های وارده (`IntegratedIncomingPanel.razor`: `IncomingLetters.Dabirkhane` یا `OutgoingLetters.Dabirkhane`)
+  bool get canSeeIncomingDabirkhane =>
+      !isReferrer &&
+      (_openPreview ||
+          has('IncomingLetters.Dabirkhane') ||
+          has('OutgoingLetters.Dabirkhane'));
+
+  bool get canSeeDabirkhane =>
+      canSeeOutgoingDabirkhane || canSeeIncomingDabirkhane;
+
+  /// مدیریت گروه‌های گیرندگان نامه (`LetterGroups.razor`: `PersonalSettings.ManageLetterGroups` یا `InnerLetters.Create`)
+  bool get canManageLetterGroups =>
+      !isReferrer &&
+      (_openPreview ||
+          has('PersonalSettings.ManageLetterGroups') ||
+          canCreateInnerLetter);
+
+  /// ساختار شماره نامه / اندیکاتور (`LetterStructure.razor`: `LetterStructures.Read` و `Update`)
+  bool get canSeeLetterStructures =>
+      !isReferrer &&
+      (_openPreview ||
+          has('LetterStructures.Read') ||
+          canSee('LetterStructures'));
+  bool get canUpdateLetterStructures =>
+      !isReferrer && (_openPreview || has('LetterStructures.Update'));
+
+  bool get canSeeOfficeAutomation =>
+      canSeeLettersAny || canSeeDabirkhane || canSeeMinutes;
 
   bool get canCreateInnerLetter => !isReferrer && has('InnerLetters.Create');
   bool get canCreateOutgoingLetter =>
       !isReferrer && has('OutgoingLetters.Create');
   bool get canCreateIncomingLetter =>
-      !isReferrer && has('IncomingLetters.Create');
+      !isReferrer &&
+      (has('IncomingLetters.Create') || canSeeIncomingDabirkhane);
   bool get canCreateAnyLetter =>
       canCreateInnerLetter ||
       canCreateOutgoingLetter ||
@@ -174,7 +207,8 @@ class WebAccess {
   bool get canSeePersonalEmail => !isReferrer && has('Email.Personal');
   bool get canSeeEmailAny => canSeeEmail || canSeePersonalEmail;
 
-  bool get canSeeOfficeGroup => canSeeLettersAny || canSeeEmail;
+  bool get canSeeOfficeGroup =>
+      canSeeLettersAny || canSeeDabirkhane || canSeeEmail;
 
   // --- صورتجلسه ---
   bool get canSeeMinutes => !isReferrer && canSee('MeetingMinutes');

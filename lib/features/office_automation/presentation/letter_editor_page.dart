@@ -104,7 +104,9 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   bool _busy = false;
   bool _loadingDetail = false;
 
-  OfficeAutomationRepository get _repo => context.read<OfficeAutomationRepository>();
+  OfficeAutomationRepository get _repo =>
+      Provider.of<OfficeAutomationRepository?>(context, listen: false) ??
+      OfficeAutomationRepository(context.read<ApiClient>());
 
   @override
   void initState() {

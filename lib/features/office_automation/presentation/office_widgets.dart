@@ -183,7 +183,7 @@ class LetterBadges extends StatelessWidget {
   }
 }
 
-/// کارت یک سطر نامه در کارتابل
+/// کارت اجرایی یک سطر نامه در کارتابل — طراحی لوکس با نوار وضعیت کناری، نشانگر خوانده‌نشده و بج‌های دقیق
 class LetterTile extends StatelessWidget {
   const LetterTile({
     super.key,
@@ -200,151 +200,275 @@ class LetterTile extends StatelessWidget {
   final VoidCallback? onNeshan;
   final bool showSender;
 
+  static Color _kindAccent(LetterKind? kind, Color fallback) => switch (kind) {
+    LetterKind.inner => const Color(0xff2563eb),
+    LetterKind.outgoing => const Color(0xff059669),
+    LetterKind.incoming => const Color(0xffd97706),
+    null => fallback,
+  };
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final unread = !item.isRead;
+    final accent = _kindAccent(kind, theme.colorScheme.primary);
+    final edgeColor = item.isUrgent
+        ? foriatColor(item.foriat)
+        : unread
+        ? accent
+        : Colors.transparent;
     final subtitle = kind == LetterKind.outgoing
         ? (item.receiverOrganization ?? item.receiver)
         : (item.senderOrganization ?? item.sender);
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xff111c33) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
           color: unread
-              ? theme.colorScheme.primary.withValues(alpha: .35)
-              : const Color(0xffe4eaf3),
+              ? accent.withValues(alpha: 0.34)
+              : isDark
+              ? const Color(0xff23324d)
+              : const Color(0xffe2e8f0),
+          width: unread ? 1.25 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: (unread ? accent : const Color(0xff0f172a)).withValues(
+              alpha: isDark ? 0.18 : (unread ? 0.08 : 0.035),
+            ),
+            blurRadius: unread ? 16 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: (unread
-                              ? theme.colorScheme.primary
-                              : Colors.blueGrey.shade200)
-                          .withValues(alpha: .13),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(
-                      _kindIcon(kind),
-                      size: 20,
-                      color: unread
-                          ? theme.colorScheme.primary
-                          : Colors.blueGrey.shade400,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
+                  Container(width: unread || item.isUrgent ? 4.5 : 0, color: edgeColor),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      gradient: unread
+                                          ? LinearGradient(
+                                              colors: [
+                                                accent,
+                                                accent.withValues(alpha: 0.75),
+                                              ],
+                                              begin: Alignment.topRight,
+                                              end: Alignment.bottomLeft,
+                                            )
+                                          : null,
+                                      color: unread
+                                          ? null
+                                          : accent.withValues(alpha: 0.10),
+                                      borderRadius: BorderRadius.circular(13),
+                                    ),
+                                    child: Icon(
+                                      _kindIcon(kind),
+                                      size: 20,
+                                      color: unread ? Colors.white : accent,
+                                    ),
+                                  ),
+                                  if (unread)
+                                    Positioned(
+                                      top: -2,
+                                      left: -2,
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xffef4444),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: isDark
+                                                ? const Color(0xff111c33)
+                                                : Colors.white,
+                                            width: 1.6,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title.trim().isEmpty
+                                          ? 'بدون عنوان'
+                                          : item.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13.8,
+                                        height: 1.35,
+                                        fontWeight: unread
+                                            ? FontWeight.w900
+                                            : FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 3,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: [
+                                        if (item.letterNumber.isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? const Color(0xff1e293b)
+                                                  : const Color(0xfff1f5f9),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              'شماره ${Fa.digits(item.letterNumber)}',
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: isDark
+                                                    ? const Color(0xffcbd5e1)
+                                                    : const Color(0xff475569),
+                                              ),
+                                            ),
+                                          ),
+                                        if (showSender && subtitle.isNotEmpty)
+                                          Text(
+                                            subtitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark
+                                                  ? const Color(0xff94a3b8)
+                                                  : const Color(0xff64748b),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    Fa.date(
+                                      item.date?.toIso8601String(),
+                                      time: false,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? const Color(0xff94a3b8)
+                                          : const Color(0xff64748b),
+                                    ),
+                                  ),
+                                  if (onNeshan != null)
+                                    IconButton(
+                                      onPressed: onNeshan,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.only(top: 4),
+                                      constraints: const BoxConstraints(),
+                                      icon: Icon(
+                                        item.isNeshan
+                                            ? Icons.star_rounded
+                                            : Icons.star_border_rounded,
+                                        size: 20,
+                                        color: item.isNeshan
+                                            ? const Color(0xfff59e0b)
+                                            : const Color(0xff94a3b8),
+                                      ),
+                                    )
+                                  else if (item.isNeshan)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 4),
+                                      child: Icon(
+                                        Icons.star_rounded,
+                                        size: 18,
+                                        color: Color(0xfff59e0b),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          if (item.matnErja != null &&
+                              item.matnErja!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(
+                                  alpha: isDark ? 0.14 : 0.06,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border(
+                                  right: BorderSide(color: accent, width: 3),
+                                ),
+                              ),
                               child: Text(
-                                item.title,
+                                'دستور ارجاع: ${item.matnErja}',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: unread
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? const Color(0xffe2e8f0)
+                                      : const Color(0xff334155),
                                 ),
                               ),
                             ),
-                            if (item.isNeshan)
-                              const Icon(
-                                Icons.star,
-                                size: 17,
-                                color: Color(0xffe0a800),
-                              ),
                           ],
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          [
-                            if (item.letterNumber.isNotEmpty)
-                              'شماره ${Fa.digits(item.letterNumber)}',
-                            if (showSender && subtitle.isNotEmpty)
-                              subtitle,
-                          ].join(' • '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: Colors.blueGrey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        Fa.date(item.date?.toIso8601String(), time: false),
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          color: Colors.blueGrey.shade400,
-                        ),
+                          const SizedBox(height: 8),
+                          LetterBadges(item: item, kind: kind, compact: true),
+                        ],
                       ),
-                      if (onNeshan != null)
-                        IconButton(
-                          onPressed: onNeshan,
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: Icon(
-                            item.isNeshan ? Icons.star : Icons.star_border,
-                            size: 19,
-                            color: item.isNeshan
-                                ? const Color(0xffe0a800)
-                                : Colors.blueGrey.shade300,
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 ],
               ),
-              if (item.matnErja != null && item.matnErja!.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: const Color(0xfff4f7fb),
-                    borderRadius: BorderRadius.circular(9),
-                    border: const Border(
-                      right: BorderSide(color: Color(0xff2a6bd4), width: 3),
-                    ),
-                  ),
-                  child: Text(
-                    'دستور ارجاع: ${item.matnErja}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: Colors.blueGrey.shade700),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 9),
-              LetterBadges(item: item, kind: kind, compact: true),
-            ],
+            ),
           ),
         ),
       ),
@@ -352,10 +476,10 @@ class LetterTile extends StatelessWidget {
   }
 
   static IconData _kindIcon(LetterKind? kind) => switch (kind) {
-    LetterKind.inner => Icons.edit_note,
-    LetterKind.outgoing => Icons.north_east,
-    LetterKind.incoming => Icons.south_west,
-    null => Icons.mail_outline,
+    LetterKind.inner => Icons.mark_email_read_rounded,
+    LetterKind.outgoing => Icons.outbox_rounded,
+    LetterKind.incoming => Icons.move_to_inbox_rounded,
+    null => Icons.mail_outline_rounded,
   };
 }
 
