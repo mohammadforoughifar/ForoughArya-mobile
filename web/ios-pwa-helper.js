@@ -5,6 +5,94 @@
 (function () {
   'use strict';
 
+  // ۰) شیم سازگاری کامل برای محیط‌های بدون HTTPS (شبکه داخلی http://192.168.x.x)،
+  // باز کردن مستقیم تک‌فایل روی آیفون (file://) و فریم‌های ایزوله (Origin: null)
+  (function applySandboxAndHttpShims() {
+    ['localStorage', 'sessionStorage'].forEach(function (storeName) {
+      try {
+        var st = window[storeName];
+        st.setItem('__fa_probe__', '1');
+        st.removeItem('__fa_probe__');
+      } catch (_) {
+        var mem = Object.create(null);
+        var shim = {
+          get length() { return Object.keys(mem).length; },
+          key: function (i) { return Object.keys(mem)[i] || null; },
+          getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+          setItem: function (k, v) { mem[String(k)] = String(v); },
+          removeItem: function (k) { delete mem[String(k)]; },
+          clear: function () { mem = Object.create(null); }
+        };
+        try { Object.defineProperty(window, storeName, { value: shim, configurable: true }); } catch (_) {}
+      }
+    });
+
+    try {
+      if (window.history) {
+        var origPush = window.history.pushState;
+        var origReplace = window.history.replaceState;
+        if (typeof origPush === 'function') {
+          window.history.pushState = function () {
+            try { return origPush.apply(this, arguments); } catch (_) {}
+          };
+        }
+        if (typeof origReplace === 'function') {
+          window.history.replaceState = function () {
+            try { return origReplace.apply(this, arguments); } catch (_) {}
+          };
+        }
+      }
+    } catch (_) {}
+
+    // شیم WebCrypto برای FlutterSecureStorage در شبکه داخلی HTTP یا فایل محلی آیفون
+    try {
+      if (window.crypto && !window.crypto.subtle) {
+        var xorTransform = function (rawKey, iv, input) {
+          var data = input instanceof Uint8Array ? input : new Uint8Array(input);
+          var k = rawKey instanceof Uint8Array ? rawKey : new Uint8Array(rawKey);
+          var v = iv ? (iv instanceof Uint8Array ? iv : new Uint8Array(iv)) : new Uint8Array(12);
+          var out = new Uint8Array(data.length);
+          for (var i = 0; i < data.length; i++) {
+            out[i] = data[i] ^ k[i % k.length] ^ v[i % v.length] ^ ((i * 31) & 0xff);
+          }
+          return out.buffer;
+        };
+        var fallbackSubtle = {
+          generateKey: function () {
+            var raw = new Uint8Array(32);
+            window.crypto.getRandomValues(raw);
+            return Promise.resolve({ __raw: raw });
+          },
+          exportKey: function (_fmt, key) {
+            var r = (key && key.__raw) ? key.__raw : new Uint8Array(32);
+            return Promise.resolve(r.slice(0).buffer);
+          },
+          importKey: function (_fmt, keyData) {
+            var r = keyData instanceof Uint8Array ? keyData.slice(0) : new Uint8Array(keyData).slice(0);
+            return Promise.resolve({ __raw: r });
+          },
+          wrapKey: function (_fmt, key, wrapKeyObj, alg) {
+            var r = (key && key.__raw) ? key.__raw : new Uint8Array(32);
+            return Promise.resolve(xorTransform(wrapKeyObj.__raw, alg && alg.iv, r));
+          },
+          unwrapKey: function (_fmt, wrapped, wrapKeyObj, alg) {
+            var rawBuf = xorTransform(wrapKeyObj.__raw, alg && alg.iv, wrapped);
+            return Promise.resolve({ __raw: new Uint8Array(rawBuf) });
+          },
+          encrypt: function (alg, key, data) {
+            return Promise.resolve(xorTransform(key.__raw, alg && alg.iv, data));
+          },
+          decrypt: function (alg, key, data) {
+            return Promise.resolve(xorTransform(key.__raw, alg && alg.iv, data));
+          }
+        };
+        try {
+          Object.defineProperty(window.crypto, 'subtle', { value: fallbackSubtle, configurable: true });
+        } catch (_) {}
+      }
+    } catch (_) {}
+  })();
+
   const PUSH_OPT_IN_KEY = 'forough_push_opt_in_user';
   const INSTALL_DISMISS_KEY = 'forough_ios_install_dismiss_ts';
   let currentAudio = null;
@@ -517,9 +605,10 @@
       ? 'برای نصب نسخهٔ تمام‌صفحه روی آیفون، ابتدا از منوی سه‌نقطه گزینهٔ <b>Open in Safari</b> را بزنید.'
       : 'برای نصب روی آیفون: در نوار پایین سافاری دکمهٔ <b>Share (⎋)</b> و سپس <b>Add to Home Screen (➕)</b> را بزنید.';
 
+    const iconSrc = window.__FOROUGH_ICON_DATA_URI || 'icons/apple-touch-icon.png';
     wrap.innerHTML =
       '<div style="display:flex;align-items:flex-start;gap:11px;">' +
-        '<img src="icons/apple-touch-icon.png" alt="" style="width:42px;height:42px;border-radius:11px;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.3);" />' +
+        '<img src="' + iconSrc + '" alt="" style="width:42px;height:42px;border-radius:11px;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.3);" />' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:13px;font-weight:800;margin-bottom:3px;color:#fff;">نصب وب‌اپلیکیشن فروغ آریا در آیفون</div>' +
           '<div style="font-size:11.5px;line-height:1.65;color:#cbd5e1;">' + bodyText + '</div>' +
