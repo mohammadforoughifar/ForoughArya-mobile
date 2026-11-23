@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../data/moadian_perms.dart';
 import '../data/moadian_repository.dart';
 import '../models/moadian_models.dart';
 import 'moadian_basic_info_tab.dart';
@@ -252,6 +254,10 @@ class _MoadianHomePageState extends State<MoadianHomePage> {
   Widget build(BuildContext context) {
     final actionableCount =
         _labels.notSent + _labels.hasError + _labels.waitingInquiry;
+    final session = Provider.of<AuthController?>(context)?.session;
+    final canCreateInvoice =
+        session == null ||
+        MoadianPerms.can(session, MoadianPerms.invoiceCreate);
 
     return Scaffold(
       backgroundColor: MoadianColors.bg,
@@ -263,15 +269,16 @@ class _MoadianHomePageState extends State<MoadianHomePage> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  tooltip: 'صدور صورتحساب جدید',
-                  onPressed: _openNewInvoice,
-                  icon: const Icon(
-                    Icons.post_add_rounded,
-                    color: Colors.white,
-                    size: 21,
+                if (canCreateInvoice)
+                  IconButton(
+                    tooltip: 'صدور صورتحساب جدید',
+                    onPressed: _openNewInvoice,
+                    icon: const Icon(
+                      Icons.post_add_rounded,
+                      color: Colors.white,
+                      size: 21,
+                    ),
                   ),
-                ),
                 IconButton(
                   tooltip: 'نوسازی',
                   onPressed: _loading ? null : _loadShell,

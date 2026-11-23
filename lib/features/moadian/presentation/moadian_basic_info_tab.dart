@@ -1366,13 +1366,9 @@ class _MoadianBasicInfoTabState extends State<MoadianBasicInfoTab> {
 
   Widget _buildCompaniesAndFiscalSection(dynamic session) {
     final canComp =
-        session == null ||
-        MoadianPerms.can(session, MoadianPerms.company) ||
-        MoadianPerms.can(session, MoadianPerms.view);
+        session == null || MoadianPerms.can(session, MoadianPerms.company);
     final canFy =
-        session == null ||
-        MoadianPerms.can(session, MoadianPerms.fiscalYear) ||
-        MoadianPerms.can(session, MoadianPerms.view);
+        session == null || MoadianPerms.can(session, MoadianPerms.fiscalYear);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1816,9 +1812,7 @@ class _MoadianBasicInfoTabState extends State<MoadianBasicInfoTab> {
 
   Widget _buildGoodsSection(dynamic session) {
     final canManage =
-        session == null ||
-        MoadianPerms.can(session, MoadianPerms.goods) ||
-        MoadianPerms.can(session, MoadianPerms.view);
+        session == null || MoadianPerms.can(session, MoadianPerms.goods);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1922,9 +1916,7 @@ class _MoadianBasicInfoTabState extends State<MoadianBasicInfoTab> {
 
   Widget _buildCustomersSection(dynamic session) {
     final canManage =
-        session == null ||
-        MoadianPerms.can(session, MoadianPerms.customers) ||
-        MoadianPerms.can(session, MoadianPerms.view);
+        session == null || MoadianPerms.can(session, MoadianPerms.customers);
 
     final filtered = _customers.where((c) {
       if (_custSearch.trim().isEmpty) return true;
@@ -2048,9 +2040,7 @@ class _MoadianBasicInfoTabState extends State<MoadianBasicInfoTab> {
 
   Widget _buildUnitsSection(dynamic session) {
     final canManage =
-        session == null ||
-        MoadianPerms.can(session, MoadianPerms.units) ||
-        MoadianPerms.can(session, MoadianPerms.view);
+        session == null || MoadianPerms.can(session, MoadianPerms.units);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

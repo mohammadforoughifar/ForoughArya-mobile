@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
@@ -459,8 +460,29 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
+    final access = WebAccess(auth.session, unrestrictedWhenNull: true);
     final name = auth.session?.displayName ?? '';
     final accent = _scope.color;
+
+    if (_scope == EmailScope.personal && !access.canSeePersonalEmail) {
+      return Scaffold(
+        backgroundColor: OfficeColors.bg,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'برای استفاده از «ایمیل شخصی» باید مجوز Email.Personal برای نقش شما فعال باشد.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.8,
+                color: Colors.blueGrey.shade700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     final tabCounts = {
       'inbox': _unread['inbox'] ?? 0,
@@ -488,17 +510,20 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
       ),
     );
 
-    final composeFab = FloatingActionButton.extended(
-      heroTag: widget.embedded ? 'email_fab_${_scope.name}' : 'email_fab_main',
-      onPressed: () => _compose(),
-      backgroundColor: accent,
-      foregroundColor: Colors.white,
-      icon: const Icon(Icons.edit_outlined),
-      label: const Text(
-        'ایمیل جدید',
-        style: TextStyle(fontWeight: FontWeight.w700),
-      ),
-    );
+    final Widget? composeFab = access.canCreateEmail
+        ? FloatingActionButton.extended(
+            heroTag:
+                widget.embedded ? 'email_fab_${_scope.name}' : 'email_fab_main',
+            onPressed: () => _compose(),
+            backgroundColor: accent,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text(
+              'ایمیل جدید',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          )
+        : null;
 
     if (widget.embedded) {
       return Scaffold(
@@ -625,11 +650,12 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                             tooltip: 'دریافت ایمیل‌ها',
                             onTap: _sync,
                           ),
-                          _HeaderBtn(
-                            icon: Icons.edit_outlined,
-                            tooltip: 'ایمیل جدید',
-                            onTap: () => _compose(),
-                          ),
+                          if (access.canCreateEmail)
+                            _HeaderBtn(
+                              icon: Icons.edit_outlined,
+                              tooltip: 'ایمیل جدید',
+                              onTap: () => _compose(),
+                            ),
                           _HeaderBtn(
                             icon: Icons.settings_outlined,
                             tooltip: 'حساب‌های ایمیل',
@@ -638,15 +664,20 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                         ],
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                      child: _ScopeSwitch(
-                        scope: _scope,
-                        onChanged: _changeScope,
-                        corporateCount: _accounts.where((a) => a.isDabirkhane).length,
-                        personalCount: _accounts.where((a) => !a.isDabirkhane).length,
+                    if (access.canSeePersonalEmail)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                        child: _ScopeSwitch(
+                          scope: _scope,
+                          onChanged: _changeScope,
+                          corporateCount: _accounts
+                              .where((a) => a.isDabirkhane)
+                              .length,
+                          personalCount: _accounts
+                              .where((a) => !a.isDabirkhane)
+                              .length,
+                        ),
                       ),
-                    ),
                     OfficeSlidingTabs(
                       items: _tabsDef,
                       index: _tabIndex,

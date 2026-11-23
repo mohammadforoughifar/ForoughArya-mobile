@@ -72,6 +72,39 @@ class AuthController extends ChangeNotifier {
       initializing = false;
       notifyListeners();
     }
+    if (_session != null) {
+      // همگام‌سازی غیرمسدودکنندهٔ نقش‌ها و مجوزهای به‌روز از `/api/auth/me` (مشابه AuthService وب)
+      // تا تغییر دسترسی در پنل وب بدون نیاز به خروج/ورود مجدد در اندروید اعمال شود.
+      refreshSession();
+    }
+  }
+
+  /// به‌روزرسانی مجوزها، نقش‌ها و مشخصات نشست از `GET /api/auth/me`.
+  Future<void> refreshSession() async {
+    final current = _session;
+    if (current == null || current.token.isEmpty) return;
+    try {
+      final r = await _api.get<dynamic>('/api/auth/me');
+      final data = r.data;
+      if (data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      if (!map.containsKey('permissions') && !map.containsKey('Permissions')) {
+        return;
+      }
+      final fresh = AuthSession.fromJson({
+        ...current.toJson(),
+        ...map,
+        if ((map['token']?.toString() ?? '').isEmpty) 'token': current.token,
+      });
+      _session = fresh;
+      await _storage.write(
+        key: 'auth_session',
+        value: jsonEncode(fresh.toJson()),
+      );
+      notifyListeners();
+    } catch (_) {
+      // در صورت آفلاین بودن شبکه، نشست ذخیره‌شده حفظ می‌شود.
+    }
   }
 
   Future<bool> login(String username, String password) async {

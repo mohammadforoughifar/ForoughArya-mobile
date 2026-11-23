@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
@@ -344,21 +345,26 @@ class _WorkOrdersPageState extends State<WorkOrdersPage> {
           WorkOrderPerformanceView(key: ValueKey('performance-$_version')),
         ],
       ),
-      // دکمهٔ «دستور کار جدید» — همیشه در دسترس و بالاتر از نوار پایین
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 64),
-        child: FloatingActionButton.extended(
-          key: const Key('new-work-order'),
-          onPressed: _newOrder,
-          backgroundColor: WoColors.seed,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'دستور کار جدید',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ),
-      ),
+      // دکمهٔ «دستور کار جدید» — فقط با مجوز `WorkOrders.Create` مثل نسخهٔ وب
+      floatingActionButton: WebAccess(
+                context.watch<AuthController>().session,
+                unrestrictedWhenNull: true,
+              ).canCreateWorkOrder
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 64),
+              child: FloatingActionButton.extended(
+                key: const Key('new-work-order'),
+                onPressed: _newOrder,
+                backgroundColor: WoColors.seed,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text(
+                  'دستور کار جدید',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            )
+          : null,
     );
   }
 }

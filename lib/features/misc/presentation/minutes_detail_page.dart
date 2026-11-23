@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
@@ -1353,7 +1354,19 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
   }
 
   Widget _buildActionToolbar(MinutesDetail d) {
-    final canEdit = !d.isClosed && (_isCreator(d) || _myUserId == 0);
+    final access = WebAccess(
+      Provider.of<AuthController?>(context)?.session,
+      unrestrictedWhenNull: true,
+    );
+    final canEdit =
+        !d.isClosed &&
+        access.canUpdateMinutes &&
+        (_isCreator(d) || _myUserId == 0);
+    final canDelete =
+        !d.isClosed &&
+        access.canDeleteMinutes &&
+        (_isCreator(d) || _myUserId == 0) &&
+        _canDelete(d);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1365,23 +1378,25 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          FilledButton.tonalIcon(
-            onPressed: _printing ? null : () => _printPdf(share: false),
-            icon: _printing
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.picture_as_pdf_rounded, size: 17),
-            label: const Text('چاپ PDF با سربرگ'),
-          ),
-          OutlinedButton.icon(
-            onPressed: _printing ? null : () => _printPdf(share: true),
-            icon: const Icon(Icons.share_rounded, size: 16),
-            label: const Text('اشتراک PDF'),
-          ),
-          if (!d.isClosed)
+          if (access.canPrintMinutes) ...[
+            FilledButton.tonalIcon(
+              onPressed: _printing ? null : () => _printPdf(share: false),
+              icon: _printing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.picture_as_pdf_rounded, size: 17),
+              label: const Text('چاپ PDF با سربرگ'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _printing ? null : () => _printPdf(share: true),
+              icon: const Icon(Icons.share_rounded, size: 16),
+              label: const Text('اشتراک PDF'),
+            ),
+          ],
+          if (!d.isClosed && access.canUpdateMinutes)
             FilledButton.icon(
               onPressed: _submitMinutes,
               style: FilledButton.styleFrom(backgroundColor: MiscColors.ok),
@@ -1399,8 +1414,8 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('ویرایش'),
             ),
-          // حذف صورتجلسه — فقط ایجادکننده و فقط بدون امضا
-          if (canEdit && _canDelete(d))
+          // حذف صورتجلسه — فقط ایجادکننده با دسترسی Delete و فقط بدون امضا
+          if (canDelete)
             OutlinedButton.icon(
               onPressed: _deleteMinutes,
               style: OutlinedButton.styleFrom(
@@ -1465,14 +1480,22 @@ class _MinutesDetailPageState extends State<MinutesDetailPage> {
               ),
               itemCount: attendees.length,
               itemBuilder: (_, i) {
+                final access = WebAccess(
+                  Provider.of<AuthController?>(context, listen: false)?.session,
+                  unrestrictedWhenNull: true,
+                );
                 final p = attendees[i];
                 final b64 = p.cleanSignatureBase64;
                 final canSignHere =
                     !d.isClosed &&
                     !p.isSigned &&
+                    access.canSignMinutes &&
                     (_myUserId == p.userId || _myUserId == 0);
                 final canRemoveSig =
-                    !d.isClosed && p.isSigned && _isCreator(d);
+                    !d.isClosed &&
+                    p.isSigned &&
+                    access.canUpdateMinutes &&
+                    _isCreator(d);
 
                 return Container(
                   padding: const EdgeInsets.all(9),

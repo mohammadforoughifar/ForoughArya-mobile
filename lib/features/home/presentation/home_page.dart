@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/app_version.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/notifications/push_service.dart';
 import '../../../core/utils/fa.dart';
@@ -55,6 +56,7 @@ import '../../shop/data/shop_repository.dart';
 import '../../shop/models/order_models.dart';
 import '../../shop/models/treasury_models.dart';
 import '../../shop/presentation/expenses_page.dart';
+import '../../shop/presentation/financial_dashboard_page.dart';
 import '../../shop/presentation/kardex_page.dart';
 import '../../shop/presentation/ops_dashboard_page.dart';
 import '../../shop/presentation/order_form_page.dart';
@@ -165,19 +167,32 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  WebAccess _currentAccess() => WebAccess(
+    Provider.of<AuthController?>(context, listen: false)?.session,
+    unrestrictedWhenNull: true,
+  );
+
   Future<void> _load() async {
     final api = context.read<ApiClient>();
+    final access = _currentAccess();
+    final allowedKpis = buildKpiCards(access: access);
     setState(() {
+      _kpis = allowedKpis;
       _loading = true;
-      _widgetsSettled = false;
-      _cartableLoading = true;
+      _widgetsSettled = allowedKpis.isEmpty;
+      _cartableLoading = access.canSeeMyCartable;
       _error = null;
     });
     try {
       final results = await Future.wait([
         _repo.fetchCompanies(),
         _repo.fetchUnreadCount(),
-        _repo.fetchWidgets(_kpis.map((k) => k.widgetKey), range: _kpiRange),
+        allowedKpis.isEmpty
+            ? Future.value(<String, WidgetData>{})
+            : _repo.fetchWidgets(
+                allowedKpis.map((k) => k.widgetKey),
+                range: _kpiRange,
+              ),
       ]);
       if (!mounted) return;
       final companies = results[0] as CompanyContext;
@@ -193,7 +208,7 @@ class _HomePageState extends State<HomePage> {
         _loading = false;
       });
       await Future.wait([
-        _loadWidgets(widgets, range: _kpiRange),
+        if (allowedKpis.isNotEmpty) _loadWidgets(widgets, range: _kpiRange),
         _loadWorkbenchCartable(unreadCount: unread),
       ]);
     } on Exception catch (e) {
@@ -232,20 +247,27 @@ class _HomePageState extends State<HomePage> {
   /// بارگذاری همزمان کارتابل یکپارچه، اقدامات اصلی/فرعی و شمارنده‌های زندهٔ ماژول‌ها.
   Future<void> _loadWorkbenchCartable({int? unreadCount}) async {
     final api = context.read<ApiClient>();
+    final access = _currentAccess();
     await _ensureCompany();
 
-    // ۱) منابع رسمی سرور: /api/cartable/me و /api/notifications/page
-    final serverCartableFuture = _repo.fetchUnifiedCartable();
-    final mainNtfFuture = _repo.fetchNotificationPage(
-      take: 6,
-      category: 'main',
-      unreadOnly: _ntfUnreadOnly,
-    );
-    final subNtfFuture = _repo.fetchNotificationPage(
-      take: 6,
-      category: 'sub',
-      unreadOnly: _ntfUnreadOnly,
-    );
+    // ۱) منابع رسمی سرور: /api/cartable/me فقط با MyCartable.View و /api/notifications/page
+    final serverCartableFuture = access.canSeeMyCartable
+        ? _repo.fetchUnifiedCartable()
+        : Future.value(const <CartableEntry>[]);
+    final mainNtfFuture = access.canSeeMyCartable
+        ? _repo.fetchNotificationPage(
+            take: 6,
+            category: 'main',
+            unreadOnly: _ntfUnreadOnly,
+          )
+        : Future.value(const NotificationPageResult());
+    final subNtfFuture = access.canSeeMyCartable
+        ? _repo.fetchNotificationPage(
+            take: 6,
+            category: 'sub',
+            unreadOnly: _ntfUnreadOnly,
+          )
+        : Future.value(const NotificationPageResult());
 
     // فاز اول: نمایش فوری کارتابل و اعلان‌های سرور بدون معطل شدن روی ماژول‌های جانبی
     final serverCartable = await serverCartableFuture;
@@ -266,7 +288,7 @@ class _HomePageState extends State<HomePage> {
       );
     });
 
-    // ۲) جمع‌آوری موازی وضعیت زنده از ماژول‌ها (هر کدام کاملاً مستقل و ایمن)
+    // ۲) جمع‌آوری موازی وضعیت زنده از ماژول‌های مجاز کاربر
     int unreadLetters = 0;
     int signingLetters = 0;
     int dabirkhaneLetters = 0;
@@ -279,73 +301,83 @@ class _HomePageState extends State<HomePage> {
     final extraEntries = <CartableEntry>[];
 
     await Future.wait<void>([
-      // اتوماسیون اداری توکا
-      () async {
-        final repo = OfficeAutomationRepository(api);
-        try {
-          final st = await repo.innerStats();
-          unreadLetters += st.unread;
-        } catch (_) {}
-        for (final kind in LetterKind.values) {
-          try {
-            final c = await repo.mailboxCounts(kind);
-            signingLetters += c.signing;
-            dabirkhaneLetters += c.dabirkhane;
-          } catch (_) {}
-        }
-        if (unreadLetters > 0) {
-          extraEntries.add(
-            CartableEntry(
-              source: 'letters',
-              kind: 'unread-erja',
-              title: '${Fa.digits(unreadLetters)} ارجاع و نامهٔ خوانده‌نشده',
-              subtitle: 'منتظر بررسی در کارتابل نامه‌ها',
-              moduleLabel: 'اتوماسیون اداری توکا',
-              targetKey: 'tab-2',
-              icon: Icons.mark_email_unread_rounded,
-              color: const Color(0xff0284c7),
-              badgeCount: unreadLetters,
-              priority: 2,
-            ),
-          );
-        }
-        if (signingLetters > 0) {
-          extraEntries.add(
-            CartableEntry(
-              source: 'letters',
-              kind: 'signing',
-              title: '${Fa.digits(signingLetters)} نامه در انتظار امضای شما',
-              subtitle: 'کارتابل امضای نامه‌های صادره',
-              moduleLabel: 'اتوماسیون اداری توکا',
-              targetKey: 'tab-2',
-              icon: Icons.draw_rounded,
-              color: const Color(0xff7c3aed),
-              badgeCount: signingLetters,
-              priority: 3,
-            ),
-          );
-        }
-        if (dabirkhaneLetters > 0) {
-          extraEntries.add(
-            CartableEntry(
-              source: 'letters',
-              kind: 'dabirkhane',
-              title:
-                  '${Fa.digits(dabirkhaneLetters)} نامه در صف شماره‌گذاری دبیرخانه',
-              subtitle: 'دبیرخانه یکپارچه اتوماسیون اداری توکا',
-              moduleLabel: 'اتوماسیون اداری توکا',
-              targetKey: 'tab-2',
-              icon: Icons.move_to_inbox_rounded,
-              color: const Color(0xff0f766e),
-              badgeCount: dabirkhaneLetters,
-              priority: 2,
-            ),
-          );
-        }
-      }(),
+      // اتوماسیون اداری توکا (فقط با دسترسی مشاهدهٔ نامه‌ها)
+      if (access.canSeeLettersAny)
+        () async {
+          final repo = OfficeAutomationRepository(api);
+          if (access.canSeeInnerLetters) {
+            try {
+              final st = await repo.innerStats();
+              unreadLetters += st.unread;
+            } catch (_) {}
+          }
+          for (final kind in LetterKind.values) {
+            final allowedKind = switch (kind) {
+              LetterKind.inner => access.canSeeInnerLetters,
+              LetterKind.outgoing => access.canSeeOutgoingLetters,
+              LetterKind.incoming => access.canSeeIncomingLetters,
+            };
+            if (!allowedKind) continue;
+            try {
+              final c = await repo.mailboxCounts(kind);
+              signingLetters += c.signing;
+              dabirkhaneLetters += c.dabirkhane;
+            } catch (_) {}
+          }
+          if (unreadLetters > 0) {
+            extraEntries.add(
+              CartableEntry(
+                source: 'letters',
+                kind: 'unread-erja',
+                title: '${Fa.digits(unreadLetters)} ارجاع و نامهٔ خوانده‌نشده',
+                subtitle: 'منتظر بررسی در کارتابل نامه‌ها',
+                moduleLabel: 'اتوماسیون اداری توکا',
+                targetKey: 'tab-2',
+                icon: Icons.mark_email_unread_rounded,
+                color: const Color(0xff0284c7),
+                badgeCount: unreadLetters,
+                priority: 2,
+              ),
+            );
+          }
+          if (signingLetters > 0) {
+            extraEntries.add(
+              CartableEntry(
+                source: 'letters',
+                kind: 'signing',
+                title: '${Fa.digits(signingLetters)} نامه در انتظار امضای شما',
+                subtitle: 'کارتابل امضای نامه‌های صادره',
+                moduleLabel: 'اتوماسیون اداری توکا',
+                targetKey: 'tab-2',
+                icon: Icons.draw_rounded,
+                color: const Color(0xff7c3aed),
+                badgeCount: signingLetters,
+                priority: 3,
+              ),
+            );
+          }
+          if (dabirkhaneLetters > 0) {
+            extraEntries.add(
+              CartableEntry(
+                source: 'letters',
+                kind: 'dabirkhane',
+                title:
+                    '${Fa.digits(dabirkhaneLetters)} نامه در صف شماره‌گذاری دبیرخانه',
+                subtitle: 'دبیرخانه یکپارچه اتوماسیون اداری توکا',
+                moduleLabel: 'اتوماسیون اداری توکا',
+                targetKey: 'tab-2',
+                icon: Icons.move_to_inbox_rounded,
+                color: const Color(0xff0f766e),
+                badgeCount: dabirkhaneLetters,
+                priority: 2,
+              ),
+            );
+          }
+        }(),
 
-      // دستورکار رایکا
-      () async {
+      // دستورکار رایکا (فقط با WorkOrders)
+      if (access.canSeeWorkOrders)
+        () async {
         try {
           final c = await WorkOrderRepository(api).counts();
           int pick(List<String> names) => names
@@ -399,152 +431,156 @@ class _HomePageState extends State<HomePage> {
       }(),
 
       // درخواست‌های خدمت IT (مدیریت سیستم — هم‌تراز با Cartable.razor وب)
-      () async {
-        try {
-          final itRepo = ItRequestRepository(api);
-          final access = await itRepo.myAccess();
-          final mine = await itRepo.mine();
-          final readyConfirm = mine.items
-              .where((r) => r.status == ItRequestStatus.managerApproved)
-              .length;
-          if (readyConfirm > 0) {
-            openItReq += readyConfirm;
-            extraEntries.add(
-              CartableEntry(
-                source: 'it',
-                kind: 'confirm',
-                title:
-                    'پاسخ ${Fa.digits(readyConfirm)} درخواست IT آمادهٔ تأیید شماست',
-                subtitle: 'تأیید نهایی و بستن درخواست خدمت',
-                moduleLabel: 'مدیریت سیستم',
-                targetKey: 'it-requests',
-                icon: Icons.task_alt_rounded,
-                color: const Color(0xff0284c7),
-                badgeCount: readyConfirm,
-                priority: 2,
-              ),
-            );
-          }
-          if (access.isExpert) {
-            final exp = await itRepo.expertInbox();
-            final waitingReport = exp.items
-                .where(
-                  (r) =>
-                      r.status == ItRequestStatus.assigned &&
-                      r.assignments.any(
-                        (a) =>
-                            a.expertUserId == access.userId &&
-                            !a.reportSubmitted,
-                      ),
-                )
+      if (access.canSeeItRequests)
+        () async {
+          try {
+            final itRepo = ItRequestRepository(api);
+            final itAccess = await itRepo.myAccess();
+            final mine = await itRepo.mine();
+            final readyConfirm = mine.items
+                .where((r) => r.status == ItRequestStatus.managerApproved)
                 .length;
-            if (waitingReport > 0) {
-              openItReq += waitingReport;
+            if (readyConfirm > 0) {
+              openItReq += readyConfirm;
               extraEntries.add(
                 CartableEntry(
                   source: 'it',
-                  kind: 'expert',
+                  kind: 'confirm',
                   title:
-                      '${Fa.digits(waitingReport)} درخواست IT منتظر گزارش کارشناسی شماست',
-                  subtitle: 'کارتابل کارشناس مدیریت سیستم',
+                      'پاسخ ${Fa.digits(readyConfirm)} درخواست IT آمادهٔ تأیید شماست',
+                  subtitle: 'تأیید نهایی و بستن درخواست خدمت',
                   moduleLabel: 'مدیریت سیستم',
                   targetKey: 'it-requests',
-                  icon: Icons.handyman_rounded,
-                  color: const Color(0xffd97706),
-                  badgeCount: waitingReport,
+                  icon: Icons.task_alt_rounded,
+                  color: const Color(0xff0284c7),
+                  badgeCount: readyConfirm,
                   priority: 2,
                 ),
               );
             }
-          }
-          if (access.isManager) {
-            final mgr = await itRepo.managerInbox();
-            final newReqs = mgr.items
-                .where((r) => r.status == ItRequestStatus.created)
-                .length;
-            final waitingDecision = mgr.items
-                .where(
-                  (r) =>
-                      r.status == ItRequestStatus.assigned &&
-                      r.assignments.any((a) => a.pendingDecision),
-                )
-                .length;
-            openItReq += newReqs + waitingDecision;
-            if (newReqs > 0) {
-              extraEntries.add(
-                CartableEntry(
-                  source: 'it',
-                  kind: 'mgr-new',
-                  title:
-                      '${Fa.digits(newReqs)} درخواست جدید IT منتظر ارجاع مدیر',
-                  subtitle: 'کارتابل مدیر زیرساخت و پشتیبانی',
-                  moduleLabel: 'مدیریت سیستم',
-                  targetKey: 'it-requests',
-                  icon: Icons.support_agent_rounded,
-                  color: const Color(0xff4f46e5),
-                  badgeCount: newReqs,
-                  priority: 3,
-                ),
-              );
+            if (itAccess.isExpert) {
+              final exp = await itRepo.expertInbox();
+              final waitingReport = exp.items
+                  .where(
+                    (r) =>
+                        r.status == ItRequestStatus.assigned &&
+                        r.assignments.any(
+                          (a) =>
+                              a.expertUserId == itAccess.userId &&
+                              !a.reportSubmitted,
+                        ),
+                  )
+                  .length;
+              if (waitingReport > 0) {
+                openItReq += waitingReport;
+                extraEntries.add(
+                  CartableEntry(
+                    source: 'it',
+                    kind: 'expert',
+                    title:
+                        '${Fa.digits(waitingReport)} درخواست IT منتظر گزارش کارشناسی شماست',
+                    subtitle: 'کارتابل کارشناس مدیریت سیستم',
+                    moduleLabel: 'مدیریت سیستم',
+                    targetKey: 'it-requests',
+                    icon: Icons.handyman_rounded,
+                    color: const Color(0xffd97706),
+                    badgeCount: waitingReport,
+                    priority: 2,
+                  ),
+                );
+              }
             }
-            if (waitingDecision > 0) {
-              extraEntries.add(
-                CartableEntry(
-                  source: 'it',
-                  kind: 'mgr-decision',
-                  title:
-                      'گزارش کارشناس برای ${Fa.digits(waitingDecision)} درخواست IT منتظر تصمیم شماست',
-                  subtitle: 'تأیید یا رد گزارش کارشناس',
-                  moduleLabel: 'مدیریت سیستم',
-                  targetKey: 'it-requests',
-                  icon: Icons.verified_user_outlined,
-                  color: const Color(0xff059669),
-                  badgeCount: waitingDecision,
-                  priority: 2,
-                ),
-              );
+            if (itAccess.isManager) {
+              final mgr = await itRepo.managerInbox();
+              final newReqs = mgr.items
+                  .where((r) => r.status == ItRequestStatus.created)
+                  .length;
+              final waitingDecision = mgr.items
+                  .where(
+                    (r) =>
+                        r.status == ItRequestStatus.assigned &&
+                        r.assignments.any((a) => a.pendingDecision),
+                  )
+                  .length;
+              openItReq += newReqs + waitingDecision;
+              if (newReqs > 0) {
+                extraEntries.add(
+                  CartableEntry(
+                    source: 'it',
+                    kind: 'mgr-new',
+                    title:
+                        '${Fa.digits(newReqs)} درخواست جدید IT منتظر ارجاع مدیر',
+                    subtitle: 'کارتابل مدیر زیرساخت و پشتیبانی',
+                    moduleLabel: 'مدیریت سیستم',
+                    targetKey: 'it-requests',
+                    icon: Icons.support_agent_rounded,
+                    color: const Color(0xff4f46e5),
+                    badgeCount: newReqs,
+                    priority: 3,
+                  ),
+                );
+              }
+              if (waitingDecision > 0) {
+                extraEntries.add(
+                  CartableEntry(
+                    source: 'it',
+                    kind: 'mgr-decision',
+                    title:
+                        'گزارش کارشناس برای ${Fa.digits(waitingDecision)} درخواست IT منتظر تصمیم شماست',
+                    subtitle: 'تأیید یا رد گزارش کارشناس',
+                    moduleLabel: 'مدیریت سیستم',
+                    targetKey: 'it-requests',
+                    icon: Icons.verified_user_outlined,
+                    color: const Color(0xff059669),
+                    badgeCount: waitingDecision,
+                    priority: 2,
+                  ),
+                );
+              }
             }
-          }
-        } catch (_) {}
-      }(),
+          } catch (_) {}
+        }(),
 
       // کارتابل آرشیو اسناد و مدارک
-      () async {
-        try {
-          final page = await DocArchiveRepository(
-            api,
-          ).cartable(includeDone: false, take: 5);
-          pendingArchive = page.total;
-          if (pendingArchive > 0) {
-            extraEntries.add(
-              CartableEntry(
-                source: 'doc-archive',
-                kind: 'pending',
-                title:
-                    '${Fa.digits(pendingArchive)} مدرک در کارتابل آرشیو منتظر بررسی است',
-                subtitle: 'تأیید یا تکمیل گردش مدارک سازمانی',
-                moduleLabel: 'کارتابل آرشیو',
-                targetKey: 'doc-cartable',
-                icon: Icons.folder_copy_rounded,
-                color: const Color(0xffea580c),
-                badgeCount: pendingArchive,
-                priority: 2,
-              ),
-            );
-          }
-        } catch (_) {}
-      }(),
+      if (access.canSeeDocArchive)
+        () async {
+          try {
+            final page = await DocArchiveRepository(
+              api,
+            ).cartable(includeDone: false, take: 5);
+            pendingArchive = page.total;
+            if (pendingArchive > 0) {
+              extraEntries.add(
+                CartableEntry(
+                  source: 'doc-archive',
+                  kind: 'pending',
+                  title:
+                      '${Fa.digits(pendingArchive)} مدرک در کارتابل آرشیو منتظر بررسی است',
+                  subtitle: 'تأیید یا تکمیل گردش مدارک سازمانی',
+                  moduleLabel: 'کارتابل آرشیو',
+                  targetKey: 'doc-cartable',
+                  icon: Icons.folder_copy_rounded,
+                  color: const Color(0xffea580c),
+                  badgeCount: pendingArchive,
+                  priority: 2,
+                ),
+              );
+            }
+          } catch (_) {}
+        }(),
 
       // پیام رسان میها — خلاصهٔ سبک پیام‌های خوانده‌نشده از /api/chat/summary
-      () async {
-        try {
-          final summary = await ChatErpApi(api).summary();
-          unreadChats = summary.totalUnreadMessages;
-        } catch (_) {}
-      }(),
+      if (access.canSeeChat)
+        () async {
+          try {
+            final summary = await ChatErpApi(api).summary();
+            unreadChats = summary.totalUnreadMessages;
+          } catch (_) {}
+        }(),
 
       // مودیان تیسا — شمارندهٔ صورتحساب‌های خطادار، پیش‌نویس و منتظر استعلام
-      () async {
+      if (access.canSeeMoadianOverview)
+        () async {
         try {
           final mRepo = MoadianRepository(api);
           final cps = await mRepo.getCpInfos();
@@ -1094,111 +1130,124 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// ساخت فهرست کامل فرمان‌یار جستجوی سریع (Command Palette) در سراسر نرم‌افزار.
-  List<WorkbenchCommandItem> _buildCommandItems(List<ModuleTile> modules) => [
-    // عملیات سریع
-    WorkbenchCommandItem(
-      title: 'صدور صورتحساب الکترونیکی مودیان',
-      subtitle: 'مودیان تیسا • ارسال رسمی به کارپوشه مالیاتی',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.post_add_rounded,
-      color: const Color(0xff0f766e),
-      keywords: const [
-        'صورتحساب مودیان',
-        'مودیان تیسا',
-        'فاکتور مالیاتی',
-        'سامانه مودیان',
-      ],
-      onSelect: () => _pushPage(const MoadianInvoiceFormPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'صدور فاکتور فروش جدید',
-      subtitle: 'فروشگاهی کایر • عملیات فروش',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.add_shopping_cart_rounded,
-      color: const Color(0xff2563eb),
-      keywords: const ['فاکتور فروش', 'فروش جدید', 'کایر'],
-      onSelect: () => _pushPage(const OrderFormPage(type: TxnType.sale)),
-    ),
-    WorkbenchCommandItem(
-      title: 'ثبت فاکتور خرید جدید',
-      subtitle: 'فروشگاهی کایر • عملیات خرید',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.shopping_bag_rounded,
-      color: const Color(0xff0f766e),
-      keywords: const ['فاکتور خرید', 'خرید جدید', 'کایر'],
-      onSelect: () => _pushPage(const OrderFormPage(type: TxnType.purchase)),
-    ),
-    WorkbenchCommandItem(
-      title: 'صدور پیش‌فاکتور فروش',
-      subtitle: 'فروشگاهی کایر • پیش‌فاکتور',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.request_quote_rounded,
-      color: const Color(0xff4f46e5),
-      keywords: const ['پیش فاکتور', 'پیش‌فاکتور'],
-      onSelect: () => _pushPage(
-        const OrderFormPage(type: TxnType.sale, isProforma: true),
+  /// ساخت فهرست کامل فرمان‌یار جستجوی سریع (Command Palette) منطبق بر دسترسی‌های وب کاربر.
+  List<WorkbenchCommandItem> _buildCommandItems(
+    List<ModuleTile> modules,
+    WebAccess access,
+  ) => [
+    // عملیات سریع مجاز
+    if (access.canCreateMoadianInvoice)
+      WorkbenchCommandItem(
+        title: 'صدور صورتحساب الکترونیکی مودیان',
+        subtitle: 'مودیان تیسا • ارسال رسمی به کارپوشه مالیاتی',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.post_add_rounded,
+        color: const Color(0xff0f766e),
+        keywords: const [
+          'صورتحساب مودیان',
+          'مودیان تیسا',
+          'فاکتور مالیاتی',
+          'سامانه مودیان',
+        ],
+        onSelect: () => _pushPage(const MoadianInvoiceFormPage()),
       ),
-    ),
-    WorkbenchCommandItem(
-      title: 'ثبت نامهٔ داخلی جدید',
-      subtitle: 'اتوماسیون اداری توکا',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.outgoing_mail,
-      color: const Color(0xff2547a8),
-      keywords: const ['نامه جدید', 'نامه داخلی', 'توکا', 'اتوماسیون'],
-      onSelect: () =>
-          _pushPage(const LetterEditorPage(kind: LetterKind.inner)),
-    ),
-    WorkbenchCommandItem(
-      title: 'ثبت دستور کار جدید',
-      subtitle: 'دستورکار رایکا',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.playlist_add_check_circle_rounded,
-      color: const Color(0xffd97706),
-      keywords: const ['دستور کار جدید', 'دستورکار', 'رایکا'],
-      onSelect: () => _pushPage(const WorkOrderEditorPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'ثبت سند دریافت خزانه',
-      subtitle: 'فروشگاهی کایر • خزانه‌داری',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.south_west_rounded,
-      color: const Color(0xff059669),
-      keywords: const ['سند دریافت', 'دریافت وجه', 'تسویه', 'خزانه'],
-      onSelect: () =>
-          _pushPage(const TrsVoucherFormPage(kind: TrsKind.receipt)),
-    ),
-    WorkbenchCommandItem(
-      title: 'ثبت سند پرداخت خزانه',
-      subtitle: 'فروشگاهی کایر • خزانه‌داری',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.north_east_rounded,
-      color: const Color(0xffdc2626),
-      keywords: const ['سند پرداخت', 'پرداخت وجه', 'خزانه'],
-      onSelect: () =>
-          _pushPage(const TrsVoucherFormPage(kind: TrsKind.payment)),
-    ),
-    WorkbenchCommandItem(
-      title: 'تنظیم صورتجلسهٔ جدید',
-      subtitle: 'فرم‌های متفرقه • صورتجلسه',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.note_add_rounded,
-      color: const Color(0xff059669),
-      keywords: const ['صورتجلسه جدید', 'مصوبه'],
-      onSelect: () => _pushPage(const MinutesEditorPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'ثبت درخواست خدمت IT',
-      subtitle: 'مدیریت سیستم • پشتیبانی فنی',
-      group: 'عملیات سریع یک‌ضربه‌ای',
-      icon: Icons.support_agent_rounded,
-      color: const Color(0xff4f46e5),
-      keywords: const ['درخواست IT', 'تیکت', 'خرابی سیستم'],
-      onSelect: () => _pushPage(const ItRequestFormPage()),
-    ),
+    if (access.canCreateSale) ...[
+      WorkbenchCommandItem(
+        title: 'صدور فاکتور فروش جدید',
+        subtitle: 'فروشگاهی کایر • عملیات فروش',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.add_shopping_cart_rounded,
+        color: const Color(0xff2563eb),
+        keywords: const ['فاکتور فروش', 'فروش جدید', 'کایر'],
+        onSelect: () => _pushPage(const OrderFormPage(type: TxnType.sale)),
+      ),
+      WorkbenchCommandItem(
+        title: 'صدور پیش‌فاکتور فروش',
+        subtitle: 'فروشگاهی کایر • پیش‌فاکتور',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.request_quote_rounded,
+        color: const Color(0xff4f46e5),
+        keywords: const ['پیش فاکتور', 'پیش‌فاکتور'],
+        onSelect: () => _pushPage(
+          const OrderFormPage(type: TxnType.sale, isProforma: true),
+        ),
+      ),
+    ],
+    if (access.canCreatePurchase)
+      WorkbenchCommandItem(
+        title: 'ثبت فاکتور خرید جدید',
+        subtitle: 'فروشگاهی کایر • عملیات خرید',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.shopping_bag_rounded,
+        color: const Color(0xff0f766e),
+        keywords: const ['فاکتور خرید', 'خرید جدید', 'کایر'],
+        onSelect: () => _pushPage(const OrderFormPage(type: TxnType.purchase)),
+      ),
+    if (access.canCreateInnerLetter)
+      WorkbenchCommandItem(
+        title: 'ثبت نامهٔ داخلی جدید',
+        subtitle: 'اتوماسیون اداری توکا',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.outgoing_mail,
+        color: const Color(0xff2547a8),
+        keywords: const ['نامه جدید', 'نامه داخلی', 'توکا', 'اتوماسیون'],
+        onSelect: () =>
+            _pushPage(const LetterEditorPage(kind: LetterKind.inner)),
+      ),
+    if (access.canCreateWorkOrder)
+      WorkbenchCommandItem(
+        title: 'ثبت دستور کار جدید',
+        subtitle: 'دستورکار رایکا',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.playlist_add_check_circle_rounded,
+        color: const Color(0xffd97706),
+        keywords: const ['دستور کار جدید', 'دستورکار', 'رایکا'],
+        onSelect: () => _pushPage(const WorkOrderEditorPage()),
+      ),
+    if (access.canCreateSettlement) ...[
+      WorkbenchCommandItem(
+        title: 'ثبت سند دریافت خزانه',
+        subtitle: 'فروشگاهی کایر • خزانه‌داری',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.south_west_rounded,
+        color: const Color(0xff059669),
+        keywords: const ['سند دریافت', 'دریافت وجه', 'تسویه', 'خزانه'],
+        onSelect: () =>
+            _pushPage(const TrsVoucherFormPage(kind: TrsKind.receipt)),
+      ),
+      WorkbenchCommandItem(
+        title: 'ثبت سند پرداخت خزانه',
+        subtitle: 'فروشگاهی کایر • خزانه‌داری',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.north_east_rounded,
+        color: const Color(0xffdc2626),
+        keywords: const ['سند پرداخت', 'پرداخت وجه', 'خزانه'],
+        onSelect: () =>
+            _pushPage(const TrsVoucherFormPage(kind: TrsKind.payment)),
+      ),
+    ],
+    if (access.canCreateMinutes)
+      WorkbenchCommandItem(
+        title: 'تنظیم صورتجلسهٔ جدید',
+        subtitle: 'فرم‌های متفرقه • صورتجلسه',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.note_add_rounded,
+        color: const Color(0xff059669),
+        keywords: const ['صورتجلسه جدید', 'مصوبه'],
+        onSelect: () => _pushPage(const MinutesEditorPage()),
+      ),
+    if (access.canSeeItRequests)
+      WorkbenchCommandItem(
+        title: 'ثبت درخواست خدمت IT',
+        subtitle: 'مدیریت سیستم • پشتیبانی فنی',
+        group: 'عملیات سریع یک‌ضربه‌ای',
+        icon: Icons.support_agent_rounded,
+        color: const Color(0xff4f46e5),
+        keywords: const ['درخواست IT', 'تیکت', 'خرابی سیستم'],
+        onSelect: () => _pushPage(const ItRequestFormPage()),
+      ),
 
-    // همهٔ ماژول‌های سازمان (هم‌نام با وب)
+    // همهٔ ماژول‌های مجاز سازمان (هم‌نام با وب)
     for (final m in modules)
       WorkbenchCommandItem(
         title: m.name,
@@ -1211,137 +1260,171 @@ class _HomePageState extends State<HomePage> {
         onSelect: () => _openModule(m),
       ),
 
-    // زیربخش‌های کلیدی پرکاربرد
-    WorkbenchCommandItem(
-      title: 'داشبورد عملیاتی خرید، فروش و تعمیرات',
-      subtitle: 'فروشگاهی کایر • داشبورد',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.query_stats_rounded,
-      color: const Color(0xff2563eb),
-      keywords: const ['داشبورد عملیاتی', 'آمار فروش'],
-      onSelect: () => _pushPage(const OpsDashboardPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'مدیریت چک‌های دریافتی و پرداختی',
-      subtitle: 'فروشگاهی کایر • خزانه‌داری',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.payments_outlined,
-      color: const Color(0xff059669),
-      keywords: const ['چک', 'سررسید چک', 'واگذاری'],
-      onSelect: () => _pushPage(const TrsChequesPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'موجودی لحظه‌ای انبارها',
-      subtitle: 'فروشگاهی کایر • کالا و انبار',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.inventory_2_outlined,
-      color: const Color(0xfff97316),
-      keywords: const ['موجودی', 'انبار', 'کالا'],
-      onSelect: () => _pushPage(const StockPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'کاردکس کالا (تعدادی و ریالی)',
-      subtitle: 'فروشگاهی کایر • گزارش‌ها',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.list_alt_rounded,
-      color: const Color(0xff0891b2),
-      keywords: const ['کاردکس', 'گردش کالا'],
-      onSelect: () => _pushPage(const KardexPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'طرف حساب‌ها (مشتریان و تأمین‌کنندگان)',
-      subtitle: 'فروشگاهی کایر • اطلاعات پایه',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.people_alt_rounded,
-      color: const Color(0xff4f46e5),
-      keywords: const ['مشتری', 'تأمین کننده', 'طرف حساب'],
-      onSelect: () => _pushPage(const PartiesPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'تعمیرات، گارانتی و طرح تعویض',
-      subtitle: 'فروشگاهی کایر • عملیات',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.build_circle_outlined,
-      color: const Color(0xffd97706),
-      keywords: const ['تعمیرات', 'گارانتی', 'طرح تعویض'],
-      onSelect: () => _pushPage(const RepairsPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'فهرست و کارپوشه صورتحساب‌های مودیان',
-      subtitle: 'مودیان تیسا • ارسال، استعلام، اصلاحیه و ابطال',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.receipt_long_rounded,
-      color: const Color(0xff0f766e),
-      keywords: const ['کارپوشه مودیان', 'استعلام مودیان', 'اصلاحیه', 'ابطالی'],
-      onSelect: () => _pushPage(const MoadianHomePage(initialTab: 1)),
-    ),
-    WorkbenchCommandItem(
-      title: 'اتصال، حافظه مالیاتی و کلید خصوصی RSA',
-      subtitle: 'مودیان تیسا • اطلاعات پایه و تست اتصال',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.vpn_key_rounded,
-      color: const Color(0xff0d9488),
-      keywords: const ['کلید خصوصی', 'حافظه مالیاتی', 'PEM', 'تست اتصال مودیان'],
-      onSelect: () => _pushPage(
-        const MoadianHomePage(initialTab: 2, initialBasicSection: 1),
+    // زیربخش‌های کلیدی پرکاربرد (فقط موارد مجاز)
+    if (access.canSeeFinancialDashboard)
+      WorkbenchCommandItem(
+        title: 'داشبورد مالی و مدیریتی فروشگاه',
+        subtitle: 'فروش و سود دوره‌ای، بدهکاران معوق و هشدار چک‌ها',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.speed_rounded,
+        color: const Color(0xff1d4ed8),
+        keywords: const ['داشبورد مالی', 'سود', 'بدهکاران', 'چک‌های امروز'],
+        onSelect: () => _pushPage(const FinancialDashboardPage()),
       ),
-    ),
-    WorkbenchCommandItem(
-      title: 'کالا و خدمات دارای کد ۱۳ رقمی CPC',
-      subtitle: 'مودیان تیسا • شناسه‌های stuffid.tax.gov.ir',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.qr_code_2_rounded,
-      color: const Color(0xff0f766e),
-      keywords: const ['CPC', 'شناسه کالا', '۱۳ رقمی', 'stuffid'],
-      onSelect: () => _pushPage(
-        const MoadianHomePage(initialTab: 2, initialBasicSection: 2),
+    if (access.shop.canSeeOperationalDashboard)
+      WorkbenchCommandItem(
+        title: 'داشبورد عملیاتی خرید، فروش و تعمیرات',
+        subtitle: 'فروشگاهی کایر • داشبورد',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.query_stats_rounded,
+        color: const Color(0xff2563eb),
+        keywords: const ['داشبورد عملیاتی', 'آمار فروش'],
+        onSelect: () => _pushPage(const OpsDashboardPage()),
       ),
-    ),
-    WorkbenchCommandItem(
-      title: 'هزینه‌های فروشگاه',
-      subtitle: 'فروشگاهی کایر • مالی',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.receipt_rounded,
-      color: const Color(0xffdc2626),
-      keywords: const ['هزینه', 'ثبت هزینه'],
-      onSelect: () => _pushPage(const ExpensesPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'گاوصندوق رمزهای سازمانی',
-      subtitle: 'مدیریت سیستم • امنیت',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.enhanced_encryption_rounded,
-      color: const Color(0xff3730a3),
-      keywords: const ['گاوصندوق', 'پسورد', 'رمز', 'vault'],
-      onSelect: () => _pushPage(const VaultPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'مدیریت سرورها و منابع',
-      subtitle: 'مدیریت سیستم • زیرساخت',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.dns_outlined,
-      color: const Color(0xff1e3a8a),
-      keywords: const ['سرور', 'server'],
-      onSelect: () => _pushPage(const ServerManagementPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'اسکن شبکه و تجهیزات فعال',
-      subtitle: 'مدیریت سیستم • شبکه',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.radar_rounded,
-      color: const Color(0xff0284c7),
-      keywords: const ['اسکن شبکه', 'آی‌پی', 'پینگ'],
-      onSelect: () => _pushPage(const NetworkScanPage()),
-    ),
-    WorkbenchCommandItem(
-      title: 'دوربین‌های مداربسته (CCTV)',
-      subtitle: 'مدیریت سیستم • نظارت تصویری',
-      group: 'صفحات و گزارش‌های پرکاربرد',
-      icon: Icons.videocam_rounded,
-      color: const Color(0xff0f766e),
-      keywords: const ['دوربین', 'مداربسته', 'cctv', 'nvr'],
-      onSelect: () => _pushPage(const CctvCamerasPage()),
-    ),
+    if (access.shop.canSeeCheques)
+      WorkbenchCommandItem(
+        title: 'مدیریت چک‌های دریافتی و پرداختی',
+        subtitle: 'فروشگاهی کایر • خزانه‌داری',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.payments_outlined,
+        color: const Color(0xff059669),
+        keywords: const ['چک', 'سررسید چک', 'واگذاری'],
+        onSelect: () => _pushPage(const TrsChequesPage()),
+      ),
+    if (access.shop.canSeeStock)
+      WorkbenchCommandItem(
+        title: 'موجودی لحظه‌ای انبارها',
+        subtitle: 'فروشگاهی کایر • کالا و انبار',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.inventory_2_outlined,
+        color: const Color(0xfff97316),
+        keywords: const ['موجودی', 'انبار', 'کالا'],
+        onSelect: () => _pushPage(const StockPage()),
+      ),
+    if (access.shop.canSeeKardex)
+      WorkbenchCommandItem(
+        title: 'کاردکس کالا (تعدادی و ریالی)',
+        subtitle: 'فروشگاهی کایر • گزارش‌ها',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.list_alt_rounded,
+        color: const Color(0xff0891b2),
+        keywords: const ['کاردکس', 'گردش کالا'],
+        onSelect: () => _pushPage(const KardexPage()),
+      ),
+    if (access.shop.anyPartyAccess)
+      WorkbenchCommandItem(
+        title: 'طرف حساب‌ها (مشتریان و تأمین‌کنندگان)',
+        subtitle: 'فروشگاهی کایر • اطلاعات پایه',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.people_alt_rounded,
+        color: const Color(0xff4f46e5),
+        keywords: const ['مشتری', 'تأمین کننده', 'طرف حساب'],
+        onSelect: () => _pushPage(const PartiesPage()),
+      ),
+    if (access.shop.canSeeRepairs)
+      WorkbenchCommandItem(
+        title: 'تعمیرات، گارانتی و طرح تعویض',
+        subtitle: 'فروشگاهی کایر • عملیات',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.build_circle_outlined,
+        color: const Color(0xffd97706),
+        keywords: const ['تعمیرات', 'گارانتی', 'طرح تعویض'],
+        onSelect: () => _pushPage(const RepairsPage()),
+      ),
+    if (access.canSeeMoadianOverview)
+      WorkbenchCommandItem(
+        title: 'فهرست و کارپوشه صورتحساب‌های مودیان',
+        subtitle: 'مودیان تیسا • ارسال، استعلام، اصلاحیه و ابطال',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.receipt_long_rounded,
+        color: const Color(0xff0f766e),
+        keywords: const [
+          'کارپوشه مودیان',
+          'استعلام مودیان',
+          'اصلاحیه',
+          'ابطالی',
+        ],
+        onSelect: () => _pushPage(const MoadianHomePage(initialTab: 1)),
+      ),
+    if (access.canSeeMoadianGroup) ...[
+      WorkbenchCommandItem(
+        title: 'اتصال، حافظه مالیاتی و کلید خصوصی RSA',
+        subtitle: 'مودیان تیسا • اطلاعات پایه و تست اتصال',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.vpn_key_rounded,
+        color: const Color(0xff0d9488),
+        keywords: const [
+          'کلید خصوصی',
+          'حافظه مالیاتی',
+          'PEM',
+          'تست اتصال مودیان',
+        ],
+        onSelect: () => _pushPage(
+          const MoadianHomePage(initialTab: 2, initialBasicSection: 1),
+        ),
+      ),
+      WorkbenchCommandItem(
+        title: 'کالا و خدمات دارای کد ۱۳ رقمی CPC',
+        subtitle: 'مودیان تیسا • شناسه‌های stuffid.tax.gov.ir',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.qr_code_2_rounded,
+        color: const Color(0xff0f766e),
+        keywords: const ['CPC', 'شناسه کالا', '۱۳ رقمی', 'stuffid'],
+        onSelect: () => _pushPage(
+          const MoadianHomePage(initialTab: 2, initialBasicSection: 2),
+        ),
+      ),
+    ],
+    if (access.shop.canSeeExpenses)
+      WorkbenchCommandItem(
+        title: 'هزینه‌های فروشگاه',
+        subtitle: 'فروشگاهی کایر • مالی',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.receipt_rounded,
+        color: const Color(0xffdc2626),
+        keywords: const ['هزینه', 'ثبت هزینه'],
+        onSelect: () => _pushPage(const ExpensesPage()),
+      ),
+    if (access.canSeeItVault)
+      WorkbenchCommandItem(
+        title: 'گاوصندوق رمزهای سازمانی',
+        subtitle: 'مدیریت سیستم • امنیت',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.enhanced_encryption_rounded,
+        color: const Color(0xff3730a3),
+        keywords: const ['گاوصندوق', 'پسورد', 'رمز', 'vault'],
+        onSelect: () => _pushPage(const VaultPage()),
+      ),
+    if (access.canSeeServers)
+      WorkbenchCommandItem(
+        title: 'مدیریت سرورها و منابع',
+        subtitle: 'مدیریت سیستم • زیرساخت',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.dns_outlined,
+        color: const Color(0xff1e3a8a),
+        keywords: const ['سرور', 'server'],
+        onSelect: () => _pushPage(const ServerManagementPage()),
+      ),
+    if (access.canSeeIpam)
+      WorkbenchCommandItem(
+        title: 'اسکن شبکه و تجهیزات فعال',
+        subtitle: 'مدیریت سیستم • شبکه',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.radar_rounded,
+        color: const Color(0xff0284c7),
+        keywords: const ['اسکن شبکه', 'آی‌پی', 'پینگ'],
+        onSelect: () => _pushPage(const NetworkScanPage()),
+      ),
+    if (access.canSeeCctvCameras || access.canSeeCctvNvrs)
+      WorkbenchCommandItem(
+        title: 'دوربین‌های مداربسته (CCTV)',
+        subtitle: 'مدیریت سیستم • نظارت تصویری',
+        group: 'صفحات و گزارش‌های پرکاربرد',
+        icon: Icons.videocam_rounded,
+        color: const Color(0xff0f766e),
+        keywords: const ['دوربین', 'مداربسته', 'cctv', 'nvr'],
+        onSelect: () => _pushPage(const CctvCamerasPage()),
+      ),
     WorkbenchCommandItem(
       title: 'تغییر شرکت فعال',
       subtitle: _companies.active?.name ?? 'انتخاب شرکت سازمانی',
@@ -1362,13 +1445,14 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
-  void _openCommandSearch(List<ModuleTile> modules) {
+  void _openCommandSearch(List<ModuleTile> modules, WebAccess access) {
     HapticFeedback.lightImpact();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => WorkbenchCommandSheet(items: _buildCommandItems(modules)),
+      builder: (_) =>
+          WorkbenchCommandSheet(items: _buildCommandItems(modules, access)),
     );
   }
 
@@ -1758,6 +1842,9 @@ class _HomePageState extends State<HomePage> {
       case 'doc-archive-cartable':
         _pushPage(const DocArchiveCartablePage());
         return;
+      case 'financial-dashboard':
+        _pushPage(const FinancialDashboardPage());
+        return;
       case 'sales':
         _pushPage(const ShopHomePage());
         return;
@@ -1863,9 +1950,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// غنی‌سازی کاشی‌های ماژول با شمارنده‌های زندهٔ همان لحظه.
-  List<ModuleTile> _enrichedModules() {
-    final raw = buildModuleTiles(openTabs: const {1, 2, 3, 4});
+  /// غنی‌سازی کاشی‌های ماژول مجاز کاربر با شمارنده‌های زندهٔ همان لحظه.
+  List<ModuleTile> _enrichedModules(WebAccess access) {
+    final raw = buildModuleTiles(
+      openTabs: const {1, 2, 3, 4},
+      access: access,
+    );
     return [
       for (final m in raw)
         switch (m.id) {
@@ -1918,13 +2008,14 @@ class _HomePageState extends State<HomePage> {
     return [...pinned, ...rest];
   }
 
-  /// مرتب‌سازی کارت‌های KPI: کارت‌هایی که دادهٔ زنده دارند در اولویت اول قرار می‌گیرند.
-  List<HomeKpi> get _orderedKpis {
-    if (!_widgetsSettled) return _kpis;
-    final withData = _kpis
+  /// مرتب‌سازی کارت‌های KPI مجاز کاربر: کارت‌هایی که دادهٔ زنده دارند در اولویت اول قرار می‌گیرند.
+  List<HomeKpi> _orderedKpisFor(WebAccess access) {
+    final allowed = buildKpiCards(access: access);
+    if (!_widgetsSettled) return allowed;
+    final withData = allowed
         .where((k) => _widgetData[k.widgetKey]?.value != null)
         .toList();
-    final withoutData = _kpis
+    final withoutData = allowed
         .where((k) => _widgetData[k.widgetKey]?.value == null)
         .toList();
     return [...withData, ...withoutData];
@@ -1945,19 +2036,28 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.select<AuthController, ({String name, String role})>(
-      (a) => (
-        name: a.session?.displayName ?? '',
-        role: a.session?.role == 'Admin'
-            ? 'مدیر سیستم'
-            : (a.session?.roleNames.isNotEmpty == true
-                  ? a.session!.roleNames.first
-                  : 'کاربر سازمانی'),
-      ),
-    );
-    final allModules = _enrichedModules();
+    final authCtrl = Provider.of<AuthController?>(context);
+    final access = WebAccess(authCtrl?.session, unrestrictedWhenNull: true);
+    final sessionName = authCtrl?.session?.displayName ?? '';
+    final sessionRole = authCtrl?.session?.role == 'Admin'
+        ? 'مدیر سیستم'
+        : (authCtrl?.session?.roleNames.isNotEmpty == true
+              ? authCtrl!.session!.roleNames.first
+              : 'کاربر سازمانی');
+
+    final allModules = _enrichedModules(access);
     final visibleModules = _filteredAndSortedModules(allModules);
-    final orderedKpis = _orderedKpis;
+    final orderedKpis = _orderedKpisFor(access);
+    final hasAnyQuickAction =
+        access.canSeeFinancialDashboard ||
+        access.canCreateSale ||
+        access.canCreatePurchase ||
+        access.canCreateInnerLetter ||
+        access.canCreateWorkOrder ||
+        access.canCreateSettlement ||
+        access.canCreateMinutes ||
+        access.canSeeItRequests ||
+        access.canCreateMoadianInvoice;
 
     return Scaffold(
       backgroundColor: HomeColors.bg,
@@ -1971,21 +2071,27 @@ class _HomePageState extends State<HomePage> {
           slivers: [
             // ۱. سربرگ فرماندهی میز کار + شرکت فعال + نوار نبض سازمان
             _ExecutiveHeader(
-              name: session.name,
-              roleLabel: session.role,
+              name: sessionName,
+              roleLabel: sessionRole,
               unread: _unread,
               companies: _companies,
               pulse: _pulse,
               loading: _loading,
-              onSearch: () => _openCommandSearch(allModules),
+              onSearch: () => _openCommandSearch(allModules, access),
               onCustomize: () => _openCustomize(allModules),
               onBell: _openNotifications,
               onSettings: () => _openSettings(allModules),
               onPickCompany: _openCompanies,
-              onTapActionable: _focusCartable,
-              onTapLetters: () => widget.onOpenTab(2),
-              onTapWorkOrders: () => widget.onOpenTab(1),
-              onTapChats: () => widget.onOpenTab(4),
+              onTapActionable: access.canSeeMyCartable ? _focusCartable : null,
+              onTapLetters: access.canSeeOfficeAutomation
+                  ? () => widget.onOpenTab(2)
+                  : null,
+              onTapWorkOrders: access.canSeeWorkOrders
+                  ? () => widget.onOpenTab(1)
+                  : null,
+              onTapChats: access.canSeeMessenger
+                  ? () => widget.onOpenTab(4)
+                  : null,
             ),
 
             if (_error != null)
@@ -1996,14 +2102,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-            // ۲. نوار عملیات سریع یک‌ضربه‌ای
-            if (_prefs.showQuickActions) ...[
+            // ۲. نوار عملیات سریع یک‌ضربه‌ای (فقط عملیات مجاز کاربر)
+            if (_prefs.showQuickActions && hasAnyQuickAction) ...[
               SliverToBoxAdapter(
                 child: _SectionHeader(
                   title: 'عملیات سریع میز کار',
                   subtitle: 'ثبت و صدور مستقیم با یک لمس',
                   trailing: TextButton.icon(
-                    onPressed: () => _openCommandSearch(allModules),
+                    onPressed: () => _openCommandSearch(allModules, access),
                     icon: const Icon(Icons.bolt_rounded, size: 15),
                     label: const Text('همهٔ فرمان‌ها'),
                     style: TextButton.styleFrom(
@@ -2021,30 +2127,68 @@ class _HomePageState extends State<HomePage> {
               ),
               SliverToBoxAdapter(
                 child: _QuickActionsRail(
-                  onSaleInvoice: () =>
-                      _pushPage(const OrderFormPage(type: TxnType.sale)),
-                  onPurchaseInvoice: () =>
-                      _pushPage(const OrderFormPage(type: TxnType.purchase)),
-                  onProforma: () => _pushPage(
-                    const OrderFormPage(type: TxnType.sale, isProforma: true),
-                  ),
-                  onNewLetter: () => _pushPage(
-                    const LetterEditorPage(kind: LetterKind.inner),
-                  ),
-                  onNewWorkOrder: () => _pushPage(const WorkOrderEditorPage()),
-                  onNewReceipt: () => _pushPage(
-                    const TrsVoucherFormPage(kind: TrsKind.receipt),
-                  ),
-                  onNewMinutes: () => _pushPage(const MinutesEditorPage()),
-                  onNewItRequest: () => _pushPage(const ItRequestFormPage()),
-                  onMoadianInvoice: () =>
-                      _pushPage(const MoadianInvoiceFormPage()),
+                  onFinancialDashboard: access.canSeeFinancialDashboard
+                      ? () => _pushPage(const FinancialDashboardPage())
+                      : null,
+                  onSaleInvoice: access.canCreateSale
+                      ? () =>
+                            _pushPage(const OrderFormPage(type: TxnType.sale))
+                      : null,
+                  onPurchaseInvoice: access.canCreatePurchase
+                      ? () => _pushPage(
+                          const OrderFormPage(type: TxnType.purchase),
+                        )
+                      : null,
+                  onProforma: access.canCreateSale
+                      ? () => _pushPage(
+                          const OrderFormPage(
+                            type: TxnType.sale,
+                            isProforma: true,
+                          ),
+                        )
+                      : null,
+                  onNewLetter: access.canCreateInnerLetter
+                      ? () => _pushPage(
+                          const LetterEditorPage(kind: LetterKind.inner),
+                        )
+                      : null,
+                  onNewWorkOrder: access.canCreateWorkOrder
+                      ? () => _pushPage(const WorkOrderEditorPage())
+                      : null,
+                  onNewReceipt: access.canCreateSettlement
+                      ? () => _pushPage(
+                          const TrsVoucherFormPage(kind: TrsKind.receipt),
+                        )
+                      : null,
+                  onNewMinutes: access.canCreateMinutes
+                      ? () => _pushPage(const MinutesEditorPage())
+                      : null,
+                  onNewItRequest: access.canSeeItRequests
+                      ? () => _pushPage(const ItRequestFormPage())
+                      : null,
+                  onMoadianInvoice: access.canCreateMoadianInvoice
+                      ? () => _pushPage(const MoadianInvoiceFormPage())
+                      : null,
                 ),
               ),
             ],
 
-            // ۳. کارتابل یکپارچه و میز اقدام (آینهٔ صفحهٔ اول وب Cartable.razor)
-            if (_prefs.showCartable) ...[
+            // ۲.۵ مطابق `RootLanding.razor`: اگر کارتابل غیرفعال است ولی `Dashboards.Financial`
+            // فعال است، کارت برجستهٔ داشبورد مالی در صدر میز کار نمایش داده می‌شود.
+            if (!access.canSeeMyCartable &&
+                access.canSeeFinancialDashboard) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: _FinancialDashboardHeroCard(
+                    onOpen: () => _pushPage(const FinancialDashboardPage()),
+                  ),
+                ),
+              ),
+            ],
+
+            // ۳. کارتابل یکپارچه و میز اقدام (آینهٔ صفحهٔ اول وب Cartable.razor — فقط با MyCartable.View)
+            if (_prefs.showCartable && access.canSeeMyCartable) ...[
               SliverToBoxAdapter(
                 key: _cartableKey,
                 child: _SectionHeader(
@@ -2094,8 +2238,10 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
 
-            // ۴. شاخص‌های کلیدی عملکرد (KPI) با انتخابگر بازهٔ زمانی
-            if (_prefs.showKpis) ...[
+            // ۴. شاخص‌های کلیدی عملکرد (KPI — فقط با MyDashboards.View و ماژول مجاز)
+            if (_prefs.showKpis &&
+                access.canSeeMyDashboards &&
+                orderedKpis.isNotEmpty) ...[
               SliverToBoxAdapter(
                 child: _SectionHeader(
                   title: 'شاخص‌های عملکرد سازمان',
@@ -2361,10 +2507,10 @@ class _ExecutiveHeader extends StatelessWidget {
   final VoidCallback onBell;
   final VoidCallback onSettings;
   final VoidCallback onPickCompany;
-  final VoidCallback onTapActionable;
-  final VoidCallback onTapLetters;
-  final VoidCallback onTapWorkOrders;
-  final VoidCallback onTapChats;
+  final VoidCallback? onTapActionable;
+  final VoidCallback? onTapLetters;
+  final VoidCallback? onTapWorkOrders;
+  final VoidCallback? onTapChats;
 
   String get _greeting {
     final h = DateTime.now().hour;
@@ -2700,67 +2846,83 @@ class _ExecutiveHeader extends StatelessWidget {
                       ),
                     ),
 
-                    const SizedBox(height: 11),
+                    if (onTapActionable != null ||
+                        onTapLetters != null ||
+                        onTapWorkOrders != null ||
+                        onTapChats != null) ...[
+                      const SizedBox(height: 11),
 
-                    // ردیف چهارم: نوار نبض زندهٔ میز کار (۴ شاخص عملیاتی قابل لمس)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 9,
+                      // ردیف چهارم: نوار نبض زندهٔ میز کار (فقط شاخص‌های مجاز کاربر)
+                      Builder(
+                        builder: (_) {
+                          final cells = <Widget>[
+                            if (onTapActionable != null)
+                              Expanded(
+                                child: _PulseCell(
+                                  label: 'منتظر اقدام',
+                                  count: pulse.actionableCount,
+                                  accent: const Color(0xfffbbf24),
+                                  icon: Icons.bolt_rounded,
+                                  onTap: onTapActionable!,
+                                ),
+                              ),
+                            if (onTapLetters != null)
+                              Expanded(
+                                child: _PulseCell(
+                                  label: 'توکا (نخوانده)',
+                                  count: pulse.unreadLetters,
+                                  accent: const Color(0xff38bdf8),
+                                  icon: Icons.mark_email_unread_rounded,
+                                  onTap: onTapLetters!,
+                                ),
+                              ),
+                            if (onTapWorkOrders != null)
+                              Expanded(
+                                child: _PulseCell(
+                                  label: 'رایکا (باز)',
+                                  count: pulse.openWorkOrders,
+                                  accent: pulse.overdueWorkOrders > 0
+                                      ? const Color(0xfff87171)
+                                      : const Color(0xfffb923c),
+                                  icon: Icons.assignment_late_rounded,
+                                  onTap: onTapWorkOrders!,
+                                ),
+                              ),
+                            if (onTapChats != null)
+                              Expanded(
+                                child: _PulseCell(
+                                  label: 'میها (چت)',
+                                  count: pulse.unreadChats,
+                                  accent: const Color(0xff2dd4bf),
+                                  icon: Icons.forum_rounded,
+                                  onTap: onTapChats!,
+                                ),
+                              ),
+                          ];
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 9,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.12),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                for (var i = 0; i < cells.length; i++) ...[
+                                  if (i > 0) _vDivider(),
+                                  cells[i],
+                                ],
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.20),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _PulseCell(
-                              label: 'منتظر اقدام',
-                              count: pulse.actionableCount,
-                              accent: const Color(0xfffbbf24),
-                              icon: Icons.bolt_rounded,
-                              onTap: onTapActionable,
-                            ),
-                          ),
-                          _vDivider(),
-                          Expanded(
-                            child: _PulseCell(
-                              label: 'توکا (نخوانده)',
-                              count: pulse.unreadLetters,
-                              accent: const Color(0xff38bdf8),
-                              icon: Icons.mark_email_unread_rounded,
-                              onTap: onTapLetters,
-                            ),
-                          ),
-                          _vDivider(),
-                          Expanded(
-                            child: _PulseCell(
-                              label: 'رایکا (باز)',
-                              count: pulse.openWorkOrders,
-                              accent: pulse.overdueWorkOrders > 0
-                                  ? const Color(0xfff87171)
-                                  : const Color(0xfffb923c),
-                              icon: Icons.assignment_late_rounded,
-                              onTap: onTapWorkOrders,
-                            ),
-                          ),
-                          _vDivider(),
-                          Expanded(
-                            child: _PulseCell(
-                              label: 'میها (چت)',
-                              count: pulse.unreadChats,
-                              accent: const Color(0xff2dd4bf),
-                              icon: Icons.forum_rounded,
-                              onTap: onTapChats,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -2952,95 +3114,116 @@ class _BellButton extends StatelessWidget {
 
 class _QuickActionsRail extends StatelessWidget {
   const _QuickActionsRail({
-    required this.onSaleInvoice,
-    required this.onPurchaseInvoice,
-    required this.onProforma,
-    required this.onNewLetter,
-    required this.onNewWorkOrder,
-    required this.onNewReceipt,
-    required this.onNewMinutes,
-    required this.onNewItRequest,
-    required this.onMoadianInvoice,
+    this.onFinancialDashboard,
+    this.onSaleInvoice,
+    this.onPurchaseInvoice,
+    this.onProforma,
+    this.onNewLetter,
+    this.onNewWorkOrder,
+    this.onNewReceipt,
+    this.onNewMinutes,
+    this.onNewItRequest,
+    this.onMoadianInvoice,
   });
 
-  final VoidCallback onSaleInvoice;
-  final VoidCallback onPurchaseInvoice;
-  final VoidCallback onProforma;
-  final VoidCallback onNewLetter;
-  final VoidCallback onNewWorkOrder;
-  final VoidCallback onNewReceipt;
-  final VoidCallback onNewMinutes;
-  final VoidCallback onNewItRequest;
-  final VoidCallback onMoadianInvoice;
+  final VoidCallback? onFinancialDashboard;
+  final VoidCallback? onSaleInvoice;
+  final VoidCallback? onPurchaseInvoice;
+  final VoidCallback? onProforma;
+  final VoidCallback? onNewLetter;
+  final VoidCallback? onNewWorkOrder;
+  final VoidCallback? onNewReceipt;
+  final VoidCallback? onNewMinutes;
+  final VoidCallback? onNewItRequest;
+  final VoidCallback? onMoadianInvoice;
 
   @override
   Widget build(BuildContext context) {
     final actions =
         <({String title, String sub, IconData icon, Color color, VoidCallback onTap})>[
-          (
-            title: 'فاکتور فروش',
-            sub: 'فروشگاهی کایر',
-            icon: Icons.add_shopping_cart_rounded,
-            color: const Color(0xff2563eb),
-            onTap: onSaleInvoice,
-          ),
-          (
-            title: 'صورتحساب مودیان',
-            sub: 'مودیان تیسا',
-            icon: Icons.receipt_long_rounded,
-            color: const Color(0xff0f766e),
-            onTap: onMoadianInvoice,
-          ),
-          (
-            title: 'فاکتور خرید',
-            sub: 'فروشگاهی کایر',
-            icon: Icons.shopping_bag_rounded,
-            color: const Color(0xff0f766e),
-            onTap: onPurchaseInvoice,
-          ),
-          (
-            title: 'نامه جدید',
-            sub: 'اتوماسیون توکا',
-            icon: Icons.edit_document,
-            color: const Color(0xff1e40af),
-            onTap: onNewLetter,
-          ),
-          (
-            title: 'دستور کار جدید',
-            sub: 'دستورکار رایکا',
-            icon: Icons.playlist_add_check_rounded,
-            color: const Color(0xffd97706),
-            onTap: onNewWorkOrder,
-          ),
-          (
-            title: 'سند دریافت',
-            sub: 'خزانه‌داری کایر',
-            icon: Icons.account_balance_wallet_rounded,
-            color: const Color(0xff059669),
-            onTap: onNewReceipt,
-          ),
-          (
-            title: 'پیش‌فاکتور',
-            sub: 'فروشگاهی کایر',
-            icon: Icons.request_quote_rounded,
-            color: const Color(0xff4f46e5),
-            onTap: onProforma,
-          ),
-          (
-            title: 'صورتجلسه جدید',
-            sub: 'مصوبات جلسات',
-            icon: Icons.description_rounded,
-            color: const Color(0xff0d9488),
-            onTap: onNewMinutes,
-          ),
-          (
-            title: 'درخواست IT',
-            sub: 'مدیریت سیستم',
-            icon: Icons.support_agent_rounded,
-            color: const Color(0xff7c3aed),
-            onTap: onNewItRequest,
-          ),
+          if (onFinancialDashboard != null)
+            (
+              title: 'داشبورد مالی',
+              sub: 'سود، چک و بدهکاران',
+              icon: Icons.speed_rounded,
+              color: const Color(0xff1d4ed8),
+              onTap: onFinancialDashboard!,
+            ),
+          if (onSaleInvoice != null)
+            (
+              title: 'فاکتور فروش',
+              sub: 'فروشگاهی کایر',
+              icon: Icons.add_shopping_cart_rounded,
+              color: const Color(0xff2563eb),
+              onTap: onSaleInvoice!,
+            ),
+          if (onMoadianInvoice != null)
+            (
+              title: 'صورتحساب مودیان',
+              sub: 'مودیان تیسا',
+              icon: Icons.receipt_long_rounded,
+              color: const Color(0xff0f766e),
+              onTap: onMoadianInvoice!,
+            ),
+          if (onPurchaseInvoice != null)
+            (
+              title: 'فاکتور خرید',
+              sub: 'فروشگاهی کایر',
+              icon: Icons.shopping_bag_rounded,
+              color: const Color(0xff0f766e),
+              onTap: onPurchaseInvoice!,
+            ),
+          if (onNewLetter != null)
+            (
+              title: 'نامه جدید',
+              sub: 'اتوماسیون توکا',
+              icon: Icons.edit_document,
+              color: const Color(0xff1e40af),
+              onTap: onNewLetter!,
+            ),
+          if (onNewWorkOrder != null)
+            (
+              title: 'دستور کار جدید',
+              sub: 'دستورکار رایکا',
+              icon: Icons.playlist_add_check_rounded,
+              color: const Color(0xffd97706),
+              onTap: onNewWorkOrder!,
+            ),
+          if (onNewReceipt != null)
+            (
+              title: 'سند دریافت',
+              sub: 'خزانه‌داری کایر',
+              icon: Icons.account_balance_wallet_rounded,
+              color: const Color(0xff059669),
+              onTap: onNewReceipt!,
+            ),
+          if (onProforma != null)
+            (
+              title: 'پیش‌فاکتور',
+              sub: 'فروشگاهی کایر',
+              icon: Icons.request_quote_rounded,
+              color: const Color(0xff4f46e5),
+              onTap: onProforma!,
+            ),
+          if (onNewMinutes != null)
+            (
+              title: 'صورتجلسه جدید',
+              sub: 'مصوبات جلسات',
+              icon: Icons.description_rounded,
+              color: const Color(0xff0d9488),
+              onTap: onNewMinutes!,
+            ),
+          if (onNewItRequest != null)
+            (
+              title: 'درخواست IT',
+              sub: 'مدیریت سیستم',
+              icon: Icons.support_agent_rounded,
+              color: const Color(0xff7c3aed),
+              onTap: onNewItRequest!,
+            ),
         ];
+
+    if (actions.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
       height: 82,
@@ -4633,6 +4816,105 @@ class _ErrorBanner extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+class _FinancialDashboardHeroCard extends StatelessWidget {
+  const _FinancialDashboardHeroCard({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => HPressable(
+    onTap: onOpen,
+    scale: 0.98,
+    child: Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff1d4ed8), Color(0xff0f766e)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff1d4ed8).withValues(alpha: 0.24),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Icon(
+              Icons.speed_rounded,
+              color: Colors.white,
+              size: 25,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'داشبورد مالی و مدیریتی فروشگاه',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'فروش و سود دوره‌ای، بدهکاران سررسیدشده و هشدار چک‌ها',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Colors.white.withValues(alpha: 0.86),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ورود',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(width: 3),
+                Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 11,
+                  color: Colors.white,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

@@ -31,10 +31,14 @@ class MoadianPerms {
   ];
 
   /// بررسی یک سطح دسترسی (پشتیبانی از نام کلیدهای وب `Moadian.X` و معادل‌های قدیمی `moadian.*.manage`).
+  /// مطابق `MoadianPermissionFilter.cs` و `NavMenu.razor`:
+  /// فقط مدیر قدیمی بدون نقش RBAC همه‌چیز را می‌بیند؛ اگر نقش RBAC فعال دارد،
+  /// دقیقاً سطوح تیک‌خوردهٔ مودیان (و برای `Moadian.View` همچنین `isAdmin`) ملاک است.
   static bool can(AuthSession? session, String perm) {
     if (session == null) return false;
-    if (session.role == 'Admin') return true;
-    if (session.has(perm)) return true;
+    if (session.isUnrestrictedAdmin) return true;
+    if (perm == view && session.isAdmin) return true;
+    if (session.hasDirect(perm)) return true;
     final alt = switch (perm) {
       company => 'moadian.company.manage',
       fiscalYear => 'moadian.fiscalyear.manage',

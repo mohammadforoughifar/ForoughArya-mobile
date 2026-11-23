@@ -805,10 +805,8 @@ class _MoadianInvoiceFormPageState extends State<MoadianInvoiceFormPage> {
     final session = context.watch<AuthController>().session;
     final allowed = widget.mode == MoadianFormMode.create ||
             widget.mode == MoadianFormMode.copy
-        ? MoadianPerms.can(session, MoadianPerms.invoiceCreate) ||
-              MoadianPerms.can(session, MoadianPerms.view)
-        : MoadianPerms.can(session, MoadianPerms.invoiceUpdate) ||
-              MoadianPerms.can(session, MoadianPerms.view);
+        ? MoadianPerms.can(session, MoadianPerms.invoiceCreate)
+        : MoadianPerms.can(session, MoadianPerms.invoiceUpdate);
 
     final grand = MoadianCalc.grandTotal(_vm.invoiceItems);
     final totalVat = MoadianCalc.totalVat(_vm.invoiceItems);

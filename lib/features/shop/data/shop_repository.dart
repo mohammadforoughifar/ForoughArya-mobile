@@ -19,6 +19,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
+import '../models/financial_dashboard_models.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
 import '../models/report_models.dart';
@@ -2277,4 +2278,39 @@ class ShopRepository {
     );
     return ShopPage.parse(r.data, ReorderItem.fromJson);
   }
+
+  // ---------- داشبورد مالی وب (`AdminHome.razor` + `DashboardController.cs`) ----------
+
+  /// `GET /api/dashboard` — خلاصهٔ فروشگاه (`[RequirePermission("Dashboards", "Financial")]`)
+  Future<DashboardSummaryDto> financialSummary() async {
+    final r = await _api.get<dynamic>('/api/dashboard');
+    return r.data is Map
+        ? DashboardSummaryDto.fromJson(Map<String, dynamic>.from(r.data as Map))
+        : const DashboardSummaryDto();
+  }
+
+  /// `GET /api/dashboard/admin` — فروش/سود دوره‌ای، روندها، بدهکاران و چک‌ها
+  Future<AdminDashboardDto> adminFinancialDashboard() async {
+    final r = await _api.get<dynamic>('/api/dashboard/admin');
+    return r.data is Map
+        ? AdminDashboardDto.fromJson(Map<String, dynamic>.from(r.data as Map))
+        : const AdminDashboardDto();
+  }
+
+  /// `GET /api/dashboard/recent?count=8` — آخرین اسناد خرید/فروش/اصلاح موجودی
+  Future<List<RecentActivityDto>> dashboardRecent({int count = 8}) async {
+    final r = await _api.get<dynamic>(
+      '/api/dashboard/recent',
+      query: {'count': count.clamp(1, 50)},
+    );
+    return ShopPage.parse(r.data, RecentActivityDto.fromJson).items;
+  }
+
+  /// `POST /api/dashboard/credits/{transactionId}/settle?amount=...` — تسویه نسیه مشتری
+  Future<void> settleDashboardCredit(int transactionId, double amount) =>
+      _api.post<dynamic>(
+        '/api/dashboard/credits/$transactionId/settle',
+        null,
+        {'amount': amount},
+      );
 }

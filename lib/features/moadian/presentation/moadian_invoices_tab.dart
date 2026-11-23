@@ -276,8 +276,7 @@ class _MoadianInvoicesTabState extends State<MoadianInvoicesTab> {
     final session = context.watch<AuthController>().session;
     final canCreate =
         session == null ||
-        MoadianPerms.can(session, MoadianPerms.invoiceCreate) ||
-        MoadianPerms.can(session, MoadianPerms.view);
+        MoadianPerms.can(session, MoadianPerms.invoiceCreate);
     final canSend =
         session == null || MoadianPerms.can(session, MoadianPerms.invoiceSend);
     final canInquiry =

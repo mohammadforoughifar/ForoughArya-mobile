@@ -31,6 +31,7 @@ import '../models/order_models.dart';
 import '../models/treasury_models.dart';
 import 'categories_page.dart';
 import 'expenses_page.dart';
+import 'financial_dashboard_page.dart';
 import 'goods_issues_page.dart';
 import 'kardex_page.dart';
 import 'opening_balance_page.dart';
@@ -714,7 +715,21 @@ class _ShopHomePageState extends State<ShopHomePage> {
         ),
 
       // ============ ۴) گزارش‌ها و داشبورد ============
-      if (perms.canSeeDashboard)
+      if (perms.canSeeFinancialDashboard)
+        _DeskTool(
+          id: 'financial-dashboard',
+          title: 'داشبورد مالی فروشگاه',
+          subtitle:
+              'فروش و سود دوره‌ای، نمودارهای روند، بدهکاران معوق و هشدار چک‌ها',
+          icon: Icons.speed_rounded,
+          color: const Color(0xff1d4ed8),
+          gradientEnd: const Color(0xff059669),
+          group: _ShopGroup.reports,
+          keywords:
+              'داشبورد مالی مدیریتی سود فروش امروز هفته ماه فصل بدهکاران چک های امروز وصول برگشت',
+          builder: (_) => const FinancialDashboardPage(embedded: true),
+        ),
+      if (perms.canSeeOperationalDashboard)
         _DeskTool(
           id: 'ops-dashboard',
           title: 'داشبورد عملیاتی کایر',
@@ -935,6 +950,16 @@ class _ShopHomePageState extends State<ShopHomePage> {
         ),
       if (isRef) ...[
         _DeskTool(
+          id: 'ref-my-dashboard',
+          title: 'داشبورد من (پنل معرف)',
+          subtitle: 'خلاصه مانده کیف پول، پورسانت ماه جاری و آخرین اسناد',
+          icon: Icons.speed_rounded,
+          color: const Color(0xff1d4ed8),
+          group: _ShopGroup.visits,
+          keywords: 'داشبورد من پنل معرف پورسانت',
+          builder: (_) => const FinancialDashboardPage(embedded: true),
+        ),
+        _DeskTool(
           id: 'ref-my-wallet',
           title: 'کیف پول من (معرف)',
           subtitle: 'مانده پورسانت و پرداخت‌های دریافتی من',
@@ -996,6 +1021,15 @@ class _ShopHomePageState extends State<ShopHomePage> {
     List<_DeskTool> allTools,
   ) {
     return <_ExpressAction>[
+      if (perms.canSeeFinancialDashboard)
+        _ExpressAction(
+          title: 'داشبورد مالی',
+          subtitle: 'سود، چک‌ها و بدهکاران',
+          icon: Icons.speed_rounded,
+          color: const Color(0xff1d4ed8),
+          gradientEnd: const Color(0xff059669),
+          onTap: () => _openToolById(allTools, 'financial-dashboard'),
+        ),
       if (perms.canManageSection('Sale'))
         _ExpressAction(
           title: 'فاکتور فروش',

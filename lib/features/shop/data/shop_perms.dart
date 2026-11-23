@@ -201,35 +201,36 @@ class ShopPerms {
     'reportpages',
   };
 
-  bool get isAdmin =>
-      (_session?.role ?? '').trim().toLowerCase() == 'admin';
+  bool get isAdmin => _session?.isAdmin ?? false;
+
+  bool get _isUnrestrictedAdmin => _session?.isUnrestrictedAdmin ?? false;
+
+  /// اگر نقش کاربر حداقل یک مجوز `Shop.*` داشته باشد، دقیقاً مثل `ShopAccess.cs`
+  /// فقط همان کلیدهای `Shop.{Key}.{View|Manage}` ملاک‌اند و به ماژول‌های قدیمی
+  /// رجوع نمی‌شود تا هیچ بخش اضافه‌ای باز نشود.
+  bool get _hasModernShopPerms =>
+      _session?.permissions.any(
+        (p) => p.trim().toLowerCase().startsWith('shop.'),
+      ) ??
+      false;
 
   /// نقش «مدیر فروش» — دقیقاً مطابق `AuthState.IsSalesManager` در وب
-  bool get isSalesManager =>
-      isAdmin ||
-      (_session?.roleNames.any(
-            (r) => r.trim().toLowerCase() == 'salesmanager',
-          ) ??
-          false);
+  bool get isSalesManager => _session?.isSalesManager ?? false;
 
   /// بررسی دقیق تک‌مجوز بدون بسط کلیدهای کلی ماژول (معادل `IAuthState.HasDirect`)
   bool hasDirect(String permission) {
     final s = _session;
     if (s == null) return false;
-    if (isAdmin) return true;
-    final target = permission.trim().toLowerCase();
-    return s.permissions.any((p) => p.trim().toLowerCase() == target);
+    return s.hasDirect(permission);
   }
 
-  /// بررسی استاندارد مجوز (همراه با سازگاری `.Manage` / `.Full` برای ماژول‌های ۲بخشی)
+  /// بررسی استاندارد مجوز (همراه با سازگاری `.Manage` / `.Full` برای ماژول‌های ۲بخشی قدیمی)
   bool has(String permission) {
     final s = _session;
     if (s == null) return false;
-    if (isAdmin) return true;
-    if (hasDirect(permission)) return true;
+    if (s.hasDirect(permission)) return true;
     final parts = permission.trim().split('.');
-    // برای مجوزهای ۳بخشی `Shop.{Key}.View` نباید `Shop.Manage` کلید بی‌ربط بسازد
-    if (parts.length == 2) {
+    if (parts.length == 2 && !_hasModernShopPerms) {
       final mod = parts.first.toLowerCase();
       return s.permissions.any((p) {
         final low = p.trim().toLowerCase();
@@ -243,9 +244,7 @@ class ShopPerms {
   bool hasModuleDirect(String module) {
     final s = _session;
     if (s == null) return false;
-    if (isAdmin) return true;
-    final prefix = '${module.trim().toLowerCase()}.';
-    return s.permissions.any((p) => p.trim().toLowerCase().startsWith(prefix));
+    return s.hasModuleDirect(module);
   }
 
   bool hasModule(String module) => hasModuleDirect(module);
@@ -254,10 +253,18 @@ class ShopPerms {
   bool canSeeModuleDirect(String module) {
     final m = module.trim();
     if (m.isEmpty) return false;
-    if (isAdmin) return true;
+    final s = _session;
+    if (s == null) return false;
+    if (_isUnrestrictedAdmin) return true;
     if (hasDirect('$m.View') ||
         hasDirect('$m.Read') ||
         hasDirect('$m.Access')) {
+      return true;
+    }
+    if (!_hasModernShopPerms &&
+        (hasDirect('$m.Manage') ||
+            hasDirect('$m.Full') ||
+            (m.toLowerCase() == 'stock' && hasDirect('Stock.Update')))) {
       return true;
     }
     if (m.toLowerCase() == 'reportpages') {
@@ -294,17 +301,17 @@ class ShopPerms {
     };
   }
 
-  /// معادل دقیق `ShopAccess.CanSee(Auth, key)` در وب (همراه با سازگاری مجوزهای خام قدیمی)
+  /// معادل دقیق `ShopAccess.CanSee(Auth, key)` در وب (همراه با سازگاری مجوزهای خام قدیمی
+  /// فقط زمانی که هیچ مجوز جدید `Shop.*` روی نقش تعریف نشده است).
   bool canSeeSection(String key) {
-    if (isAdmin) return true;
+    if (_isUnrestrictedAdmin) return true;
     final sec = ShopSections.byKey(key);
     if (sec == null) return false;
     if (hasDirect(sec.viewPermission)) return true;
     if (sec.writable && hasDirect(sec.managePermission)) return true;
+    if (sec.key == 'Kardex' && hasDirect('ReportPages.Kardex')) return true;
+    if (_hasModernShopPerms) return false;
 
-    if (sec.key == 'Kardex') {
-      return hasDirect('ReportPages.Kardex');
-    }
     for (final legacy in sec.legacyModules) {
       if (canSeeModuleDirect(legacy)) return true;
     }
@@ -315,8 +322,9 @@ class ShopPerms {
   bool canManageSection(String key) {
     final sec = ShopSections.byKey(key);
     if (sec == null || !sec.writable) return false;
-    if (isAdmin) return true;
+    if (_isUnrestrictedAdmin) return true;
     if (hasDirect(sec.managePermission)) return true;
+    if (_hasModernShopPerms) return false;
 
     for (final legacy in sec.legacyModules) {
       if (hasDirect('$legacy.Create') ||
@@ -334,11 +342,18 @@ class ShopPerms {
       keys.any((k) => canSeeSection(k));
 
   // ---------------- میانبرهای کاربردی بخش‌های فروشگاهی کایر ----------------
-  bool get canSeeDashboard =>
-      canSeeSection('Dashboard') || hasDirect('Dashboards.Financial');
 
-  bool get canSeePartyStatements =>
-      canSeeSection('PartyStatements') || anyPartyAccess;
+  /// داشبورد مالی فروشگاه (`/dashboard` — `AdminHome.razor` و `DashboardController.cs`):
+  /// دقیقاً مطابق وب فقط با `Dashboards.Financial` باز می‌شود (مستقل از `Shop.Dashboard.View`).
+  bool get canSeeFinancialDashboard => hasDirect('Dashboards.Financial');
+
+  /// داشبورد عملیاتی (`/operations/reports/dashboard` — `ShopAccess.CanSee(Auth, "Dashboard")`)
+  bool get canSeeOperationalDashboard => canSeeSection('Dashboard');
+
+  bool get canSeeDashboard => canSeeOperationalDashboard;
+
+  /// مطابق `NavMenu.razor`: گزارش طلب و بدهی اشخاص فقط با `ShopAccess.CanSee(Auth, "PartyStatements")`
+  bool get canSeePartyStatements => canSeeSection('PartyStatements');
 
   bool get canSeeOrderReports => canSeeSection('OrderReports');
   bool get canSeeKardex => canSeeSection('Kardex');
@@ -483,15 +498,47 @@ class ShopPerms {
       canSeeSuppliers && !canSeeCustomers ? 'تأمین‌کنندگان' : 'طرف حساب‌ها';
 
   // ---------------- فاز ۴: نقطه سفارش و تسویه طرح تعویض ----------------
+  /// مطابق `NavMenu.razor`: نقطه سفارش فقط با `ReportPages.Reorder` (یا مدیر بدون محدودیت)
   bool get canSeeReorder =>
-      isAdmin ||
-      hasDirect('ReportPages.Reorder') ||
-      canSeeSection('Kardex') ||
-      canSeeSection('Products');
+      _isUnrestrictedAdmin || hasDirect('ReportPages.Reorder');
 
   bool get canSettleTradeIn =>
-      isAdmin ||
+      _isUnrestrictedAdmin ||
       hasDirect('Orders.Update') ||
       canManageSection('Sale') ||
       canManageSection('Installments');
+
+  /// معادل دقیق `ShowOpsGroup || ShowReportsGroup || CanSee("ReferrerWallets")` در `NavMenu.razor`
+  bool get canSeeShopGroup =>
+      canSeeFinancialDashboard ||
+      canSeeOperationalDashboard ||
+      canSeeAnySection(const [
+        'Products',
+        'Categories',
+        'Units',
+        'Warehouses',
+        'Parties',
+        'Referrers',
+        'Banks',
+        'Pricing',
+        'Kardex',
+        'OrderReports',
+        'PartyStatements',
+        'Expenses',
+        'Repairs',
+        'Purchase',
+        'Sale',
+        'GoodsIssue',
+        'Installments',
+        'OpeningBalance',
+        'Settlement',
+        'Guide',
+        'PrintSettings',
+      ]) ||
+      anyPartyAccess ||
+      canSeeSalesVisitGroup ||
+      canSeeVisRequestsReport ||
+      canSeeReorder ||
+      canSeeStock ||
+      canSeeReferrerWallets;
 }

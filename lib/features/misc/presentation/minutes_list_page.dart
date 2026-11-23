@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
@@ -244,25 +245,31 @@ class _MinutesListPageState extends State<MinutesListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final access = WebAccess(
+      context.watch<AuthController>().session,
+      unrestrictedWhenNull: true,
+    );
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: MiscColors.bg,
-        floatingActionButton: FloatingActionButton.extended(
-          heroTag: 'minutes_new_fab',
-          onPressed: _openCreate,
-          backgroundColor: MiscColors.teal,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'ثبت صورتجلسه',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ),
+        floatingActionButton: access.canCreateMinutes
+            ? FloatingActionButton.extended(
+                heroTag: 'minutes_new_fab',
+                onPressed: _openCreate,
+                backgroundColor: MiscColors.teal,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text(
+                  'ثبت صورتجلسه',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              )
+            : null,
         body: Column(
           children: [
             _buildHeader(),
-            Expanded(child: _buildBody()),
+            Expanded(child: _buildBody(access)),
           ],
         ),
       ),
@@ -478,7 +485,7 @@ class _MinutesListPageState extends State<MinutesListPage> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(WebAccess access) {
     if (_loading) {
       return const LoadingView(label: 'در حال دریافت صورتجلسه‌ها…');
     }
@@ -548,14 +555,15 @@ class _MinutesListPageState extends State<MinutesListPage> {
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
                     children: [
-                      FilledButton.icon(
-                        onPressed: _openCreate,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: MiscColors.teal,
+                      if (access.canCreateMinutes)
+                        FilledButton.icon(
+                          onPressed: _openCreate,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: MiscColors.teal,
+                          ),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('ثبت صورتجلسه جدید'),
                         ),
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: const Text('ثبت صورتجلسه جدید'),
-                      ),
                       OutlinedButton.icon(
                         onPressed: _openCompanyPicker,
                         icon: const Icon(Icons.business_rounded, size: 17),
@@ -579,7 +587,9 @@ class _MinutesListPageState extends State<MinutesListPage> {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _MinutesCard(
           item: _items[i],
-          onDelete: () => _confirmDelete(_items[i]),
+          onDelete: access.canDeleteMinutes
+              ? () => _confirmDelete(_items[i])
+              : null,
           onTap: () => _openDetail(_items[i]),
         ),
       ),

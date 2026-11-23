@@ -1,6 +1,6 @@
 // ============================================================
-//  گیت‌های مجوز «مدیریت سخت‌افزار» — عیناً مثل وب
-//  منبع: Layout/NavMenu.razor (ShowAdminGroup) و تک‌تک صفحات ItAssets/Cctv
+//  گیت‌های مجوز «مدیریت سیستم و سخت‌افزار» — عیناً مثل وب
+//  منبع: Layout/NavMenu.razor (ShowAdminGroup) و ModuleAccess.cs
 // ============================================================
 
 import '../../../core/auth/auth_session.dart';
@@ -11,29 +11,25 @@ class ItPerms {
 
   bool has(String permission) => _session?.has(permission) ?? false;
 
-  bool get isAdmin => (_session?.role ?? '') == 'Admin';
+  bool get isAdmin => _session?.isAdmin ?? false;
 
   /// معادل `HasModule` وب: هر مجوزی که با «Module.» شروع شود
-  bool hasModule(String module) {
-    final s = _session;
-    if (s == null) return false;
-    if (s.role == 'Admin') return true;
-    final prefix = '${module.toLowerCase()}.';
-    return s.permissions.any((p) => p.toLowerCase().startsWith(prefix));
-  }
+  bool hasModule(String module) => _session?.hasModule(module) ?? false;
 
-  /// معادل `CanSee("Module")` وب
-  bool canSeeModule(String module) =>
-      hasModule(module) || has('$module.Read');
+  /// معادل دقیق `ModuleAccess.CanSee(Auth, module)` وب:
+  /// برای ماژول‌های استاندارد فقط `.View` / `.Read` / `.Access` منو را باز می‌کند
+  /// و برای ماژول‌های بخشی (`ItRequests` و...) هر مجوزی از همان ماژول کافی است.
+  bool canSeeModule(String module) => _session?.canSee(module) ?? false;
 
-  // ---------------- داشبورد سخت‌افزار ----------------
+  // ---------------- داشبوردهای مدیریتی و سخت‌افزار ----------------
   bool get canSeeHardwareDashboard => has('Dashboards.Hardware');
+  bool get canSeeManagementDashboard => has('Dashboards.Management');
 
   // ---------------- گروه «مدیریت سیستم» ----------------
   bool get canSeeItRequests => canSeeModule('ItRequests');
   bool get canSeeSystemUsers => canSeeModule('SystemUsers');
 
-  /// زیرآیتم «شرکت‌های راه‌دور» فقط برای مدیر
+  /// زیرآیتم «شرکت‌های راه‌دور» فقط برای مدیر دارای `ItRequests`
   bool get canSeeRemoteCompanies => canSeeItRequests && isAdmin;
   bool get canSeeCctvCameras => canSeeModule('CctvCameras');
   bool get canSeeCctvNvrs => canSeeModule('CctvNvrs');
@@ -51,7 +47,7 @@ class ItPerms {
       canSeeServers ||
       canSeeIpam;
 
-  // ---------------- مجوزهای دانه‌ای (فازهای بعدی) ----------------
+  // ---------------- مجوزهای دانه‌ای ----------------
   bool get ipamCreate => has('Ipam.Create');
   bool get ipamUpdate => has('Ipam.Update');
   bool get ipamDelete => has('Ipam.Delete');

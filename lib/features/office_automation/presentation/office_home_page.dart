@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/widgets/common.dart';
@@ -31,10 +32,11 @@ class OfficeAutomationPage extends StatefulWidget {
 }
 
 class _OfficeAutomationPageState extends State<OfficeAutomationPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+    with TickerProviderStateMixin {
+  late TabController _tabs;
   OfficeAutomationRepository get _repo =>
-      context.read<OfficeAutomationRepository>();
+      Provider.of<OfficeAutomationRepository?>(context, listen: false) ??
+      OfficeAutomationRepository(context.read<ApiClient>());
 
   AutomationStats _stats = const AutomationStats();
   bool _statsLoading = true;
@@ -50,11 +52,31 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
   /// تب جاری برای همگام‌سازی تب کشویی با TabBarView
   int _tabIndex = 0;
 
-  // هر ماژول (داخلی / صادره / وارده) یک تب کامل است و کارتابل‌های خودش را
-  // داخل همان صفحه دارد: دریافتی، ارسالی، پیش‌نویس، بایگانی (+ امضا و دبیرخانه برای صادره).
-  // دیگر «کارتابل داخلی / صادره / وارده / بایگانی / پیش‌نویس» به‌صورت تب‌های
-  // پراکنده و تکراری وجود ندارد.
-  static const _tabsDef = [
+  List<({String label, IconData icon, String key})> _visibleTabs(
+    WebAccess access,
+  ) => [
+    const (label: 'داشبورد', icon: Icons.dashboard_outlined, key: 'dashboard'),
+    if (access.canSeeInnerLetters)
+      const (label: 'داخلی', icon: Icons.edit_note, key: 'inner'),
+    if (access.canSeeOutgoingLetters)
+      const (label: 'صادره', icon: Icons.north_east, key: 'outgoing'),
+    if (access.canSeeIncomingLetters)
+      const (label: 'وارده', icon: Icons.south_west, key: 'incoming'),
+    if (access.canSeeEmail)
+      const (
+        label: 'ایمیل سازمانی',
+        icon: Icons.alternate_email,
+        key: 'email_corporate',
+      ),
+    if (access.canSeeEmail && access.canSeePersonalEmail)
+      const (
+        label: 'ایمیل شخصی',
+        icon: Icons.person_outline,
+        key: 'email_personal',
+      ),
+  ];
+
+  List<({String label, IconData icon, String key})> _currentTabs = const [
     (label: 'داشبورد', icon: Icons.dashboard_outlined, key: 'dashboard'),
     (label: 'داخلی', icon: Icons.edit_note, key: 'inner'),
     (label: 'صادره', icon: Icons.north_east, key: 'outgoing'),
@@ -63,18 +85,46 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
     (label: 'ایمیل شخصی', icon: Icons.person_outline, key: 'email_personal'),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _tabs = TabController(length: _tabsDef.length, vsync: this);
+  void _attachTabListener() {
     _tabs.addListener(() {
       if (_tabs.index != _tabIndex && mounted) {
         setState(() => _tabIndex = _tabs.index);
       }
       if (_tabs.indexIsChanging) return;
-      if (_tabKey(_tabs.index).startsWith('email_')) return;
-      _ensureLoaded(_tabKey(_tabs.index));
+      final k = _tabKey(_tabs.index);
+      if (k.startsWith('email_') || k == 'dashboard') return;
+      _ensureLoaded(k);
     });
+  }
+
+  void _syncTabs(List<({String label, IconData icon, String key})> nextTabs) {
+    final same =
+        _currentTabs.length == nextTabs.length &&
+        List.generate(
+          nextTabs.length,
+          (i) => _currentTabs[i].key == nextTabs[i].key,
+        ).every((e) => e);
+    if (same) return;
+    final prevKey = _tabIndex < _currentTabs.length
+        ? _currentTabs[_tabIndex].key
+        : 'dashboard';
+    _tabs.dispose();
+    _currentTabs = nextTabs;
+    final restoredIdx = nextTabs.indexWhere((t) => t.key == prevKey);
+    _tabIndex = restoredIdx >= 0 ? restoredIdx : 0;
+    _tabs = TabController(
+      length: nextTabs.length,
+      initialIndex: _tabIndex,
+      vsync: this,
+    );
+    _attachTabListener();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: _currentTabs.length, vsync: this);
+    _attachTabListener();
     _loadStats();
     _ensureLoaded('inner_inbox');
   }
@@ -88,16 +138,15 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
     super.dispose();
   }
 
-  String _tabKey(int index) => switch (index) {
-    1 => 'inner_inbox',
-    2 => 'outgoing_inbox',
-    3 => 'incoming_inbox',
-    4 => 'signing',
-    5 => 'dabirkhane',
-    8 => 'email_corporate',
-    9 => 'email_personal',
-    _ => 'inner_inbox',
-  };
+  String _tabKey(int index) {
+    if (index < 0 || index >= _currentTabs.length) return 'dashboard';
+    return switch (_currentTabs[index].key) {
+      'inner' => 'inner_inbox',
+      'outgoing' => 'outgoing_inbox',
+      'incoming' => 'incoming_inbox',
+      final k => k,
+    };
+  }
 
   /// شمارندهٔ روی هر تب کشویی
   Map<String, int> get _counts => {
@@ -265,9 +314,35 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
   }
 
   void _goTab(int i) {
+    if (i < 0 || i >= _currentTabs.length) return;
     _tabs.animateTo(i);
-    if (_tabKey(i).startsWith('email_')) return;
-    _ensureLoaded(_tabKey(i));
+    final k = _tabKey(i);
+    if (k.startsWith('email_') || k == 'dashboard') return;
+    _ensureLoaded(k);
+  }
+
+  void _goTabByKey(String key) {
+    final idx = _currentTabs.indexWhere((t) => t.key == key);
+    if (idx >= 0) _goTab(idx);
+  }
+
+  bool _canCreateForTab(WebAccess access, String tabKey) => switch (tabKey) {
+    'outgoing_inbox' => access.canCreateOutgoingLetter,
+    'incoming_inbox' => access.canCreateIncomingLetter,
+    'inner_inbox' => access.canCreateInnerLetter,
+    _ => access.canCreateAnyLetter,
+  };
+
+  LetterKind _defaultCreateKind(WebAccess access, String tabKey) {
+    if (tabKey == 'outgoing_inbox' && access.canCreateOutgoingLetter) {
+      return LetterKind.outgoing;
+    }
+    if (tabKey == 'incoming_inbox' && access.canCreateIncomingLetter) {
+      return LetterKind.incoming;
+    }
+    if (access.canCreateInnerLetter) return LetterKind.inner;
+    if (access.canCreateOutgoingLetter) return LetterKind.outgoing;
+    return LetterKind.incoming;
   }
 
   // ============================================================
@@ -277,7 +352,11 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
+    final access = WebAccess(auth.session, unrestrictedWhenNull: true);
+    final nextTabs = _visibleTabs(access);
+    _syncTabs(nextTabs);
     final name = auth.session?.displayName ?? '';
+    final activeKey = _tabKey(_tabIndex);
 
     return Scaffold(
       backgroundColor: OfficeColors.bg,
@@ -373,11 +452,12 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                                   }
                                 },
                               ),
-                              _HeaderBtn(
-                                icon: Icons.add_circle_outline,
-                                tooltip: 'نامهٔ جدید',
-                                onTap: () => _newLetterSheet(),
-                              ),
+                              if (access.canCreateAnyLetter)
+                                _HeaderBtn(
+                                  icon: Icons.add_circle_outline,
+                                  tooltip: 'نامهٔ جدید',
+                                  onTap: () => _newLetterSheet(access),
+                                ),
                               _HeaderBtn(
                                 icon: Icons.account_circle_outlined,
                                 tooltip: 'حساب کاربری',
@@ -387,20 +467,25 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                           ),
                         ),
                         OfficeSlidingTabs(
-                          items: _tabsDef,
+                          items: _currentTabs,
                           index: _tabIndex,
                           onChanged: _goTab,
                           background: Colors.transparent,
                           pillColor: OfficeColors.seed,
                           showCounts: true,
                           counts: _counts,
-                          accentFor: (i) => switch (i) {
-                            1 => OfficeColors.inner,
-                            2 => OfficeColors.outgoing,
-                            3 => OfficeColors.incoming,
-                            4 => OfficeColors.email,
-                            5 => OfficeColors.emailPersonal,
-                            _ => OfficeColors.seed,
+                          accentFor: (i) {
+                            if (i < 0 || i >= _currentTabs.length) {
+                              return OfficeColors.seed;
+                            }
+                            return switch (_currentTabs[i].key) {
+                              'inner' => OfficeColors.inner,
+                              'outgoing' => OfficeColors.outgoing,
+                              'incoming' => OfficeColors.incoming,
+                              'email_corporate' => OfficeColors.email,
+                              'email_personal' => OfficeColors.emailPersonal,
+                              _ => OfficeColors.seed,
+                            };
                           },
                         ),
                       ],
@@ -415,109 +500,127 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
             child: TabBarView(
               controller: _tabs,
               children: [
-                _dashboardTab(),
-                const LetterMailboxPage(
-                  kind: LetterKind.inner,
-                  embedded: true,
-                ),
-                const LetterMailboxPage(
-                  kind: LetterKind.outgoing,
-                  embedded: true,
-                ),
-                const LetterMailboxPage(
-                  kind: LetterKind.incoming,
-                  embedded: true,
-                ),
-                const EmailPage(initialScope: EmailScope.corporate, embedded: true),
-                const EmailPage(initialScope: EmailScope.personal, embedded: true),
+                for (final t in _currentTabs)
+                  switch (t.key) {
+                    'inner' => const LetterMailboxPage(
+                      kind: LetterKind.inner,
+                      embedded: true,
+                    ),
+                    'outgoing' => const LetterMailboxPage(
+                      kind: LetterKind.outgoing,
+                      embedded: true,
+                    ),
+                    'incoming' => const LetterMailboxPage(
+                      kind: LetterKind.incoming,
+                      embedded: true,
+                    ),
+                    'email_corporate' => const EmailPage(
+                      initialScope: EmailScope.corporate,
+                      embedded: true,
+                    ),
+                    'email_personal' => const EmailPage(
+                      initialScope: EmailScope.personal,
+                      embedded: true,
+                    ),
+                    _ => _dashboardTab(access),
+                  },
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: _tabKey(_tabIndex).startsWith('email_')
+      floatingActionButton: activeKey.startsWith('email_') ||
+              !_canCreateForTab(access, activeKey)
           ? null
           : FloatingActionButton.extended(
               heroTag: 'office_new_letter_fab',
-              onPressed: () => _newLetter(_kindOf(_tabKey(_tabs.index))),
+              onPressed: () => _newLetter(_defaultCreateKind(access, activeKey)),
               backgroundColor: OfficeColors.seed,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.add),
-              label: const Text('نامهٔ جدید', style: TextStyle(fontWeight: FontWeight.w700)),
+              label: const Text(
+                'نامهٔ جدید',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
     );
   }
 
-  /// برد سه ماژول نامه؛ داخل هر کارت، چهار کارتابل واقعی همان ماژول
-  Widget _buildModuleBoard() {
+  /// برد ماژول‌های مجاز نامه؛ داخل هر کارت، کارتابل‌های واقعی همان ماژول
+  Widget _buildModuleBoard(WebAccess access) {
     return Column(
       children: [
-        _ModuleCard(
-          title: 'نامهٔ داخلی',
-          subtitle: 'ارتباط درون‌سازمانی',
-          icon: Icons.edit_note,
-          color: OfficeColors.inner,
-          boxes: const [
-            LetterBox.inbox,
-            LetterBox.sent,
-            LetterBox.drafts,
-            LetterBox.archive,
-          ],
-          counts: _innerCounts,
-          onOpenBox: (b) => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LetterMailboxPage(
-                kind: LetterKind.inner,
-                initialBox: b,
+        if (access.canSeeInnerLetters) ...[
+          _ModuleCard(
+            title: 'نامهٔ داخلی',
+            subtitle: 'ارتباط درون‌سازمانی',
+            icon: Icons.edit_note,
+            color: OfficeColors.inner,
+            boxes: const [
+              LetterBox.inbox,
+              LetterBox.sent,
+              LetterBox.drafts,
+              LetterBox.archive,
+            ],
+            counts: _innerCounts,
+            onOpenBox: (b) => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => LetterMailboxPage(
+                  kind: LetterKind.inner,
+                  initialBox: b,
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        _ModuleCard(
-          title: 'نامهٔ صادره',
-          subtitle: 'مکاتبات برون‌سازمانی و امضا',
-          icon: Icons.north_east,
-          color: OfficeColors.outgoing,
-          boxes: const [
-            LetterBox.inbox,
-            LetterBox.sent,
-            LetterBox.signing,
-            LetterBox.dabirkhane,
-            LetterBox.archive,
-          ],
-          counts: _outgoingCounts,
-          onOpenBox: (b) => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LetterMailboxPage(
-                kind: LetterKind.outgoing,
-                initialBox: b,
+          const SizedBox(height: 10),
+        ],
+        if (access.canSeeOutgoingLetters) ...[
+          _ModuleCard(
+            title: 'نامهٔ صادره',
+            subtitle: 'مکاتبات برون‌سازمانی و امضا',
+            icon: Icons.north_east,
+            color: OfficeColors.outgoing,
+            boxes: const [
+              LetterBox.inbox,
+              LetterBox.sent,
+              LetterBox.signing,
+              LetterBox.dabirkhane,
+              LetterBox.archive,
+            ],
+            counts: _outgoingCounts,
+            onOpenBox: (b) => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => LetterMailboxPage(
+                  kind: LetterKind.outgoing,
+                  initialBox: b,
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        _ModuleCard(
-          title: 'نامهٔ وارده',
-          subtitle: 'ثبت و ارجاع نامه‌های رسیده',
-          icon: Icons.south_west,
-          color: OfficeColors.incoming,
-          boxes: const [
-            LetterBox.inbox,
-            LetterBox.sent,
-            LetterBox.drafts,
-            LetterBox.archive,
-          ],
-          counts: _incomingCounts,
-          onOpenBox: (b) => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LetterMailboxPage(
-                kind: LetterKind.incoming,
-                initialBox: b,
+          const SizedBox(height: 10),
+        ],
+        if (access.canSeeIncomingLetters)
+          _ModuleCard(
+            title: 'نامهٔ وارده',
+            subtitle: 'ثبت و ارجاع نامه‌های رسیده',
+            icon: Icons.south_west,
+            color: OfficeColors.incoming,
+            boxes: const [
+              LetterBox.inbox,
+              LetterBox.sent,
+              LetterBox.drafts,
+              LetterBox.archive,
+            ],
+            counts: _incomingCounts,
+            onOpenBox: (b) => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => LetterMailboxPage(
+                  kind: LetterKind.incoming,
+                  initialBox: b,
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -546,8 +649,42 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
   //  داشبورد
   // ============================================================
 
-  Widget _dashboardTab() {
+  Widget _dashboardTab(WebAccess access) {
     final s = _stats;
+    final quickTiles = <Widget>[
+      if (access.canCreateInnerLetter)
+        _QuickTile(
+          label: 'نامهٔ داخلی',
+          icon: Icons.edit_note,
+          color: OfficeColors.inner,
+          onTap: () => _newLetter(LetterKind.inner),
+        ),
+      if (access.canCreateOutgoingLetter)
+        _QuickTile(
+          label: 'نامهٔ صادره',
+          icon: Icons.north_east,
+          color: OfficeColors.outgoing,
+          onTap: () => _newLetter(LetterKind.outgoing),
+        ),
+      if (access.canCreateIncomingLetter)
+        _QuickTile(
+          label: 'نامهٔ وارده',
+          icon: Icons.south_west,
+          color: OfficeColors.incoming,
+          onTap: () => _newLetter(LetterKind.incoming),
+        ),
+      if (access.canSeeMinutes)
+        _QuickTile(
+          label: 'صورتجلسه',
+          icon: Icons.description_outlined,
+          color: OfficeColors.minutes,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const MinutesListPage(),
+            ),
+          ),
+        ),
+    ];
     return RefreshIndicator(
       onRefresh: _loadStats,
       child: ListView(
@@ -595,15 +732,19 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                             Icon(Icons.mark_email_unread_outlined,
                                 size: 15, color: Colors.white.withValues(alpha: .8)),
                             const SizedBox(width: 6),
-                            Text(
-                              'کارتابل امروز',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: .85),
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: Text(
+                                'کارتابل امروز',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .85),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                            const Spacer(),
+                            const SizedBox(width: 6),
                             HeroBadge(
                               label: Fa.date(DateTime.now().toIso8601String(), time: false),
                               icon: Icons.today_outlined,
@@ -657,54 +798,32 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
           const SizedBox(height: 16),
 
           // --- ماژول‌های نامه: هر ماژول با کارتابل‌های واقعی خودش ---
-          const _SectionLabel(title: 'ماژول‌های نامه', icon: Icons.folder_copy_outlined),
-          OFadeSlideIn(index: 1, child: _buildModuleBoard()),
-          const SizedBox(height: 14),
+          if (access.canSeeLettersAny) ...[
+            const _SectionLabel(
+              title: 'ماژول‌های نامه',
+              icon: Icons.folder_copy_outlined,
+            ),
+            OFadeSlideIn(index: 1, child: _buildModuleBoard(access)),
+            const SizedBox(height: 14),
+          ],
 
           // --- دسترسی سریع ---
-          const _SectionLabel(title: 'دسترسی سریع', icon: Icons.bolt),
-          OFadeSlideIn(
-            index: 2,
-            child: GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: .82,
-              children: [
-                _QuickTile(
-                  label: 'نامهٔ داخلی',
-                  icon: Icons.edit_note,
-                  color: OfficeColors.inner,
-                  onTap: () => _newLetter(LetterKind.inner),
-                ),
-                _QuickTile(
-                  label: 'نامهٔ صادره',
-                  icon: Icons.north_east,
-                  color: OfficeColors.outgoing,
-                  onTap: () => _newLetter(LetterKind.outgoing),
-                ),
-                _QuickTile(
-                  label: 'نامهٔ وارده',
-                  icon: Icons.south_west,
-                  color: OfficeColors.incoming,
-                  onTap: () => _newLetter(LetterKind.incoming),
-                ),
-                _QuickTile(
-                  label: 'صورتجلسه',
-                  icon: Icons.description_outlined,
-                  color: OfficeColors.minutes,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const MinutesListPage(),
-                    ),
-                  ),
-                ),
-              ],
+          if (quickTiles.isNotEmpty) ...[
+            const _SectionLabel(title: 'دسترسی سریع', icon: Icons.bolt),
+            OFadeSlideIn(
+              index: 2,
+              child: GridView.count(
+                crossAxisCount: 4,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: .82,
+                children: quickTiles,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 14),
+          ],
 
           // --- شمارنده‌ها ---
           const _SectionLabel(title: 'شمارنده‌ها', icon: Icons.insights_outlined),
@@ -718,22 +837,24 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
               mainAxisSpacing: 9,
               crossAxisSpacing: 9,
               children: [
-                _StatCard(
-                  label: 'دریافتی داخلی',
-                  value: s.inbox,
-                  sub: '${Fa.digits(s.inboxUnread)} خوانده‌نشده',
-                  icon: Icons.inbox_outlined,
-                  color: OfficeColors.inner,
-                  onTap: () => _goTab(1),
-                ),
-                _StatCard(
-                  label: 'ارسالی',
-                  value: s.sent,
-                  sub: 'نامهٔ صادره',
-                  icon: Icons.outbox_outlined,
-                  color: OfficeColors.outgoing,
-                  onTap: () => _goTab(2),
-                ),
+                if (access.canSeeInnerLetters)
+                  _StatCard(
+                    label: 'دریافتی داخلی',
+                    value: s.inbox,
+                    sub: '${Fa.digits(s.inboxUnread)} خوانده‌نشده',
+                    icon: Icons.inbox_outlined,
+                    color: OfficeColors.inner,
+                    onTap: () => _goTabByKey('inner'),
+                  ),
+                if (access.canSeeOutgoingLetters)
+                  _StatCard(
+                    label: 'ارسالی',
+                    value: s.sent,
+                    sub: 'نامهٔ صادره',
+                    icon: Icons.outbox_outlined,
+                    color: OfficeColors.outgoing,
+                    onTap: () => _goTabByKey('outgoing'),
+                  ),
                 _StatCard(
                   label: 'نشان‌شده',
                   value: s.neshan,
@@ -747,24 +868,25 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
                   sub: 'ذخیره‌شده',
                   icon: Icons.drafts_outlined,
                   color: const Color(0xffb04fbf),
-                  onTap: () => _goTab(7),
                 ),
-                _StatCard(
-                  label: 'در انتظار امضا',
-                  value: s.signingPending,
-                  sub: 'نیازمند اقدام',
-                  icon: Icons.draw_outlined,
-                  color: OfficeColors.signing,
-                  onTap: () => _goTab(4),
-                ),
-                _StatCard(
-                  label: 'دبیرخانه',
-                  value: s.dabirkhane,
-                  sub: 'در صف ارسال',
-                  icon: Icons.account_balance_outlined,
-                  color: OfficeColors.dabirkhane,
-                  onTap: () => _goTab(5),
-                ),
+                if (access.canSeeOutgoingLetters) ...[
+                  _StatCard(
+                    label: 'در انتظار امضا',
+                    value: s.signingPending,
+                    sub: 'نیازمند اقدام',
+                    icon: Icons.draw_outlined,
+                    color: OfficeColors.signing,
+                    onTap: () => _goTabByKey('outgoing'),
+                  ),
+                  _StatCard(
+                    label: 'دبیرخانه',
+                    value: s.dabirkhane,
+                    sub: 'در صف ارسال',
+                    icon: Icons.account_balance_outlined,
+                    color: OfficeColors.dabirkhane,
+                    onTap: () => _goTabByKey('outgoing'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -799,7 +921,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
   //  کارتابل‌ها
   // ============================================================
 
-  void _newLetterSheet() => showModalBottomSheet(
+  void _newLetterSheet(WebAccess access) => showModalBottomSheet(
     context: context,
     backgroundColor: OfficeColors.bg,
     shape: const RoundedRectangleBorder(
@@ -828,36 +950,39 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage>
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-            _SheetAction(
-              icon: Icons.edit_note,
-              color: OfficeColors.inner,
-              title: 'نامهٔ داخلی',
-              subtitle: 'مکاتبهٔ درون‌سازمانی بین کاربران و گروه‌ها',
-              onTap: () {
-                Navigator.pop(c);
-                _newLetter(LetterKind.inner);
-              },
-            ),
-            _SheetAction(
-              icon: Icons.north_east,
-              color: OfficeColors.outgoing,
-              title: 'نامهٔ صادره',
-              subtitle: 'نامهٔ خروجی با شمارهٔ صادره و دبیرخانه',
-              onTap: () {
-                Navigator.pop(c);
-                _newLetter(LetterKind.outgoing);
-              },
-            ),
-            _SheetAction(
-              icon: Icons.south_west,
-              color: OfficeColors.incoming,
-              title: 'نامهٔ وارده',
-              subtitle: 'ثبت نامهٔ رسیده از سازمان بیرونی',
-              onTap: () {
-                Navigator.pop(c);
-                _newLetter(LetterKind.incoming);
-              },
-            ),
+            if (access.canCreateInnerLetter)
+              _SheetAction(
+                icon: Icons.edit_note,
+                color: OfficeColors.inner,
+                title: 'نامهٔ داخلی',
+                subtitle: 'مکاتبهٔ درون‌سازمانی بین کاربران و گروه‌ها',
+                onTap: () {
+                  Navigator.pop(c);
+                  _newLetter(LetterKind.inner);
+                },
+              ),
+            if (access.canCreateOutgoingLetter)
+              _SheetAction(
+                icon: Icons.north_east,
+                color: OfficeColors.outgoing,
+                title: 'نامهٔ صادره',
+                subtitle: 'نامهٔ خروجی با شمارهٔ صادره و دبیرخانه',
+                onTap: () {
+                  Navigator.pop(c);
+                  _newLetter(LetterKind.outgoing);
+                },
+              ),
+            if (access.canCreateIncomingLetter)
+              _SheetAction(
+                icon: Icons.south_west,
+                color: OfficeColors.incoming,
+                title: 'نامهٔ وارده',
+                subtitle: 'ثبت نامهٔ رسیده از سازمان بیرونی',
+                onTap: () {
+                  Navigator.pop(c);
+                  _newLetter(LetterKind.incoming);
+                },
+              ),
           ],
         ),
       ),
