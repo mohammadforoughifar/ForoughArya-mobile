@@ -16,6 +16,7 @@
 //       همراه فیلتر دسته‌بندی، سنجاق‌کردن به صدر میز کار، بج زنده و چیدمان ۲/۳ ستونی
 // ============================================================
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -26,6 +27,8 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/web_access.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/notifications/push_service.dart';
+import '../../../core/pwa/pwa_bridge.dart';
+import '../../../core/pwa/pwa_settings_sheet.dart';
 import '../../../core/utils/fa.dart';
 import '../../auth/connections_sheet.dart';
 import '../../it_assets/data/doc_archive_repository.dart';
@@ -207,6 +210,7 @@ class _HomePageState extends State<HomePage> {
         _unread = unread;
         _loading = false;
       });
+      PwaBridge.instance.setAppBadge(unread);
       await Future.wait([
         if (allowedKpis.isNotEmpty) _loadWidgets(widgets, range: _kpiRange),
         _loadWorkbenchCartable(unreadCount: unread),
@@ -1593,6 +1597,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
     final n = await _repo.fetchUnreadCount();
+    PwaBridge.instance.setAppBadge(n);
     if (mounted) {
       setState(() => _unread = n);
       _reloadNotificationsOnly();
@@ -1654,6 +1659,30 @@ class _HomePageState extends State<HomePage> {
                 ),
                 onTap: () => Navigator.pop(c, 'connections'),
               ),
+              if (kIsWeb) ...[
+                const Divider(height: 1),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  leading: const Icon(
+                    Icons.phone_iphone_rounded,
+                    color: HomeColors.seed,
+                  ),
+                  title: const Text(
+                    'اپلیکیشن آیفون (iOS PWA) و اعلان وب',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'نصب روی صفحهٔ اصلی آیفون، فعال‌سازی Web Push و کش آفلاین',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
+                  onTap: () => Navigator.pop(c, 'pwa'),
+                ),
+              ],
               const Divider(height: 1),
               ListTile(
                 shape: RoundedRectangleBorder(
@@ -1727,6 +1756,7 @@ class _HomePageState extends State<HomePage> {
     }
     if (action == 'password') await _changePassword();
     if (action == 'connections' && mounted) await showConnectionsSheet(context);
+    if (action == 'pwa' && mounted) await openPwaSettingsSheet(context);
   }
 
   Future<void> _changePassword() async {

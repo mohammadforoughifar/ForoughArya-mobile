@@ -27,7 +27,8 @@ class UploadTask {
   UploadTask({
     required this.localId,
     required this.conversationId,
-    required this.file,
+    this.file,
+    this.bytes,
     required this.fileName,
     required this.isImage,
     required this.threadTitle,
@@ -35,7 +36,8 @@ class UploadTask {
 
   final int localId;
   final int conversationId;
-  final File file;
+  final File? file;
+  final Uint8List? bytes;
   final String fileName;
   final bool isImage;
   final String threadTitle;
@@ -95,7 +97,9 @@ class UploadQueue {
   /// افزودن فایل به صف — بلافاصله برمی‌گردد، آپلود در پس‌زمینه انجام می‌شود.
   UploadTask enqueue({
     required int conversationId,
-    required File file,
+    File? file,
+    Uint8List? bytes,
+    String? fileName,
     required bool isImage,
     String threadTitle = '',
   }) {
@@ -103,7 +107,8 @@ class UploadQueue {
       localId: -DateTime.now().microsecondsSinceEpoch,
       conversationId: conversationId,
       file: file,
-      fileName: file.uri.pathSegments.last,
+      bytes: bytes,
+      fileName: fileName ?? file?.uri.pathSegments.last ?? 'attachment',
       isImage: isImage,
       threadTitle: threadTitle,
     );
@@ -144,10 +149,12 @@ class UploadQueue {
 
     final repo = ChatRepository(api);
     try {
-      final size = await t.file.length();
+      final size = t.bytes?.length ?? (await t.file!.length());
       final up = await repo.erp.uploadAttachmentWithProgress(
         t.conversationId,
         t.file,
+        bytes: t.bytes,
+        fileName: t.fileName,
         onProgress: (sent, total) {
           final denom = total > 0 ? total : size;
           if (denom <= 0) return;

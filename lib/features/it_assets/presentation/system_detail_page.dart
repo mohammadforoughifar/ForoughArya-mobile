@@ -28,6 +28,7 @@ import 'package:provider/provider.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../../misc/presentation/misc_style.dart';
 import '../../shop/presentation/shop_style.dart';
 import '../data/system_repository.dart';
@@ -240,10 +241,10 @@ class _SystemDetailPageState extends State<SystemDetailPage> {
     setState(() => _busy = true);
     try {
       final bytes = await _repo.pdf(widget.systemId);
+      final fileName = 'System-Identity-${widget.systemId}.pdf';
+      if (await webDeliver(bytes, fileName)) return;
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/System-Identity-${widget.systemId}.pdf',
-      );
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
       await OpenFilex.open(file.path);
     } catch (e) {

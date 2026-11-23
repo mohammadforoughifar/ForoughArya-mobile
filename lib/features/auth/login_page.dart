@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/network/connection_manager.dart';
 import '../../core/app_version.dart';
+import '../../core/pwa/pwa_settings_sheet.dart';
 import 'connections_sheet.dart';
 
 class LoginPage extends StatefulWidget {
@@ -184,6 +186,19 @@ class _LoginPageState extends State<LoginPage> {
                             icon: const Icon(Icons.hub_outlined, size: 19),
                             label: const Text('مدیریت سرورها و آدرس‌ها'),
                           ),
+                          if (kIsWeb) ...[
+                            const SizedBox(height: 2),
+                            TextButton.icon(
+                              onPressed: () => openPwaSettingsSheet(context),
+                              icon: const Icon(
+                                Icons.phone_iphone_rounded,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'نصب روی آیفون و تنظیمات PWA',
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
                             'نسخهٔ ${toFaDigits(appVersion)} • Android و iOS',

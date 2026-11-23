@@ -18,6 +18,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/web_files.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/ops_models.dart';
@@ -46,9 +47,13 @@ Future<void> _shareCsv(
             .join(','),
       );
     }
+    final csvBytes = utf8.encode('\uFEFF${sb.toString()}');
+    if (await webDeliver(csvBytes, fileName, mimeType: 'text/csv;charset=utf-8')) {
+      return;
+    }
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(utf8.encode(sb.toString()), flush: true);
+    await file.writeAsBytes(csvBytes, flush: true);
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'text/csv')],

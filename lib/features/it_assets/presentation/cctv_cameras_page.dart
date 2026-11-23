@@ -15,6 +15,7 @@
 // ============================================================
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../../shop/presentation/shop_style.dart';
 import '../data/cctv_repository.dart';
 import '../models/cctv_models.dart';
@@ -49,7 +51,7 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
   CctvGroupMode _groupMode = CctvGroupMode.location;
 
   // ورود اکسل
-  File? _importFile;
+  ({String name, Uint8List bytes})? _importPicked;
   bool _importing = false;
   CctvImportResult? _importResult;
   bool _downloadingTemplate = false;
@@ -182,15 +184,17 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
   Future<void> _pickFile() async {
     try {
       final picked = await FilePicker.pickFiles();
-      final path = picked.isEmpty ? null : picked.first.path;
-      if (path == null) return;
-      final low = path.toLowerCase();
+      if (picked.isEmpty) return;
+      final f = picked.first;
+      final low = f.name.toLowerCase();
       if (!low.endsWith('.xlsx') && !low.endsWith('.xls')) {
         _toast('فقط فایل اکسل (xlsx/xls) پشتیبانی می‌شود.', error: true);
         return;
       }
+      final bytes = await pickedBytes(f);
+      if (bytes == null) return;
       setState(() {
-        _importFile = File(path);
+        _importPicked = (name: f.name, bytes: bytes);
         _importResult = null;
       });
     } catch (e) {
@@ -199,16 +203,15 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
   }
 
   Future<void> _doImport() async {
-    if (_importFile == null) return;
+    if (_importPicked == null) return;
     setState(() {
       _importing = true;
       _importResult = null;
     });
     try {
-      final bytes = await _importFile!.readAsBytes();
       final res = await _repo.importCameras(
-        bytes,
-        _importFile!.uri.pathSegments.last,
+        _importPicked!.bytes,
+        _importPicked!.name,
       );
       if (!mounted) return;
       setState(() => _importResult = res);
@@ -230,6 +233,10 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
       final bytes = await _repo.cameraTemplate();
       if (bytes.isEmpty) {
         _toast('فایل نمونه خالی برگشت.', error: true);
+        return;
+      }
+      if (await webDeliver(bytes, 'CctvCameras-Template.xlsx')) {
+        if (mounted) _toast('قالب اکسل آماده شد.');
         return;
       }
       final dir = await getTemporaryDirectory();
@@ -279,12 +286,17 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
         _toast('خروجی خالی برگشت.', error: true);
         return;
       }
-      final dir = await getTemporaryDirectory();
       final now = DateTime.now();
       final stamp =
           '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-'
           '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-      final file = File('${dir.path}/CctvCameras-$stamp.xlsx');
+      final fileName = 'CctvCameras-$stamp.xlsx';
+      if (await webDeliver(bytes, fileName)) {
+        if (mounted) _toast('خروجی اکسل آماده شد.');
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
       final share = await showDialog<bool>(
@@ -510,9 +522,9 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
                   onPressed: _pickFile,
                   icon: const Icon(Icons.attach_file_rounded, size: 15),
                   label: Text(
-                    _importFile == null
+                    _importPicked == null
                         ? 'انتخاب فایل اکسل'
-                        : _importFile!.uri.pathSegments.last,
+                        : _importPicked!.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -531,7 +543,7 @@ class _CctvCamerasPageState extends State<CctvCamerasPage> {
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                onPressed: (_importFile == null || _importing) ? null : _doImport,
+                onPressed: (_importPicked == null || _importing) ? null : _doImport,
                 icon: _importing
                     ? const SizedBox(
                         width: 12,

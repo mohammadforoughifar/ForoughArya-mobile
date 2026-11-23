@@ -10,6 +10,7 @@ import 'dart:typed_data';
 // ============================================================
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shamsi_date/shamsi_date.dart';
@@ -17,6 +18,7 @@ import 'package:shamsi_date/shamsi_date.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/web_files.dart';
 import '../../../core/widgets/common.dart';
 import '../data/office_repository.dart';
 import '../models/letter_models.dart';
@@ -92,7 +94,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
   final _description = TextEditingController();
   String _typeErsal = 'پست';
   /// فایل‌هایی که کاربر در فرم انتخاب کرده و بعد از ثبت نامه پیوست می‌شوند
-  final List<File> _pendingFiles = [];
+  final List<({String name, String? path, Uint8List? bytes})> _pendingFiles = [];
   bool _uploading = false;
 
   DateTime _dateLetter = DateTime.now();
@@ -347,13 +349,14 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       // پیوست‌های انتخاب‌شده در فرم → روی همان نامهٔ ثبت‌شده آپلود می‌شوند
       if (!asDraft && _pendingFiles.isNotEmpty && _savedId > 0) {
         var failed = 0;
-        for (final f in List<File>.from(_pendingFiles)) {
+        for (final f in List<({String name, String? path, Uint8List? bytes})>.from(_pendingFiles)) {
           try {
             await _repo.uploadAttachment(
               widget.kind,
               _savedId,
-              f.path,
-              f.uri.pathSegments.last,
+              f.path ?? '',
+              f.name,
+              bytes: f.bytes,
             );
             _pendingFiles.remove(f);
           } catch (_) {
@@ -412,17 +415,27 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       final picked = await FilePicker.pickFiles();
       if (picked.isEmpty) return;
       var rejected = 0;
-      final added = <File>[];
+      final added = <({String name, String? path, Uint8List? bytes})>[];
       for (final f in picked) {
-        final path = f.path;
-        if (path == null) continue;
-        final f2 = File(path);
-        if (!await f2.exists()) continue;
-        if (await f2.length() > 20 * 1024 * 1024) {
-          rejected++;
-          continue;
+        if (kIsWeb) {
+          final b = await pickedBytes(f);
+          if (b == null) continue;
+          if (b.length > 20 * 1024 * 1024) {
+            rejected++;
+            continue;
+          }
+          added.add((name: f.name, path: null, bytes: b));
+        } else {
+          final path = f.path;
+          if (path == null) continue;
+          final f2 = File(path);
+          if (!await f2.exists()) continue;
+          if (await f2.length() > 20 * 1024 * 1024) {
+            rejected++;
+            continue;
+          }
+          added.add((name: f2.uri.pathSegments.last, path: path, bytes: null));
         }
-        added.add(f2);
       }
       if (!mounted) return;
       setState(() => _pendingFiles.addAll(added));
@@ -470,7 +483,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _pendingFiles[i].uri.pathSegments.last,
+                    _pendingFiles[i].name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

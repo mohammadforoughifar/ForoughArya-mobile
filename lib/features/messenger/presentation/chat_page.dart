@@ -13,6 +13,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:open_filex/open_filex.dart';
@@ -23,6 +24,7 @@ import 'package:provider/provider.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../data/chat_repository.dart';
 import '../data/upload_queue.dart';
 import '../data/voice_recorder.dart';
@@ -444,11 +446,22 @@ class _ChatPageState extends State<ChatPage> {
     if (choice == null || !mounted) return;
 
     File? file;
+    Uint8List? webBytes;
+    String? pickedName;
+    String? previewPath;
     try {
       if (choice == 'file') {
         final picked = await FilePicker.pickFiles();
-        final path = picked.isEmpty ? null : picked.first.path;
-        if (path != null) file = File(path);
+        if (picked.isNotEmpty) {
+          final f = picked.first;
+          pickedName = f.name;
+          if (kIsWeb) {
+            webBytes = await pickedBytes(f);
+          } else if (f.path != null) {
+            file = File(f.path!);
+            previewPath = f.path;
+          }
+        }
       } else {
         final picker = ImagePicker();
         final x = await picker.pickImage(
@@ -458,7 +471,15 @@ class _ChatPageState extends State<ChatPage> {
           imageQuality: 88,
           maxWidth: 2200,
         );
-        if (x != null) file = File(x.path);
+        if (x != null) {
+          pickedName = x.name;
+          previewPath = x.path;
+          if (kIsWeb) {
+            webBytes = await x.readAsBytes();
+          } else {
+            file = File(x.path);
+          }
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -470,10 +491,10 @@ class _ChatPageState extends State<ChatPage> {
       );
       return;
     }
-    if (file == null || !mounted) return;
+    if ((file == null && webBytes == null) || !mounted) return;
 
     // نمایش فوری در فهرست (در حال ارسال)
-    final size = await file.length();
+    final size = webBytes?.length ?? (await file!.length());
     if (size > 50 * 1024 * 1024) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -484,11 +505,15 @@ class _ChatPageState extends State<ChatPage> {
       );
       return;
     }
+    final resolvedName =
+        pickedName ?? file?.uri.pathSegments.last ?? 'attachment';
     // ارسال به صف پس‌زمینه سپرده می‌شود: بیرون رفتن از چت ارسال را
     // کنسل نمی‌کند و آپلود فایل‌های حجیم ادامه پیدا می‌کند.
     final task = UploadQueue.instance.enqueue(
       conversationId: widget.thread.id,
       file: file,
+      bytes: webBytes,
+      fileName: resolvedName,
       isImage: choice != 'file',
       threadTitle: widget.thread.title,
     );
@@ -497,8 +522,8 @@ class _ChatPageState extends State<ChatPage> {
       kind: choice == 'file' ? ChatKind.file : ChatKind.image,
       mine: true,
       at: DateTime.now(),
-      attachmentName: file.uri.pathSegments.last,
-      localPath: file.path,
+      attachmentName: resolvedName,
+      localPath: previewPath ?? file?.path,
       status: ChatStatus.sending,
     );
     setState(() => _items = [..._items, temp]);
@@ -937,7 +962,12 @@ class _ImageAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = message.fileUrl ?? message.localPath;
     if (url == null) return const SizedBox.shrink();
-    final image = url.startsWith('http')
+    final isWebOrRemote =
+        kIsWeb ||
+        url.startsWith('http') ||
+        url.startsWith('blob:') ||
+        url.startsWith('data:');
+    final image = isWebOrRemote
         ? Image.network(
             url,
             width: 210,
@@ -957,7 +987,7 @@ class _ImageAttachment extends StatelessWidget {
           backgroundColor: Colors.black,
           insetPadding: const EdgeInsets.all(8),
           child: InteractiveViewer(
-            child: url.startsWith('http')
+            child: isWebOrRemote
                 ? Image.network(url, fit: BoxFit.contain)
                 : Image.file(File(url), fit: BoxFit.contain),
           ),
@@ -1038,15 +1068,17 @@ class _FileAttachment extends StatelessWidget {
           onPressed: () async {
             final url = message.fileUrl!;
             try {
-              final dir = await getTemporaryDirectory();
               final name = message.attachmentName ?? 'file';
-              final target = File('${dir.path}/$name');
               final api = context.read<ApiClient>();
               final res = await api.dio.get<List<int>>(
                 url,
                 options: Options(responseType: ResponseType.bytes),
               );
-              await target.writeAsBytes(res.data ?? const []);
+              final bytes = res.data ?? const <int>[];
+              if (await webDeliver(bytes, name)) return;
+              final dir = await getTemporaryDirectory();
+              final target = File('${dir.path}/$name');
+              await target.writeAsBytes(bytes);
               await OpenFilex.open(target.path);
             } catch (e) {
               if (!context.mounted) return;

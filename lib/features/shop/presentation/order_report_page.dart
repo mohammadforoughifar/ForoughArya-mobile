@@ -23,6 +23,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/web_files.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/ops_models.dart';
@@ -256,10 +257,10 @@ class _OrderReportPageState extends State<OrderReportPage> {
         partyName: partyName,
         warehouseName: whName,
       );
+      final fileName = '${_isPurchase ? 'purchase' : 'sale'}_report_print.html';
+      if (await webOpenHtmlForPrint(html, fileName, share: share)) return;
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/${_isPurchase ? 'purchase' : 'sale'}_report_print.html',
-      );
+      final file = File('${dir.path}/$fileName');
       await file.writeAsString(html, encoding: utf8);
       if (share) {
         await SharePlus.instance.share(

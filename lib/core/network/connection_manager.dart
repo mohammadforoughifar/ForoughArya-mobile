@@ -17,6 +17,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../pwa/pwa_bridge.dart';
+
 /// یک آدرس سرور (مثلاً «شبکهٔ داخلی» → http://192.168.1.10:5100)
 class ServerEndpoint {
   ServerEndpoint({required this.id, required this.label, required this.url});
@@ -248,22 +250,53 @@ class ConnectionManager extends ChangeNotifier {
         await _save();
       }
     }
-    // نسخهٔ وب که روی همان سرور سازمان نصب شده: همان آدرس صفحه = سرور
-    if (_profiles.isEmpty && kIsWeb && Uri.base.scheme.startsWith('http')) {
-      final ep = ServerEndpoint(
-        id: newConnectionId(),
-        label: 'همین سرور',
-        url: Uri.base.origin,
-      );
-      final p = ConnectionProfile(
-        id: newConnectionId(),
-        name: Uri.base.host,
-        endpoints: [ep],
-      );
-      _profiles = [p];
-      _activeProfileId = p.id;
-      _activeEndpointId = ep.id;
-      await _save();
+    // نسخهٔ وب / آیفون PWA: ابتدا از تنظیمات زمان اجرای `pwa-config.js`
+    // (`window.FOROUGH_CONFIG`) و در صورت عدم تعیین، از آدرس همان سرور استفاده می‌شود.
+    if (_profiles.isEmpty && kIsWeb) {
+      final cfg = PwaBridge.instance.readRuntimeConfig();
+      if (cfg.serverSeeds.isNotEmpty) {
+        _profiles = [
+          for (final s in cfg.serverSeeds)
+            ConnectionProfile(
+              id: newConnectionId(),
+              name: s.name,
+              endpoints: [
+                for (final ep in s.endpoints)
+                  ServerEndpoint(
+                    id: newConnectionId(),
+                    label: ep.label,
+                    url: normalizeServerUrl(ep.url),
+                  ),
+              ],
+            ),
+        ];
+        _activeProfileId = _profiles.first.id;
+        _activeEndpointId = _profiles.first.endpoints.first.id;
+        await _save();
+      } else {
+        final configuredUrl = cfg.apiBaseUrl.isNotEmpty
+            ? normalizeServerUrl(cfg.apiBaseUrl)
+            : (cfg.autoSameOrigin && Uri.base.scheme.startsWith('http')
+                  ? Uri.base.origin
+                  : '');
+        if (configuredUrl.isNotEmpty) {
+          final parsed = Uri.tryParse(configuredUrl);
+          final ep = ServerEndpoint(
+            id: newConnectionId(),
+            label: cfg.apiBaseUrl.isNotEmpty ? 'سرور سازمانی' : 'همین سرور',
+            url: configuredUrl,
+          );
+          final p = ConnectionProfile(
+            id: newConnectionId(),
+            name: parsed?.host.isNotEmpty == true ? parsed!.host : 'سرور سامانه',
+            endpoints: [ep],
+          );
+          _profiles = [p];
+          _activeProfileId = p.id;
+          _activeEndpointId = ep.id;
+          await _save();
+        }
+      }
     }
     if (activeProfile == null && _profiles.isNotEmpty) {
       _activeProfileId = _profiles.first.id;

@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/web_files.dart';
 import '../../misc/data/minutes_repository.dart';
 import '../../misc/models/minutes_models.dart';
 import '../../office_automation/data/office_repository.dart';
@@ -157,8 +158,8 @@ class _DocAutomationSheetState extends State<DocAutomationSheet> {
     final files = await FilePicker.pickFiles();
     if (files.isEmpty) return;
     final f = files.first;
-    if (f.path == null) return;
-    final bytes = await f.readAsBytes();
+    final bytes = await pickedBytes(f);
+    if (bytes == null) return;
     setState(() {
       _extraBytes = bytes;
       _extraName = f.name;

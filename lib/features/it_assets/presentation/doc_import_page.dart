@@ -90,7 +90,7 @@ class _DocImportPageState extends State<DocImportPage> {
   };
 
   String _relative(String path) {
-    final parts = path.split(Platform.pathSeparator);
+    final parts = path.split(RegExp(r'[/\\]'));
     return parts.isEmpty ? path : parts.last;
   }
 

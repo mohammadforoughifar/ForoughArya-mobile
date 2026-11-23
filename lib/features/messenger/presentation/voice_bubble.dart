@@ -6,6 +6,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,6 +14,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../models/chat_models.dart';
 import 'messenger_style.dart';
 
@@ -36,7 +38,11 @@ class _VoiceBubbleState extends State<VoiceBubble> {
   @override
   void dispose() {
     if (_playing) {
-      _channel.invokeMethod('stop').catchError((_) => null);
+      if (kIsWeb) {
+        webStopAudio();
+      } else {
+        _channel.invokeMethod('stop').catchError((_) => null);
+      }
     }
     super.dispose();
   }
@@ -63,18 +69,42 @@ class _VoiceBubbleState extends State<VoiceBubble> {
   Future<void> _toggle() async {
     if (_loading) return;
     if (_playing) {
-      await _channel.invokeMethod('stop');
+      if (kIsWeb) {
+        await webStopAudio();
+      } else {
+        await _channel.invokeMethod('stop');
+      }
       if (mounted) setState(() => _playing = false);
       return;
     }
     setState(() => _loading = true);
     try {
-      final f = await _resolveFile();
-      if (f == null) throw Exception('فایل صوتی موجود نیست');
-      final ok = await _channel.invokeMethod<bool>('play', {'path': f.path});
+      bool ok = false;
+      if (kIsWeb) {
+        final url = widget.message.audioUrl ?? widget.message.fileUrl;
+        if (url == null || url.isEmpty) {
+          throw Exception('فایل صوتی موجود نیست');
+        }
+        final api = context.read<ApiClient>();
+        final full = api.resolveUrl(url);
+        final res = await api.dio.get<List<int>>(
+          full,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        final data = res.data;
+        if (data == null || data.isEmpty) {
+          throw Exception('فایل صوتی دریافت نشد');
+        }
+        final name = url.split('/').last.split('?').first;
+        ok = await webPlayAudio(Uint8List.fromList(data), fileName: name);
+      } else {
+        final f = await _resolveFile();
+        if (f == null) throw Exception('فایل صوتی موجود نیست');
+        ok = (await _channel.invokeMethod<bool>('play', {'path': f.path})) == true;
+      }
       if (!mounted) return;
       setState(() {
-        _playing = ok == true;
+        _playing = ok;
         _loading = false;
         _played = true;
       });

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +9,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/web_files.dart';
 import '../../shop/data/fa_num.dart';
 import '../../shop/data/shop_identifier_rules.dart';
 import '../data/moadian_perms.dart';
@@ -522,9 +522,8 @@ class _MoadianBasicInfoTabState extends State<MoadianBasicInfoTab> {
       final picked = await FilePicker.pickFiles();
       if (picked.isEmpty) return;
       final f = picked.first;
-      final path = f.path;
-      if (path == null) return;
-      final bytes = await File(path).readAsBytes();
+      final bytes = await pickedBytes(f);
+      if (bytes == null) return;
       setState(() {
         _pickedKeyFile = MoadianKeyFile(
           fileName: f.name,

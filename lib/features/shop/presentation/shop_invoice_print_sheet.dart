@@ -17,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../data/shop_repository.dart';
 import '../models/order_models.dart';
 import '../models/shop_models.dart';
@@ -104,7 +105,7 @@ class _ShopInvoicePrintSheetState extends State<_ShopInvoicePrintSheet> {
     });
   }
 
-  Future<File> _writeHtmlFile() async {
+  (String html, String fileName) _buildHtmlDoc() {
     final html = ShopInvoiceHtmlBuilder.build(
       order: _order,
       profile: _profile,
@@ -113,12 +114,17 @@ class _ShopInvoicePrintSheetState extends State<_ShopInvoicePrintSheet> {
       isProforma: widget.isProforma,
       paper: _paper,
     );
-    final dir = await getTemporaryDirectory();
     final safeNo = _order.number.replaceAll(RegExp(r'[^\w\-]+'), '_');
     final prefix = widget.isProforma
         ? 'proforma'
         : (_order.isPurchase ? 'purchase' : 'invoice');
-    final file = File('${dir.path}/${prefix}_${safeNo}_$_paper.html');
+    return (html, '${prefix}_${safeNo}_$_paper.html');
+  }
+
+  Future<File> _writeHtmlFile() async {
+    final (html, fileName) = _buildHtmlDoc();
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
     await file.writeAsString(html, encoding: utf8);
     return file;
   }
@@ -127,6 +133,8 @@ class _ShopInvoicePrintSheetState extends State<_ShopInvoicePrintSheet> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildHtmlDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: false)) return;
       final file = await _writeHtmlFile();
       await OpenFilex.open(file.path, type: 'text/html');
     } catch (e) {
@@ -144,6 +152,8 @@ class _ShopInvoicePrintSheetState extends State<_ShopInvoicePrintSheet> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildHtmlDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: true)) return;
       final file = await _writeHtmlFile();
       final docTitle = widget.isProforma
           ? 'پیش‌فاکتور فروش ${_order.number}'

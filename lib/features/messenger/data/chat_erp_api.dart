@@ -30,6 +30,7 @@
 // ============================================================
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -199,13 +200,16 @@ class ChatErpApi {
   /// آپلود پیوست با گزارش درصد پیشرفت (برای نمایش «در حال ارسال ۴۵٪»)
   Future<ChatUpload> uploadAttachmentWithProgress(
     int conversationId,
-    File file, {
+    File? file, {
+    Uint8List? bytes,
+    String? fileName,
     void Function(int sent, int total)? onProgress,
   }) async {
-    final name = file.uri.pathSegments.last;
-    final form = FormData.fromMap({
-      'file': await MultipartFile.fromFile(file.path, filename: name),
-    });
+    final name = fileName ?? file?.uri.pathSegments.last ?? 'attachment';
+    final part = bytes != null
+        ? MultipartFile.fromBytes(bytes, filename: name)
+        : await MultipartFile.fromFile(file!.path, filename: name);
+    final form = FormData.fromMap({'file': part});
     final r = await _api.postForm<dynamic>(
       _u('/conversations/$conversationId/attachments'),
       form,

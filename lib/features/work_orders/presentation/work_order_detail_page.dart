@@ -1269,7 +1269,9 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
         final files = await FilePicker.pickFiles();
         for (final f in files) {
           if (f.path == null && !kIsWeb) continue;
-          if ((f.lengthSync() ?? 0) > 10 * 1024 * 1024) {
+          final webBytes = kIsWeb ? await f.readAsBytes() : null;
+          final size = kIsWeb ? (webBytes?.length ?? 0) : (f.lengthSync() ?? 0);
+          if (size > 10 * 1024 * 1024) {
             if (mounted)
               showMessage(
                 context,
@@ -1279,7 +1281,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
             continue;
           }
           if (kIsWeb) {
-            await repo.upload(widget.id, null, f.name, bytes: await f.readAsBytes());
+            await repo.upload(widget.id, null, f.name, bytes: webBytes);
           } else {
             await repo.upload(widget.id, f.path!, f.name);
           }

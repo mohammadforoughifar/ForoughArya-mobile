@@ -214,7 +214,10 @@ class _LetterDetailPageState extends State<LetterDetailPage>
       final file = picked.isEmpty ? null : picked.first;
       final path = file?.path;
       if (file == null || (path == null && !kIsWeb)) return;
-      final size = file == null ? 0 : (file.lengthSync() ?? 0);
+      final webBytes = kIsWeb ? await pickedBytes(file) : null;
+      final size = kIsWeb
+          ? (webBytes?.length ?? 0)
+          : (file.lengthSync() ?? 0);
       if (size > 20 * 1024 * 1024) {
         if (mounted) {
           showMessage(context, 'حجم فایل بیش از ۲۰ مگابایت است.', error: true);
@@ -226,7 +229,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
         widget.letterId,
         path ?? '',
         file.name,
-        bytes: kIsWeb ? await file.readAsBytes() : null,
+        bytes: webBytes,
       );
       _changed = true;
       await _loadSide();

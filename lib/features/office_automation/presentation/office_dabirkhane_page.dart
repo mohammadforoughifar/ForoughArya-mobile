@@ -23,6 +23,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/web_access.dart';
+import '../../../core/utils/web_files.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
@@ -458,11 +459,11 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                                 if (bytes == null || bytes.isEmpty) {
                                   throw Exception('فایل چاپی از سرور دریافت نشد.');
                                 }
-                                if (!kIsWeb) {
+                                final fileName =
+                                    'sadere_${item.letterId}_${size}_${withCopy ? 'copy' : 'orig'}.pdf';
+                                if (!await webDeliver(bytes, fileName)) {
                                   final dir = await getTemporaryDirectory();
-                                  final file = File(
-                                    '${dir.path}/sadere_${item.letterId}_${size}_${withCopy ? 'copy' : 'orig'}.pdf',
-                                  );
+                                  final file = File('${dir.path}/$fileName');
                                   await file.writeAsBytes(bytes, flush: true);
                                   final res = await OpenFilex.open(file.path);
                                   if (res.type != ResultType.done) {

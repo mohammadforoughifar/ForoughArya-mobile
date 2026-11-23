@@ -8,6 +8,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -16,6 +17,7 @@ class VoiceRecorder {
 
   /// آیا ضبط صدا در این نسخه در دسترس است؟
   static Future<bool> available() async {
+    if (kIsWeb) return false;
     try {
       final r = await _channel.invokeMethod<bool>('available');
       return r ?? false;
@@ -57,6 +59,10 @@ class VoiceRecorder {
   /// شروع ضبط؛ فایل خروجی برگردانده می‌شود.
   static Future<File?> start() async {
     lastError = null;
+    if (kIsWeb) {
+      lastError = 'برای ارسال صدا در نسخهٔ وب از گزینهٔ پیوست فایل استفاده کنید.';
+      return null;
+    }
     try {
       final dir = await getTemporaryDirectory();
       final path =

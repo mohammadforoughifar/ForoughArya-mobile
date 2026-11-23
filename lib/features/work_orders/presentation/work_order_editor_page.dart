@@ -300,18 +300,21 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
   Future<void> _chooseFiles() async {
     final files = await FilePicker.pickFiles();
     if (files.isEmpty) return;
-    setState(() {
-      for (final f in files) {
-        if ((f.lengthSync() ?? 0) > 10 * 1024 * 1024) {
-          showMessage(
-            context,
-            'حجم «${f.name}» بیش از ۱۰ مگابایت است.',
-            error: true,
-          );
-        } else if (f.path != null || kIsWeb)
-          _files.add(f);
+    for (final f in files) {
+      final size = kIsWeb
+          ? (await f.readAsBytes()).length
+          : (f.lengthSync() ?? 0);
+      if (!mounted) return;
+      if (size > 10 * 1024 * 1024) {
+        showMessage(
+          context,
+          'حجم «${f.name}» بیش از ۱۰ مگابایت است.',
+          error: true,
+        );
+      } else if (f.path != null || kIsWeb) {
+        setState(() => _files.add(f));
       }
-    });
+    }
   }
 
   Future<void> _applyTemplate(Map<String, dynamic> t) async {

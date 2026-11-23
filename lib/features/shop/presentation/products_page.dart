@@ -17,6 +17,7 @@
 // ============================================================
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
 import '../../../core/utils/jalali_picker.dart';
+import '../../../core/utils/web_files.dart';
 import '../../../core/widgets/barcode_scanner_sheet.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
@@ -156,8 +158,12 @@ class _ProductsPageState extends State<ProductsPage> {
         _toast('فایل خروجی خالی برگشت.');
         return;
       }
-      final dir = await getTemporaryDirectory();
       final ext = format == 'pdf' ? 'pdf' : 'xlsx';
+      if (await webDeliver(bytes, 'inv-products.$ext')) {
+        _toast('فایل خروجی آماده شد.');
+        return;
+      }
+      final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/inv-products.$ext');
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
@@ -1542,7 +1548,7 @@ class _ImportSheetState extends State<_ImportSheet> {
   List<Warehouse> _warehouses = const [];
   int _kind = ProductImportKind.goods;
   int _warehouseId = 0;
-  File? _file;
+  ({String name, Uint8List bytes})? _pickedExcel;
   bool _importing = false;
   bool _downloadingTemplate = false;
   Map<String, dynamic>? _result;
@@ -1572,10 +1578,14 @@ class _ImportSheetState extends State<_ImportSheet> {
         _toast('فایل نمونه خالی برگشت.');
         return;
       }
-      final dir = await getTemporaryDirectory();
       final name = _isServices
           ? 'Services-Template.xlsx'
           : 'Products-Template.xlsx';
+      if (await webDeliver(bytes, name)) {
+        _toast('فایل نمونه آماده شد.');
+        return;
+      }
+      final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/$name');
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
@@ -1618,14 +1628,16 @@ class _ImportSheetState extends State<_ImportSheet> {
   Future<void> _pickFile() async {
     try {
       final picked = await FilePicker.pickFiles();
-      final path = picked.isEmpty ? null : picked.first.path;
-      if (path == null) return;
-      if (!path.toLowerCase().endsWith('.xlsx')) {
+      if (picked.isEmpty) return;
+      final f = picked.first;
+      if (!f.name.toLowerCase().endsWith('.xlsx')) {
         _toast('فقط فایل با فرمت xlsx پشتیبانی می‌شود.');
         return;
       }
+      final bytes = await pickedBytes(f);
+      if (bytes == null) return;
       setState(() {
-        _file = File(path);
+        _pickedExcel = (name: f.name, bytes: bytes);
         _result = null;
         _error = null;
       });
@@ -1641,7 +1653,7 @@ class _ImportSheetState extends State<_ImportSheet> {
       );
       return;
     }
-    if (_file == null) {
+    if (_pickedExcel == null) {
       _toast('ابتدا فایل اکسل را انتخاب کنید.');
       return;
     }
@@ -1650,10 +1662,9 @@ class _ImportSheetState extends State<_ImportSheet> {
       _error = null;
     });
     try {
-      final bytes = await _file!.readAsBytes();
       final res = await widget.repo.importProducts(
-        bytes,
-        _file!.uri.pathSegments.last,
+        _pickedExcel!.bytes,
+        _pickedExcel!.name,
         warehouseId: _isServices ? null : _warehouseId,
         kind: _kind,
       );
@@ -1831,14 +1842,14 @@ class _ImportSheetState extends State<_ImportSheet> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          _file == null
+                          _pickedExcel == null
                               ? 'انتخاب فایل اکسل…'
-                              : _file!.uri.pathSegments.last,
+                              : _pickedExcel!.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: _file == null
+                            color: _pickedExcel == null
                                 ? ShopColors.inkFaint
                                 : ShopColors.ink,
                           ),

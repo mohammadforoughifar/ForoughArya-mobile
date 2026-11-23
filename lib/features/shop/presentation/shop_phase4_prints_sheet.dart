@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../data/shop_repository.dart';
 import '../models/ops_models.dart';
 import '../models/order_models.dart';
@@ -160,7 +161,7 @@ class _RepairPrintSheetState extends State<_RepairPrintSheet> {
     return 'قبض پذیرش تعمیرات ${_repair.number}';
   }
 
-  Future<File> _writeHtmlFile() async {
+  (String html, String fileName) _buildRepairDoc() {
     final html = _deliveryMode
         ? _Phase4HtmlBuilder.buildRepairDeliveryReceipt(
             repair: _repair,
@@ -171,10 +172,15 @@ class _RepairPrintSheetState extends State<_RepairPrintSheet> {
             profile: _profile,
             invoice: _invoice,
           );
-    final dir = await getTemporaryDirectory();
     final safeNo = _repair.number.replaceAll(RegExp(r'[^\w\-]+'), '_');
     final prefix = _deliveryMode ? 'repair_delivery' : 'repair_receipt';
-    final file = File('${dir.path}/${prefix}_$safeNo.html');
+    return (html, '${prefix}_$safeNo.html');
+  }
+
+  Future<File> _writeHtmlFile() async {
+    final (html, fileName) = _buildRepairDoc();
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
     await file.writeAsString(html, encoding: utf8);
     return file;
   }
@@ -183,6 +189,8 @@ class _RepairPrintSheetState extends State<_RepairPrintSheet> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildRepairDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: false)) return;
       final file = await _writeHtmlFile();
       await OpenFilex.open(file.path, type: 'text/html');
     } catch (e) {
@@ -200,6 +208,8 @@ class _RepairPrintSheetState extends State<_RepairPrintSheet> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildRepairDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: true)) return;
       final file = await _writeHtmlFile();
       await SharePlus.instance.share(
         ShareParams(
@@ -587,15 +597,20 @@ class _GoodsIssuePrintSheetState extends State<_GoodsIssuePrintSheet> {
     });
   }
 
-  Future<File> _writeHtmlFile() async {
+  (String html, String fileName) _buildIssueDoc() {
     final html = _Phase4HtmlBuilder.buildGoodsIssue(
       issue: _issue,
       profile: _profile,
       paper: _paper,
     );
-    final dir = await getTemporaryDirectory();
     final safeNo = _issue.number.replaceAll(RegExp(r'[^\w\-]+'), '_');
-    final file = File('${dir.path}/goods_issue_${safeNo}_$_paper.html');
+    return (html, 'goods_issue_${safeNo}_$_paper.html');
+  }
+
+  Future<File> _writeHtmlFile() async {
+    final (html, fileName) = _buildIssueDoc();
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
     await file.writeAsString(html, encoding: utf8);
     return file;
   }
@@ -604,6 +619,8 @@ class _GoodsIssuePrintSheetState extends State<_GoodsIssuePrintSheet> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildIssueDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: false)) return;
       final file = await _writeHtmlFile();
       await OpenFilex.open(file.path, type: 'text/html');
     } catch (e) {
@@ -621,6 +638,8 @@ class _GoodsIssuePrintSheetState extends State<_GoodsIssuePrintSheet> {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildIssueDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: true)) return;
       final file = await _writeHtmlFile();
       final title = 'بیجک تحویل کالا ${_issue.number}';
       await SharePlus.instance.share(
@@ -889,18 +908,23 @@ class _CustomerStatementPrintSheetState
     return s.isEmpty ? 'طرف حساب' : s;
   }
 
-  Future<File> _writeHtmlFile() async {
+  (String html, String fileName) _buildStatementDoc() {
     final html = _Phase4HtmlBuilder.buildCustomerStatement(
       statement: widget.statement,
       profile: _profile,
       from: widget.from,
       to: widget.to,
     );
-    final dir = await getTemporaryDirectory();
     final partyId =
         (widget.statement['partyId'] ?? widget.statement['PartyId'] ?? 0)
             .toString();
-    final file = File('${dir.path}/party_statement_$partyId.html');
+    return (html, 'party_statement_$partyId.html');
+  }
+
+  Future<File> _writeHtmlFile() async {
+    final (html, fileName) = _buildStatementDoc();
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
     await file.writeAsString(html, encoding: utf8);
     return file;
   }
@@ -909,6 +933,8 @@ class _CustomerStatementPrintSheetState
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildStatementDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: false)) return;
       final file = await _writeHtmlFile();
       await OpenFilex.open(file.path, type: 'text/html');
     } catch (e) {
@@ -926,6 +952,8 @@ class _CustomerStatementPrintSheetState
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
+      final (html, fileName) = _buildStatementDoc();
+      if (await webOpenHtmlForPrint(html, fileName, share: true)) return;
       final file = await _writeHtmlFile();
       final title = 'صورت‌حساب رسمی $_partyName';
       await SharePlus.instance.share(

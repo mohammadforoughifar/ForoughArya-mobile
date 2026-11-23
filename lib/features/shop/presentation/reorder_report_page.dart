@@ -19,6 +19,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/fa.dart';
+import '../../../core/utils/web_files.dart';
 import '../data/shop_perms.dart';
 import '../data/shop_repository.dart';
 import '../models/order_models.dart';
@@ -142,6 +143,14 @@ class _ReorderReportPageState extends State<ReorderReportPage> {
             r.suggested,
           ].join(','),
         );
+      }
+      final csvBytes = utf8.encode('\uFEFF${sb.toString()}');
+      if (await webDeliver(
+        csvBytes,
+        'reorder_report.csv',
+        mimeType: 'text/csv;charset=utf-8',
+      )) {
+        return;
       }
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/reorder_report.csv');
