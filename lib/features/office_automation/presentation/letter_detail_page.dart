@@ -503,11 +503,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [OfficeColors.deep, accent, OfficeColors.accent.withValues(alpha: .85)],
+          colors: [OfficeColors.deepInk, OfficeColors.deep, accent],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xff8a6a24), width: 1.3),
+        ),
         boxShadow: [
           BoxShadow(
             color: OfficeColors.deep.withValues(alpha: .28),
@@ -743,7 +746,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 icon: Icons.attach_file,
                 value: Fa.digits(_attachments.length),
                 label: 'پیوست',
-                color: const Color(0xff2a6bd4),
+                color: const Color(0xff1f6f86),
               ),
               _vDivider(),
               MiniStat(
@@ -778,7 +781,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 width: double.infinity,
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
-                  color: const Color(0xfff7f9fc),
+                  color: const Color(0xfff8f7f1),
                   borderRadius: BorderRadius.circular(12),
                   border: BorderDirectional(
                     start: BorderSide(color: accent.withValues(alpha: .55), width: 3),
@@ -791,7 +794,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.95,
-                    color: Color(0xff22314a),
+                    color: Color(0xff222f2b),
                   ),
                 ),
               ),
@@ -1007,7 +1010,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
           child: OfficeCard(
             title: 'نامه‌های مرتبط',
             icon: Icons.link,
-            color: const Color(0xff2a6bd4),
+            color: const Color(0xff1f6f86),
             children: _related
                 .map(
                   (r) => Padding(
@@ -1018,11 +1021,11 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                           width: 30,
                           height: 30,
                           decoration: BoxDecoration(
-                            color: const Color(0xff2a6bd4).withValues(alpha: .10),
+                            color: const Color(0xff1f6f86).withValues(alpha: .10),
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: const Icon(Icons.description_outlined,
-                              size: 15, color: Color(0xff2a6bd4)),
+                              size: 15, color: Color(0xff1f6f86)),
                         ),
                         const SizedBox(width: 9),
                         Expanded(
@@ -1116,7 +1119,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
     decoration: BoxDecoration(
       color: s.isSigned
           ? OfficeColors.ok.withValues(alpha: .045)
-          : const Color(0xfff7f9fc),
+          : const Color(0xfff8f7f1),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(
         color: s.isSigned
@@ -1133,7 +1136,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: s.isSigned
-                  ? [const Color(0xff3fb27f), OfficeColors.ok]
+                  ? [const Color(0xff3f8a5c), OfficeColors.ok]
                   : [Colors.blueGrey.shade200, Colors.blueGrey.shade100],
             ),
             shape: BoxShape.circle,
@@ -1258,11 +1261,11 @@ class _LetterDetailPageState extends State<LetterDetailPage>
       OfficeCard(
         title: 'پیوست‌ها (${Fa.digits(_attachments.length)})',
         icon: Icons.attach_file,
-        color: const Color(0xff2a6bd4),
+        color: const Color(0xff1f6f86),
         trailing: FilledButton.icon(
           onPressed: _upload,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xff2a6bd4),
+            backgroundColor: const Color(0xff1f6f86),
             padding: const EdgeInsets.symmetric(horizontal: 12),
             minimumSize: const Size(0, 34),
             textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
@@ -1281,11 +1284,11 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
-                        color: const Color(0xff2a6bd4).withValues(alpha: .08),
+                        color: const Color(0xff1f6f86).withValues(alpha: .08),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.attach_file,
-                          size: 25, color: Color(0xff2a6bd4)),
+                          size: 25, color: Color(0xff1f6f86)),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -1310,7 +1313,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
-                    color: const Color(0xfff7f9fc),
+                    color: const Color(0xfff8f7f1),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: OfficeColors.line),
                   ),
@@ -1322,14 +1325,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              const Color(0xff2a6bd4).withValues(alpha: .18),
-                              const Color(0xff2a6bd4).withValues(alpha: .07),
+                              const Color(0xff1f6f86).withValues(alpha: .18),
+                              const Color(0xff1f6f86).withValues(alpha: .07),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(11),
                         ),
                         child: const Icon(Icons.insert_drive_file_outlined,
-                            size: 18, color: Color(0xff2a6bd4)),
+                            size: 18, color: Color(0xff1f6f86)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1360,7 +1363,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                         onPressed: () => _download(a),
                         icon: const Icon(Icons.download_outlined, size: 19),
                         tooltip: 'دانلود',
-                        color: const Color(0xff2a6bd4),
+                        color: const Color(0xff1f6f86),
                       ),
                       IconButton(
                         onPressed: () => _deleteAttachment(a),
@@ -1418,7 +1421,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
             child: OfficeCard(
               title: '${n.sender} ← ${n.receiver}',
               icon: n.isRead ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
-              color: n.isRead ? OfficeColors.ok : const Color(0xff2a6bd4),
+              color: n.isRead ? OfficeColors.ok : const Color(0xff1f6f86),
               trailing: _Pill(
                 label: n.type,
                 color: OfficeColors.accent,
@@ -1457,7 +1460,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   children: [
                     _Pill(
                       label: n.isRead ? 'خوانده شد' : 'خوانده نشده',
-                      color: n.isRead ? OfficeColors.ok : const Color(0xff2a6bd4),
+                      color: n.isRead ? OfficeColors.ok : const Color(0xff1f6f86),
                       icon: n.isRead
                           ? Icons.check_circle_outline
                           : Icons.mark_email_unread_outlined,
@@ -1506,14 +1509,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: (c.isRead ? OfficeColors.ok : const Color(0xff2a6bd4))
+                    color: (c.isRead ? OfficeColors.ok : const Color(0xff1f6f86))
                         .withValues(alpha: .12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     c.isRead ? Icons.check : Icons.subdirectory_arrow_left,
                     size: 12,
-                    color: c.isRead ? OfficeColors.ok : const Color(0xff2a6bd4),
+                    color: c.isRead ? OfficeColors.ok : const Color(0xff1f6f86),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1660,7 +1663,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                     gradient: LinearGradient(
                       colors: late
                           ? [const Color(0xffe05357), OfficeColors.danger]
-                          : [const Color(0xff4f7ce8), OfficeColors.seed],
+                          : [const Color(0xff2c687a), OfficeColors.seed],
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -2066,7 +2069,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                             decoration: BoxDecoration(
                               gradient: _type == a.title
                                   ? const LinearGradient(
-                                      colors: [OfficeColors.seed, Color(0xff4f7ce8)],
+                                      colors: [OfficeColors.seed, Color(0xff2c687a)],
                                     )
                                   : null,
                               color: _type == a.title ? null : Colors.white,
@@ -2169,7 +2172,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                             fontSize: 12.5,
                             color: _deadline == null
                                 ? Colors.blueGrey.shade400
-                                : const Color(0xff16233a),
+                                : const Color(0xff16221f),
                           ),
                         ),
                         const Spacer(),

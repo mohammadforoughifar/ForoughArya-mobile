@@ -285,7 +285,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: error ? OfficeColors.danger : const Color(0xff0f766e),
+        backgroundColor: error ? OfficeColors.danger : const Color(0xff14594f),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -349,12 +349,12 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                           width: 38,
                           height: 38,
                           decoration: BoxDecoration(
-                            color: const Color(0xff4f46e5).withValues(alpha: 0.12),
+                            color: const Color(0xff1d5f70).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
                             Icons.print_rounded,
-                            color: Color(0xff4f46e5),
+                            color: Color(0xff1d5f70),
                             size: 20,
                           ),
                         ),
@@ -378,7 +378,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 11.5,
-                                  color: Color(0xff64748b),
+                                  color: Color(0xff6a6f66),
                                 ),
                               ),
                             ],
@@ -439,7 +439,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xff4f46e5),
+                        backgroundColor: const Color(0xff1d5f70),
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -601,7 +601,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                       child: Text(
                         'هنوز پوشه‌ای در بایگانی دبیرخانه ساخته نشده است. ابتدا یک پوشه بسازید.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Color(0xff64748b)),
+                        style: TextStyle(fontSize: 12, color: Color(0xff6a6f66)),
                       ),
                     )
                   else
@@ -617,7 +617,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                             dense: true,
                             leading: const Icon(
                               Icons.folder_rounded,
-                              color: Color(0xff7c3aed),
+                              color: Color(0xff546a4f),
                             ),
                             title: Text(
                               '${'  ' * f.depth}${f.node.title}',
@@ -701,7 +701,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.tune_rounded, color: Color(0xff4f46e5)),
+                      const Icon(Icons.tune_rounded, color: Color(0xff1d5f70)),
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
@@ -870,7 +870,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xff4f46e5),
+                      backgroundColor: const Color(0xff1d5f70),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                     ),
                     onPressed: () {
@@ -960,13 +960,13 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xfff4f6fb),
+      backgroundColor: const Color(0xfff6f5ef),
       body: content,
       floatingActionButton: _mode == DabirkhaneMode.varede &&
               access.canCreateIncomingLetter
           ? FloatingActionButton.extended(
               heroTag: 'dabirkhane_incoming_create_fab',
-              backgroundColor: const Color(0xff0d9488),
+              backgroundColor: const Color(0xff146a5c),
               foregroundColor: Colors.white,
               onPressed: () async {
                 final created = await Navigator.of(context).push<bool>(
@@ -991,9 +991,12 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xff1e1b4b), Color(0xff312e81), Color(0xff4f46e5)],
+          colors: [Color(0xff10262c), Color(0xff0f3943), Color(0xff1d5f70)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
+        ),
+        border: Border(
+          bottom: BorderSide(color: Color(0xff8a6a24), width: 1.3),
         ),
       ),
       child: SafeArea(
@@ -1068,10 +1071,10 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xffe2e8f0)),
+        border: Border.all(color: const Color(0xffe3e4d8)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xff1e293b).withValues(alpha: 0.04),
+            color: const Color(0xff202b28).withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1087,7 +1090,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   icon: Icons.north_east_rounded,
                   label: 'دبیرخانه صادره',
                   badge: _stats.pending > 0 ? Fa.digits(_stats.pending) : null,
-                  activeColor: const Color(0xff4f46e5),
+                  activeColor: const Color(0xff1d5f70),
                   onTap: () {
                     if (_mode == DabirkhaneMode.sadere) return;
                     setState(() => _mode = DabirkhaneMode.sadere);
@@ -1104,7 +1107,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   badge: _incomingRegisteredTotal > 0
                       ? Fa.digits(_incomingRegisteredTotal)
                       : null,
-                  activeColor: const Color(0xff0d9488),
+                  activeColor: const Color(0xff146a5c),
                   onTap: () {
                     if (_mode == DabirkhaneMode.varede) return;
                     setState(() => _mode = DabirkhaneMode.varede);
@@ -1122,16 +1125,16 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xfff8fafc),
+                  color: const Color(0xfffaf9f5),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xffe2e8f0)),
+                  border: Border.all(color: const Color(0xffe3e4d8)),
                 ),
                 child: const Row(
                   children: [
                     Icon(
                       Icons.pin_outlined,
                       size: 17,
-                      color: Color(0xff4f46e5),
+                      color: Color(0xff1d5f70),
                     ),
                     SizedBox(width: 8),
                     Expanded(
@@ -1142,14 +1145,14 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xff334155),
+                          color: Color(0xff3a423c),
                         ),
                       ),
                     ),
                     Icon(
                       Icons.chevron_left_rounded,
                       size: 18,
-                      color: Color(0xff64748b),
+                      color: Color(0xff6a6f66),
                     ),
                   ],
                 ),
@@ -1181,7 +1184,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   label: 'در انتظار ثبت و ارسال',
                   value: _stats.pending,
                   icon: Icons.hourglass_top_rounded,
-                  color: const Color(0xffd97706),
+                  color: const Color(0xffb4771e),
                   selected: _tab == DabirkhaneTab.pending,
                   onTap: () {
                     setState(() => _tab = DabirkhaneTab.pending);
@@ -1195,7 +1198,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   label: 'ثبت و ارسال شده',
                   value: _stats.registered,
                   icon: Icons.verified_rounded,
-                  color: const Color(0xff059669),
+                  color: const Color(0xff1f6e45),
                   selected: _tab == DabirkhaneTab.registered,
                   onTap: () {
                     setState(() => _tab = DabirkhaneTab.registered);
@@ -1209,7 +1212,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   label: 'بایگانی دبیرخانه',
                   value: _stats.archived,
                   icon: Icons.inventory_2_rounded,
-                  color: const Color(0xff7c3aed),
+                  color: const Color(0xff546a4f),
                   selected: _tab == DabirkhaneTab.archived,
                   onTap: () {
                     setState(() => _tab = DabirkhaneTab.archived);
@@ -1223,7 +1226,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   label: 'کل نامه‌های امضاشده',
                   value: _stats.total,
                   icon: Icons.mark_email_read_rounded,
-                  color: const Color(0xff4f46e5),
+                  color: const Color(0xff1d5f70),
                   selected: _tab == DabirkhaneTab.all,
                   onTap: () {
                     setState(() => _tab = DabirkhaneTab.all);
@@ -1243,7 +1246,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xffe2e8f0)),
+          border: Border.all(color: const Color(0xffe3e4d8)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1315,18 +1318,18 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                             ),
                       isDense: true,
                       filled: true,
-                      fillColor: const Color(0xfff8fafc),
+                      fillColor: const Color(0xfffaf9f5),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 10,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
-                        borderSide: const BorderSide(color: Color(0xffe2e8f0)),
+                        borderSide: const BorderSide(color: Color(0xffe3e4d8)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
-                        borderSide: const BorderSide(color: Color(0xffe2e8f0)),
+                        borderSide: const BorderSide(color: Color(0xffe3e4d8)),
                       ),
                     ),
                   ),
@@ -1335,7 +1338,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                 Badge(
                   isLabelVisible: _activeFilterCount > 0,
                   label: Text(Fa.digits(_activeFilterCount)),
-                  backgroundColor: const Color(0xff4f46e5),
+                  backgroundColor: const Color(0xff1d5f70),
                   child: IconButton.filledTonal(
                     tooltip: 'فیلتر پیشرفته دبیرخانه',
                     onPressed: _openAdvancedFilterSheet,
@@ -1404,7 +1407,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xffe2e8f0)),
+        border: Border.all(color: const Color(0xffe3e4d8)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1413,7 +1416,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
             children: [
               const Icon(
                 Icons.account_tree_rounded,
-                color: Color(0xff7c3aed),
+                color: Color(0xff546a4f),
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -1439,7 +1442,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
               child: Text(
                 'بایگانی دبیرخانه خالی است. با دکمهٔ «پوشه جدید» دسته‌بندی رسمی بسازید.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Color(0xff64748b)),
+                style: TextStyle(fontSize: 12, color: Color(0xff6a6f66)),
               ),
             )
           else
@@ -1455,7 +1458,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
         padding: EdgeInsetsDirectional.only(start: depth * 12.0),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 6),
-          leading: const Icon(Icons.folder_rounded, color: Color(0xff7c3aed)),
+          leading: const Icon(Icons.folder_rounded, color: Color(0xff546a4f)),
           title: Text(
             '${node.title} (${Fa.digits(node.letterCount)})',
             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
@@ -1490,7 +1493,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
         dense: true,
         leading: const Icon(
           Icons.description_outlined,
-          color: Color(0xff4f46e5),
+          color: Color(0xff1d5f70),
           size: 19,
         ),
         title: Text(
@@ -1595,7 +1598,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   label: 'ثبت و ارسال شده',
                   value: _incomingRegisteredTotal,
                   icon: Icons.fact_check_rounded,
-                  color: const Color(0xff0d9488),
+                  color: const Color(0xff146a5c),
                   selected: _incomingView == 'registered',
                   onTap: () {
                     setState(() => _incomingView = 'registered');
@@ -1609,7 +1612,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                   label: 'بایگانی دبیرخانه وارده',
                   value: _incomingArchivedTotal,
                   icon: Icons.archive_rounded,
-                  color: const Color(0xff7c3aed),
+                  color: const Color(0xff546a4f),
                   selected: _incomingView == 'archived',
                   onTap: () {
                     setState(() => _incomingView = 'archived');
@@ -1627,7 +1630,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xffe2e8f0)),
+          border: Border.all(color: const Color(0xffe3e4d8)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1682,14 +1685,14 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                 prefixIcon: const Icon(Icons.search_rounded, size: 19),
                 isDense: true,
                 filled: true,
-                fillColor: const Color(0xfff8fafc),
+                fillColor: const Color(0xfffaf9f5),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(13),
-                  borderSide: const BorderSide(color: Color(0xffe2e8f0)),
+                  borderSide: const BorderSide(color: Color(0xffe3e4d8)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(13),
-                  borderSide: const BorderSide(color: Color(0xffe2e8f0)),
+                  borderSide: const BorderSide(color: Color(0xffe3e4d8)),
                 ),
               ),
             ),
@@ -1803,7 +1806,7 @@ class _ModePill extends StatelessWidget {
             Icon(
               icon,
               size: 17,
-              color: active ? Colors.white : const Color(0xff475569),
+              color: active ? Colors.white : const Color(0xff4f564e),
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -1814,7 +1817,7 @@ class _ModePill extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: active ? Colors.white : const Color(0xff334155),
+                  color: active ? Colors.white : const Color(0xff3a423c),
                 ),
               ),
             ),
@@ -1875,7 +1878,7 @@ class _DabirStatTile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? color : const Color(0xffe2e8f0),
+            color: selected ? color : const Color(0xffe3e4d8),
             width: selected ? 1.6 : 1,
           ),
           gradient: selected
@@ -1919,7 +1922,7 @@ class _DabirStatTile extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xff64748b),
+                      color: Color(0xff6a6f66),
                     ),
                   ),
                 ],
@@ -1953,7 +1956,7 @@ class _TabChip extends StatelessWidget {
       duration: const Duration(milliseconds: 160),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
       decoration: BoxDecoration(
-        color: active ? const Color(0xff4f46e5) : const Color(0xfff1f5f9),
+        color: active ? const Color(0xff1d5f70) : const Color(0xfff0efe9),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1963,7 +1966,7 @@ class _TabChip extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: active ? Colors.white : const Color(0xff475569),
+              color: active ? Colors.white : const Color(0xff4f564e),
             ),
             const SizedBox(width: 5),
           ],
@@ -1972,7 +1975,7 @@ class _TabChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w800,
-              color: active ? Colors.white : const Color(0xff334155),
+              color: active ? Colors.white : const Color(0xff3a423c),
             ),
           ),
         ],
@@ -2002,17 +2005,17 @@ class _OutgoingSecretariatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final registered = item.dabirkhaneSabt;
     final statusColor =
-        registered ? const Color(0xff059669) : const Color(0xffd97706);
+        registered ? const Color(0xff1f6e45) : const Color(0xffb4771e);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xffe2e8f0)),
+        border: Border.all(color: const Color(0xffe3e4d8)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xff0f172a).withValues(alpha: 0.03),
+            color: const Color(0xff1b2420).withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2029,7 +2032,7 @@ class _OutgoingSecretariatCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xff059669).withValues(alpha: 0.11),
+                    color: const Color(0xff1f6e45).withValues(alpha: 0.11),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Text(
@@ -2037,7 +2040,7 @@ class _OutgoingSecretariatCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xff047857),
+                      color: Color(0xff14564a),
                     ),
                   ),
                 ),
@@ -2050,7 +2053,7 @@ class _OutgoingSecretariatCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xff0f172a),
+                      color: Color(0xff1b2420),
                     ),
                   ),
                 ),
@@ -2086,13 +2089,13 @@ class _OutgoingSecretariatCard extends StatelessWidget {
                     label: item.archiveFolderTitle == null
                         ? 'بایگانی‌شده'
                         : 'پوشه: ${item.archiveFolderTitle}',
-                    color: const Color(0xff7c3aed),
+                    color: const Color(0xff546a4f),
                   ),
                 if (item.hasAttachment)
                   const _MiniTag(
                     icon: Icons.attach_file_rounded,
                     label: 'پیوست‌دار',
-                    color: Color(0xff475569),
+                    color: Color(0xff4f564e),
                   ),
               ],
             ),
@@ -2107,7 +2110,7 @@ class _OutgoingSecretariatCard extends StatelessWidget {
               ].join('  •  '),
               style: const TextStyle(
                 fontSize: 11.2,
-                color: Color(0xff475569),
+                color: Color(0xff4f564e),
                 height: 1.6,
               ),
             ),
@@ -2138,7 +2141,7 @@ class _OutgoingSecretariatCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xff166534),
+                    color: Color(0xff174d29),
                     height: 1.55,
                   ),
                 ),
@@ -2152,8 +2155,8 @@ class _OutgoingSecretariatCard extends StatelessWidget {
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: registered
-                        ? const Color(0xff0f766e)
-                        : const Color(0xff4f46e5),
+                        ? const Color(0xff14594f)
+                        : const Color(0xff1d5f70),
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 11),
                   ),
@@ -2233,7 +2236,7 @@ class _IncomingSecretariatCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: selected ? const Color(0xff0d9488) : const Color(0xffe2e8f0),
+          color: selected ? const Color(0xff146a5c) : const Color(0xffe3e4d8),
           width: selected ? 1.5 : 1,
         ),
       ),
@@ -2254,7 +2257,7 @@ class _IncomingSecretariatCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                 decoration: BoxDecoration(
-                  color: const Color(0xff0d9488).withValues(alpha: 0.12),
+                  color: const Color(0xff146a5c).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -2262,7 +2265,7 @@ class _IncomingSecretariatCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xff0f766e),
+                    color: Color(0xff14594f),
                   ),
                 ),
               ),
@@ -2289,7 +2292,7 @@ class _IncomingSecretariatCard extends StatelessWidget {
                 'شماره مبدأ: ${Fa.digits(item.numberLetterVarede!)}',
               if (item.date != null) 'تاریخ: ${jalaliShort(item.date!)}',
             ].join('  •  '),
-            style: const TextStyle(fontSize: 11.2, color: Color(0xff475569)),
+            style: const TextStyle(fontSize: 11.2, color: Color(0xff4f564e)),
           ),
           const Divider(height: 16),
           Wrap(
@@ -2381,17 +2384,17 @@ class _ActionPillButton extends StatelessWidget {
     style: OutlinedButton.styleFrom(
       visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      side: const BorderSide(color: Color(0xffcbd5e1)),
+      side: const BorderSide(color: Color(0xffd2d4c8)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ),
     onPressed: onTap,
-    icon: Icon(icon, size: 15, color: const Color(0xff334155)),
+    icon: Icon(icon, size: 15, color: const Color(0xff3a423c)),
     label: Text(
       label,
       style: const TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: Color(0xff334155),
+        color: Color(0xff3a423c),
       ),
     ),
   );
@@ -2420,11 +2423,11 @@ class _SelectableOptionTile extends StatelessWidget {
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: selected
-            ? const Color(0xff4f46e5).withValues(alpha: 0.08)
-            : const Color(0xfff8fafc),
+            ? const Color(0xff1d5f70).withValues(alpha: 0.08)
+            : const Color(0xfffaf9f5),
         borderRadius: BorderRadius.circular(13),
         border: Border.all(
-          color: selected ? const Color(0xff4f46e5) : const Color(0xffe2e8f0),
+          color: selected ? const Color(0xff1d5f70) : const Color(0xffe3e4d8),
           width: selected ? 1.5 : 1,
         ),
       ),
@@ -2432,7 +2435,7 @@ class _SelectableOptionTile extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: selected ? const Color(0xff4f46e5) : const Color(0xff64748b),
+            color: selected ? const Color(0xff1d5f70) : const Color(0xff6a6f66),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -2450,7 +2453,7 @@ class _SelectableOptionTile extends StatelessWidget {
                   subtitle,
                   style: const TextStyle(
                     fontSize: 11,
-                    color: Color(0xff64748b),
+                    color: Color(0xff6a6f66),
                   ),
                 ),
               ],
@@ -2460,7 +2463,7 @@ class _SelectableOptionTile extends StatelessWidget {
             selected
                 ? Icons.radio_button_checked_rounded
                 : Icons.radio_button_off_rounded,
-            color: selected ? const Color(0xff4f46e5) : const Color(0xff94a3b8),
+            color: selected ? const Color(0xff1d5f70) : const Color(0xff9aa093),
           ),
         ],
       ),
@@ -2485,11 +2488,11 @@ class _EmptySecretariatBox extends StatelessWidget {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xffe2e8f0)),
+      border: Border.all(color: const Color(0xffe3e4d8)),
     ),
     child: Column(
       children: [
-        Icon(icon, size: 42, color: const Color(0xff94a3b8)),
+        Icon(icon, size: 42, color: const Color(0xff9aa093)),
         const SizedBox(height: 10),
         Text(
           title,
@@ -2502,7 +2505,7 @@ class _EmptySecretariatBox extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontSize: 12,
-            color: Color(0xff64748b),
+            color: Color(0xff6a6f66),
             height: 1.7,
           ),
         ),
@@ -2682,7 +2685,7 @@ class _DabirkhaneRegisterSheetState extends State<_DabirkhaneRegisterSheet> {
                 children: [
                   const Icon(
                     Icons.markunread_mailbox_rounded,
-                    color: Color(0xff4f46e5),
+                    color: Color(0xff1d5f70),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -2704,7 +2707,7 @@ class _DabirkhaneRegisterSheetState extends State<_DabirkhaneRegisterSheet> {
               ),
               Text(
                 '${widget.item.title}${widget.item.receiverOrganization != null ? ' — ${widget.item.receiverOrganization}' : ''}',
-                style: const TextStyle(fontSize: 12, color: Color(0xff475569)),
+                style: const TextStyle(fontSize: 12, color: Color(0xff4f564e)),
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
@@ -2734,14 +2737,14 @@ class _DabirkhaneRegisterSheetState extends State<_DabirkhaneRegisterSheet> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xffeef2ff),
+                    color: const Color(0xffeeece1),
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: Text(
                     spec.hint,
                     style: const TextStyle(
                       fontSize: 11.5,
-                      color: Color(0xff3730a3),
+                      color: Color(0xff134049),
                     ),
                   ),
                 ),
@@ -2878,7 +2881,7 @@ class _DabirkhaneRegisterSheetState extends State<_DabirkhaneRegisterSheet> {
               const SizedBox(height: 14),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xff4f46e5),
+                  backgroundColor: const Color(0xff1d5f70),
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -2984,7 +2987,7 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.tag_rounded, color: Color(0xff4f46e5)),
+                  const Icon(Icons.tag_rounded, color: Color(0xff1d5f70)),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
@@ -3021,9 +3024,9 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xfff8fafc),
+                  color: const Color(0xfffaf9f5),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xffe2e8f0)),
+                  border: Border.all(color: const Color(0xffe3e4d8)),
                 ),
                 child: Wrap(
                   alignment: WrapAlignment.spaceBetween,
@@ -3066,7 +3069,7 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
                     ),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xff4f46e5),
+                        backgroundColor: const Color(0xff1d5f70),
                         visualDensity: VisualDensity.compact,
                       ),
                       onPressed: _reserving ? null : _reserve,
@@ -3100,7 +3103,7 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
                   child: Text(
                     'هنوز شماره‌ای برای این بخش رزرو نشده است.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Color(0xff64748b)),
+                    style: TextStyle(fontSize: 12, color: Color(0xff6a6f66)),
                   ),
                 )
               else
@@ -3116,7 +3119,7 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
                         dense: true,
                         leading: const Icon(
                           Icons.pin_rounded,
-                          color: Color(0xff4f46e5),
+                          color: Color(0xff1d5f70),
                         ),
                         title: Text(
                           Fa.digits(r.numberSabt),
@@ -3140,7 +3143,7 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
                           ),
                           decoration: BoxDecoration(
                             color: r.isUsed
-                                ? const Color(0xfff1f5f9)
+                                ? const Color(0xfff0efe9)
                                 : const Color(0xffdcfce7),
                             borderRadius: BorderRadius.circular(999),
                           ),
@@ -3150,8 +3153,8 @@ class _ReservationManagerSheetState extends State<_ReservationManagerSheet> {
                               fontSize: 10.5,
                               fontWeight: FontWeight.w800,
                               color: r.isUsed
-                                  ? const Color(0xff64748b)
-                                  : const Color(0xff15803d),
+                                  ? const Color(0xff6a6f66)
+                                  : const Color(0xff1f5c33),
                             ),
                           ),
                         ),
@@ -3222,7 +3225,7 @@ class _GardeshTreeSheetState extends State<_GardeshTreeSheet> {
           children: [
             Row(
               children: [
-                const Icon(Icons.account_tree_rounded, color: Color(0xff4f46e5)),
+                const Icon(Icons.account_tree_rounded, color: Color(0xff1d5f70)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -3253,7 +3256,7 @@ class _GardeshTreeSheetState extends State<_GardeshTreeSheet> {
                 child: Text(
                   'هنوز ارجاعی برای این نامه ثبت نشده است.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Color(0xff64748b)),
+                  style: TextStyle(fontSize: 12, color: Color(0xff6a6f66)),
                 ),
               )
             else
@@ -3280,9 +3283,9 @@ class _GardeshTreeSheetState extends State<_GardeshTreeSheet> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xfff8fafc),
+            color: const Color(0xfffaf9f5),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xffe2e8f0)),
+            border: Border.all(color: const Color(0xffe3e4d8)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3306,8 +3309,8 @@ class _GardeshTreeSheetState extends State<_GardeshTreeSheet> {
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
                       color: n.isRead
-                          ? const Color(0xff059669)
-                          : const Color(0xffd97706),
+                          ? const Color(0xff1f6e45)
+                          : const Color(0xffb4771e),
                     ),
                   ),
                 ],
@@ -3322,7 +3325,7 @@ class _GardeshTreeSheetState extends State<_GardeshTreeSheet> {
                     ].join(': '),
                     style: const TextStyle(
                       fontSize: 11.2,
-                      color: Color(0xff475569),
+                      color: Color(0xff4f564e),
                     ),
                   ),
                 ),

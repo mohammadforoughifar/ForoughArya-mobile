@@ -494,7 +494,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
     Color tabAccent(int i) => switch (i) {
       1 => OfficeColors.outgoing,
       2 => OfficeColors.archive,
-      3 => const Color(0xffb04fbf),
+      3 => const Color(0xff7a5b6e),
       _ => accent,
     };
 
@@ -578,6 +578,9 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
             decoration: BoxDecoration(
               gradient: OfficeColors.heroGradient,
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+              border: const Border(
+                bottom: BorderSide(color: Color(0xff8a6a24), width: 1.3),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: OfficeColors.deep.withValues(alpha: .25),
@@ -1003,13 +1006,13 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xffb04fbf).withValues(alpha: .12),
+                  color: const Color(0xff7a5b6e).withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.drafts_outlined,
                   size: 18,
-                  color: Color(0xffb04fbf),
+                  color: Color(0xff7a5b6e),
                 ),
               ),
               title: Text(

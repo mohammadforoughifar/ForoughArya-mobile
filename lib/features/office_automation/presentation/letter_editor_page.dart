@@ -460,7 +460,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
           padding: EdgeInsets.only(bottom: 8),
           child: Text(
             'فایلی پیوست نشده است. (هر فایل حداکثر ۲۰ مگابایت)',
-            style: TextStyle(fontSize: 11.5, color: Color(0xff64748b)),
+            style: TextStyle(fontSize: 11.5, color: Color(0xff6a6f66)),
           ),
         ),
       for (var i = 0; i < _pendingFiles.length; i++)
@@ -471,7 +471,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
             decoration: BoxDecoration(
               color: OfficeColors.bg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xffe2e8f0)),
+              border: Border.all(color: const Color(0xffe3e4d8)),
             ),
             child: Row(
               children: [
@@ -531,7 +531,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       const SizedBox(height: 4),
       const Text(
         'این فایل‌ها بلافاصله بعد از ثبت نامه، روی همان نامه پیوست می‌شوند.',
-        style: TextStyle(fontSize: 10.5, color: Color(0xff94a3b8)),
+        style: TextStyle(fontSize: 10.5, color: Color(0xff9aa093)),
       ),
     ],
   );
@@ -757,19 +757,19 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
         label: 'گیرندهٔ اصلی',
         list: _girande,
         onPick: () => _pickRecipients(title: 'گیرندهٔ اصلی', target: _girande),
-        color: const Color(0xff2a6bd4),
+        color: const Color(0xff1f6f86),
       ),
       _recipientBlock(
         label: 'ارجاع (جهت اقدام)',
         list: _erjaRecivers,
         onPick: () => _pickRecipients(title: 'گیرندگان ارجاع', target: _erjaRecivers),
-        color: const Color(0xff1a7f37),
+        color: const Color(0xff20633a),
       ),
       _recipientBlock(
         label: 'هامش (رونوشت)',
         list: _hamesh,
         onPick: () => _pickRecipients(title: 'گیرندگان هامش', target: _hamesh),
-        color: const Color(0xff6b4fd8),
+        color: const Color(0xff7d5f1f),
       ),
       if (widget.kind == LetterKind.outgoing)
         _recipientBlock(
@@ -788,7 +788,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
                 ..addAll(selected));
             }
           },
-          color: const Color(0xffe07b00),
+          color: const Color(0xffa86f1f),
         ),
     ],
   );
@@ -861,7 +861,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
               children: [
                 OfficeChip(
                   label: r.kindLabel,
-                  color: r.kind == 2 ? const Color(0xff6b4fd8) : const Color(0xff2a6bd4),
+                  color: r.kind == 2 ? const Color(0xff7d5f1f) : const Color(0xff1f6f86),
                   dense: true,
                 ),
                 const SizedBox(width: 7),
@@ -970,7 +970,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
           padding: const EdgeInsets.only(bottom: 10),
           child: OfficeChip(
             label: 'شمارهٔ اندیکاتور رزروشده: ${Fa.digits(_reservedNumber)}',
-            color: const Color(0xff1a7f37),
+            color: const Color(0xff20633a),
             icon: Icons.confirmation_number_outlined,
           ),
         ),

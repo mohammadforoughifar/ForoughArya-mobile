@@ -12,7 +12,7 @@ Color emailTabColor(EmailTab tab) => switch (tab) {
   EmailTab.inbox => OfficeColors.email,
   EmailTab.sent => OfficeColors.outgoing,
   EmailTab.archive => OfficeColors.archive,
-  EmailTab.draft => const Color(0xffb04fbf),
+  EmailTab.draft => const Color(0xff7a5b6e),
 };
 
 IconData emailTabIcon(EmailTab tab) => switch (tab) {

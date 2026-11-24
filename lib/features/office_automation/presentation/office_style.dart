@@ -1,8 +1,8 @@
 // ============================================================
-//  زبان طراحی ماژول اتوماسیون اداری
-//  همان زبان بصری «دستور کار»: گرادیان، کارت درخشان، تب کشویی،
-//  شیشه‌ای، هالهٔ نبضی و ریزانیمیشن‌های ورود
-//  رنگ‌مایه: نیلی اداری + تفکیک رنگی نوع نامه (داخلی/صادره/وارده)
+//  زبان طراحی ماژول اتوماسیون اداری — هویت «نفتی کلاسیک و طلا»
+//  طیف عمیقِ نفتی/سرمه‌ای سبز با طلایی مات سوزنی، پس‌زمینهٔ
+//  کرم-کاغذی گرم و سایه‌های ملایم؛ کلاسیک، رسمی و سازمانی
+//  رنگ‌مایه: نفتی عمیق + طلای سوزنی + تفکیک رنگی نوع نامه
 // ============================================================
 
 import 'dart:math' as math;
@@ -18,29 +18,32 @@ import '../models/letter_models.dart';
 // ------------------------------------------------------------
 
 class OfficeColors {
-  // هویت واحد با ماژول دستور کار
-  static const seed = Color(0xff2547a8);
-  static const deep = Color(0xff152a63);
-  static const accent = Color(0xff5b47d6);
+  // هویت واحد — نفتی کلاسیک و طلای سوزنی
+  static const seed = Color(0xff164e63);   // نفتی اصلی (دکمه/برند)
+  static const deep = Color(0xff0d2e36);   // نفتی تیره (هدر/گریدینت)
+  static const deepInk = Color(0xff071f26); // عمق سایه‌ای برای گرادیان
+  static const accent = Color(0xff2a6e7e);  // نفتی روشن (هایلایت)
+  static const gold = Color(0xffc9a24b);    // طلای سوزنی — امضا/تحریر
+  static const goldDeep = Color(0xff8a6a24); // برنجی آنتیک (دبیرخانه)
 
-  // رنگ اختصاصی هر نوع نامه
-  static const inner = Color(0xff2547a8); // داخلی — نیلی
-  static const outgoing = Color(0xff1a7f37); // صادره — سبز
-  static const incoming = Color(0xff0d7d8c); // وارده — فیروزه‌ای
-  static const signing = Color(0xffe07b00); // در انتظار امضا — نارنجی
-  static const dabirkhane = Color(0xff5b47d6); // دبیرخانه — بنفش
-  static const archive = Color(0xff6b7a90); // بایگانی — خاکستری
-  static const email = Color(0xff0e7490); // پست الکترونیک — آبی نفتی
-  static const emailPersonal = Color(0xff7c3aed); // ایمیل شخصی — بنفش
-  static const minutes = Color(0xff0f766e); // صورتجلسه — سبزآبی اداری
+  // رنگ اختصاصی هر نوع نامه — طیف گرم-سرد متعادل
+  static const inner = Color(0xff164e63);   // داخلی — نفتی
+  static const outgoing = Color(0xff20633a); // صادره — سبز عمیق
+  static const incoming = Color(0xff14606e); // وارده — سبزآبی نفتی
+  static const signing = Color(0xffa86f1f);  // در انتظار امضا — طلای عسلی
+  static const dabirkhane = Color(0xff8a6a24); // دبیرخانه — برنجی آنتیک
+  static const archive = Color(0xff626a61);  // بایگانی — خاکستری گرم
+  static const email = Color(0xff124f61);    // پست الکترونیک — نفتی تیره
+  static const emailPersonal = Color(0xff4f5c46); // ایمیل شخصی — زیتونی مات
+  static const minutes = Color(0xff14594f);  // صورتجلسه — سبز نفتی اداری
 
-  static const danger = Color(0xffd13438);
-  static const gold = Color(0xffe0a800);
-  static const ok = Color(0xff1a7f37);
+  static const danger = Color(0xffb5332f);   // قرمز آجری گرم (رسمی)
+  static const ok = Color(0xff20633a);
 
-  static const bg = Color(0xfff4f7fb);
-  static const line = Color(0xffe4eaf3);
-  static const ink = Color(0xff1e293b);
+  static const bg = Color(0xfff5f4ee);   // کرم-کاغذی گرم
+  static const surface = Color(0xffffffff);
+  static const line = Color(0xffe2e1d5); // خط گرم ملایم
+  static const ink = Color(0xff1b2420);  // جوهر گرم
 
   /// رنگ پایه هر نوع نامه
   static Color forKind(LetterKind? kind) => switch (kind) {
@@ -64,29 +67,36 @@ class OfficeColors {
   /// گرادیان وضعیت — همان منطق «نوار رنگی کناری» دستور کار
   static LinearGradient gradientFor(LetterListItem it, {LetterKind? kind}) {
     if (it.deadline != null && it.deadline!.isBefore(DateTime.now())) {
-      return const LinearGradient(colors: [Color(0xffe05357), Color(0xffa4262c)]);
+      return const LinearGradient(colors: [Color(0xffc7574d), Color(0xff8f2b26)]);
     }
     if (it.foriat == 'آنی') {
-      return const LinearGradient(colors: [Color(0xffe05357), Color(0xffa4262c)]);
+      return const LinearGradient(colors: [Color(0xffc7574d), Color(0xff8f2b26)]);
     }
     if (it.foriat == 'فوری') {
-      return const LinearGradient(colors: [Color(0xfff3a33c), Color(0xffd2691e)]);
+      return const LinearGradient(colors: [Color(0xffd3a95c), Color(0xff8f5a1d)]);
     }
     return switch (kind) {
       LetterKind.outgoing => const LinearGradient(
-        colors: [Color(0xff3fb27f), Color(0xff1a7f37)],
+        colors: [Color(0xff3f8a5c), Color(0xff20633a)],
       ),
       LetterKind.incoming => const LinearGradient(
-        colors: [Color(0xff2fa8b8), Color(0xff0d7d8c)],
+        colors: [Color(0xff2c7a80), Color(0xff14606e)],
       ),
       _ => const LinearGradient(
-        colors: [Color(0xff4f7ce8), Color(0xff2547a8)],
+        colors: [Color(0xff2c687a), Color(0xff164e63)],
       ),
     };
   }
 
   static LinearGradient get heroGradient => const LinearGradient(
-    colors: [deep, seed, accent],
+    colors: [deepInk, deep, seed],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  /// گرادیان طلای سوزنی — برای نشان‌ها، امضا و درخشش‌های ثانویه
+  static LinearGradient get goldGradient => const LinearGradient(
+    colors: [Color(0xffe3c878), gold, goldDeep],
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
   );
@@ -94,14 +104,14 @@ class OfficeColors {
   static Color forConfidential(String v) => switch (v) {
     'سری' => danger,
     'محرمانه' => signing,
-    _ => const Color(0xff55637a),
+    _ => const Color(0xff565d54),
   };
 
   static Color forOutgoingStatus(int s) => switch (s) {
     3 => ok,
-    2 => const Color(0xff2a6bd4),
+    2 => const Color(0xff1f6f86),
     1 => signing,
-    _ => const Color(0xff55637a),
+    _ => const Color(0xff565d54),
   };
 }
 
@@ -366,8 +376,8 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                     height: 1.45,
                                     fontWeight: unread ? FontWeight.w800 : FontWeight.w600,
                                     color: unread
-                                        ? const Color(0xff16233a)
-                                        : const Color(0xff2c3a4f),
+                                        ? const Color(0xff16221f)
+                                        : const Color(0xff2a3631),
                                   ),
                                 ),
                                 if (widget.showSender && sender.isNotEmpty) ...[
@@ -408,7 +418,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(
-                            color: const Color(0xfff4f7fb),
+                            color: const Color(0xfff5f4ee),
                             borderRadius: BorderRadius.circular(11),
                             border: BorderDirectional(
                               start: BorderSide(color: tint, width: 3),
@@ -515,7 +525,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
       ));
     }
     if (it.hasAttachment) {
-      out.add(const _Tag(label: 'پیوست', icon: Icons.attach_file, color: Color(0xff2a6bd4)));
+      out.add(const _Tag(label: 'پیوست', icon: Icons.attach_file, color: Color(0xff1f6f86)));
     }
     if (it.typeTaeed != 0) {
       out.add(_Tag(
@@ -1373,9 +1383,9 @@ class _OfficeShimmerState extends State<OfficeShimmer>
               begin: Alignment(-1 + 2 * t, 0),
               end: Alignment(0 + 2 * t, 0),
               colors: const [
-                Color(0xffeef2f8),
-                Color(0xfff8fafd),
-                Color(0xffeef2f8),
+                Color(0xffedeae0),
+                Color(0xfffaf9f4),
+                Color(0xffedeae0),
               ],
             ),
           ),

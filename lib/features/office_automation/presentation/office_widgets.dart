@@ -70,23 +70,23 @@ class OfficeChip extends StatelessWidget {
 /// رنگ محرمانگی
 Color mahramanegiColor(String value) => switch (value) {
   'سری' => const Color(0xffb3261e),
-  'محرمانه' => const Color(0xffe07b00),
-  _ => const Color(0xff55637a),
+  'محرمانه' => const Color(0xffa86f1f),
+  _ => const Color(0xff565d54),
 };
 
 /// رنگ فوریت
 Color foriatColor(String value) => switch (value) {
   'آنی' => const Color(0xffb3261e),
-  'فوری' => const Color(0xffe07b00),
-  _ => const Color(0xff55637a),
+  'فوری' => const Color(0xffa86f1f),
+  _ => const Color(0xff565d54),
 };
 
 /// رنگ وضعیت نامه صادره
 Color outgoingStatusColor(int status) => switch (status) {
-  3 => const Color(0xff1a7f37),
-  2 => const Color(0xff2a6bd4),
-  1 => const Color(0xffe07b00),
-  _ => const Color(0xff55637a),
+  3 => const Color(0xff20633a),
+  2 => const Color(0xff1f6f86),
+  1 => const Color(0xffa86f1f),
+  _ => const Color(0xff565d54),
 };
 
 /// بج‌های وضعیت یک سطر نامه
@@ -133,14 +133,14 @@ class LetterBadges extends StatelessWidget {
     if (item.erjaType != null && item.erjaType!.isNotEmpty && item.erjaType != 'گیرنده') {
       badges.add(OfficeChip(
         label: item.erjaType!,
-        color: item.erjaType == 'هامش' ? const Color(0xff6b4fd8) : const Color(0xff1a7f37),
+        color: item.erjaType == 'هامش' ? const Color(0xff7d5f1f) : const Color(0xff20633a),
         dense: compact,
       ));
     }
     if (item.hasAttachment) {
       badges.add(OfficeChip(
         label: 'پیوست',
-        color: const Color(0xff2a6bd4),
+        color: const Color(0xff1f6f86),
         icon: Icons.attach_file,
         dense: compact,
       ));
@@ -148,7 +148,7 @@ class LetterBadges extends StatelessWidget {
     if (item.typeTaeed != 0) {
       badges.add(OfficeChip(
         label: item.typeTaeed == 1 ? 'تأیید شد' : 'رد شد',
-        color: item.typeTaeed == 1 ? const Color(0xff1a7f37) : const Color(0xffb3261e),
+        color: item.typeTaeed == 1 ? const Color(0xff20633a) : const Color(0xffb3261e),
         icon: item.typeTaeed == 1 ? Icons.check_circle_outline : Icons.cancel_outlined,
         dense: compact,
       ));
@@ -156,7 +156,7 @@ class LetterBadges extends StatelessWidget {
     if (item.hasAnswer) {
       badges.add(OfficeChip(
         label: 'پاسخ دارد',
-        color: const Color(0xff1a7f37),
+        color: const Color(0xff20633a),
         icon: Icons.reply_outlined,
         dense: compact,
       ));
@@ -164,7 +164,7 @@ class LetterBadges extends StatelessWidget {
     if (item.sadereNumber != null && item.sadereNumber!.isNotEmpty) {
       badges.add(OfficeChip(
         label: 'صادره ${Fa.digits(item.sadereNumber)}',
-        color: const Color(0xff1a7f37),
+        color: const Color(0xff20633a),
         dense: compact,
       ));
     }
@@ -172,7 +172,7 @@ class LetterBadges extends StatelessWidget {
       final overdue = item.deadline!.isBefore(DateTime.now());
       badges.add(OfficeChip(
         label: 'مهلت ${Fa.date(item.deadline!.toIso8601String(), time: false)}',
-        color: overdue ? const Color(0xffb3261e) : const Color(0xffe07b00),
+        color: overdue ? const Color(0xffb3261e) : const Color(0xffa86f1f),
         icon: Icons.schedule,
         dense: compact,
       ));
@@ -201,9 +201,9 @@ class LetterTile extends StatelessWidget {
   final bool showSender;
 
   static Color _kindAccent(LetterKind? kind, Color fallback) => switch (kind) {
-    LetterKind.inner => const Color(0xff2563eb),
-    LetterKind.outgoing => const Color(0xff059669),
-    LetterKind.incoming => const Color(0xffd97706),
+    LetterKind.inner => const Color(0xff1d5f75),
+    LetterKind.outgoing => const Color(0xff1f6e45),
+    LetterKind.incoming => const Color(0xffb4771e),
     null => fallback,
   };
 
@@ -225,19 +225,19 @@ class LetterTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xff111c33) : Colors.white,
+        color: isDark ? const Color(0xff121f1c) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: unread
               ? accent.withValues(alpha: 0.34)
               : isDark
-              ? const Color(0xff23324d)
-              : const Color(0xffe2e8f0),
+              ? const Color(0xff24302c)
+              : const Color(0xffe3e4d8),
           width: unread ? 1.25 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: (unread ? accent : const Color(0xff0f172a)).withValues(
+            color: (unread ? accent : const Color(0xff1b2420)).withValues(
               alpha: isDark ? 0.18 : (unread ? 0.08 : 0.035),
             ),
             blurRadius: unread ? 16 : 10,
@@ -305,7 +305,7 @@ class LetterTile extends StatelessWidget {
                                           shape: BoxShape.circle,
                                           border: Border.all(
                                             color: isDark
-                                                ? const Color(0xff111c33)
+                                                ? const Color(0xff121f1c)
                                                 : Colors.white,
                                             width: 1.6,
                                           ),
@@ -348,8 +348,8 @@ class LetterTile extends StatelessWidget {
                                             ),
                                             decoration: BoxDecoration(
                                               color: isDark
-                                                  ? const Color(0xff1e293b)
-                                                  : const Color(0xfff1f5f9),
+                                                  ? const Color(0xff202b28)
+                                                  : const Color(0xfff0efe9),
                                               borderRadius:
                                                   BorderRadius.circular(6),
                                             ),
@@ -359,8 +359,8 @@ class LetterTile extends StatelessWidget {
                                                 fontSize: 10.5,
                                                 fontWeight: FontWeight.w800,
                                                 color: isDark
-                                                    ? const Color(0xffcbd5e1)
-                                                    : const Color(0xff475569),
+                                                    ? const Color(0xffd2d4c8)
+                                                    : const Color(0xff4f564e),
                                               ),
                                             ),
                                           ),
@@ -373,8 +373,8 @@ class LetterTile extends StatelessWidget {
                                               fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
                                               color: isDark
-                                                  ? const Color(0xff94a3b8)
-                                                  : const Color(0xff64748b),
+                                                  ? const Color(0xff9aa093)
+                                                  : const Color(0xff6a6f66),
                                             ),
                                           ),
                                       ],
@@ -395,8 +395,8 @@ class LetterTile extends StatelessWidget {
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w700,
                                       color: isDark
-                                          ? const Color(0xff94a3b8)
-                                          : const Color(0xff64748b),
+                                          ? const Color(0xff9aa093)
+                                          : const Color(0xff6a6f66),
                                     ),
                                   ),
                                   if (onNeshan != null)
@@ -411,8 +411,8 @@ class LetterTile extends StatelessWidget {
                                             : Icons.star_border_rounded,
                                         size: 20,
                                         color: item.isNeshan
-                                            ? const Color(0xfff59e0b)
-                                            : const Color(0xff94a3b8),
+                                            ? const Color(0xffd3a24a)
+                                            : const Color(0xff9aa093),
                                       ),
                                     )
                                   else if (item.isNeshan)
@@ -421,7 +421,7 @@ class LetterTile extends StatelessWidget {
                                       child: Icon(
                                         Icons.star_rounded,
                                         size: 18,
-                                        color: Color(0xfff59e0b),
+                                        color: Color(0xffd3a24a),
                                       ),
                                     ),
                                 ],
@@ -454,8 +454,8 @@ class LetterTile extends StatelessWidget {
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
                                   color: isDark
-                                      ? const Color(0xffe2e8f0)
-                                      : const Color(0xff334155),
+                                      ? const Color(0xffe3e4d8)
+                                      : const Color(0xff3a423c),
                                 ),
                               ),
                             ),
@@ -576,7 +576,7 @@ class StatPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: const Color(0xffe4eaf3)),
+          border: Border.all(color: const Color(0xffe2e1d5)),
         ),
         child: Row(
           children: [
