@@ -18,44 +18,44 @@ import '../models/letter_models.dart';
 // ------------------------------------------------------------
 
 class OfficeColors {
-  // هویت واحد — «سازمانی روشن»: نفتی سازمانی روی کاغذ سبز-خاکستری بسیار روشن
-  static const seed = Color(0xff155e6b);    // نفتی سازمانی (اصلی)
-  static const deep = Color(0xff0f414b);    // نفتی تیرهٔ متنی
-  static const deepInk = Color(0xff0b2e35); // عمق سایه‌ای
-  static const accent = Color(0xff2e7d8a);  // نفتی روشن (هایلایت)
-  static const accentSoft = Color(0xffe7efed); // تینت نفتی بسیار ملایم
-  static const gold = Color(0xffc9a24b);    // طلای سوزنی
-  static const goldDeep = Color(0xff8a6a24); // برنجی آنتیک
-  static const goldSoft = Color(0xfff3e8cf); // تینت طلایی ملایم
+  // هویت واحد — «آبی سازمانی»، مشتق از تم سراسری اپ (seed رنگ برند)
+  static const seed = Color(0xff2547a8);    // آبی برند فروغ آریا
+  static const deep = Color(0xff173a63);    // آبی تیرهٔ متنی
+  static const deepInk = Color(0xff101f3d); // عمق سایه‌ای
+  static const accent = Color(0xff3f66c4);  // آبی روشن (هایلایت)
+  static const accentSoft = Color(0xffe9effa); // تینت آبی بسیار ملایم
+  static const gold = Color(0xffc9a24b);    // کهربایی (فقط هشدار/امضا)
+  static const goldDeep = Color(0xff8a6a24); // برنجی (آنی)
+  static const goldSoft = Color(0xfff3e8cf); // تینت کهربایی ملایم
 
-  // رنگ اختصاصی هر نوع نامه — طیف رسمی و خوانا روی روشن
-  static const inner = Color(0xff155e6b);   // داخلی — نفتی
+  // رنگ اختصاصی هر نوع نامه — رسمی و خوانا روی روشن
+  static const inner = Color(0xff2547a8);   // داخلی — آبی برند
   static const outgoing = Color(0xff20633a); // صادره — سبز عمیق
-  static const incoming = Color(0xff1f6f86); // وارده — آبی نفتی
-  static const signing = Color(0xffa86f1f);  // امضا — طلای عسلی
-  static const dabirkhane = Color(0xff8a6a24); // دبیرخانه — برنجی
-  static const archive = Color(0xff626a61);  // بایگانی — خاکستری گرم
-  static const email = Color(0xff124f61);    // ایمیل سازمانی — نفتی تیره
-  static const emailPersonal = Color(0xff4f5c46); // ایمیل شخصی — زیتونی مات
-  static const minutes = Color(0xff14594f);  // صورتجلسه — سبز نفتی
+  static const incoming = Color(0xff1f5fa8); // وارده — آبی روشن اصلی
+  static const signing = Color(0xffa86f1f);  // امضا — کهربایی
+  static const dabirkhane = Color(0xff20304f); // دبیرخانه — سرمه‌ای
+  static const archive = Color(0xff5a6a8c);  // بایگانی — آبی‌خاکستری
+  static const email = Color(0xff1c3d7a);    // ایمیل سازمانی — آبی تیره
+  static const emailPersonal = Color(0xff46536b); // ایمیل شخصی — آبی‌خاکستری تیره
+  static const minutes = Color(0xff14655a);  // صورتجلسه — سبزآبی
 
   static const danger = Color(0xffb5332f);   // آجری رسمی
   static const ok = Color(0xff20633a);
 
-  static const bg = Color(0xfff3f6f5);   // سبز-خاکستری بسیار روشن
+  static const bg = Color(0xfff4f7fb);   // همان پس‌زمینهٔ سراسری اپ
   static const surface = Color(0xffffffff);
-  static const line = Color(0xffe2e7e3); // خط سبز-خاکستری ملایم
-  static const ink = Color(0xff17302e);  // جوهر نزدیک به مشکی-سبز
-  static const sub = Color(0xff5f6f6b);  // متن ثانویه
+  static const line = Color(0xffdce3ee); // همان خط سراسری اپ
+  static const ink = Color(0xff1e2a45);  // جوهر آبی‌-سرمه‌ای
+  static const sub = Color(0xff5a6a8c);  // متن ثانویه
 
-  /// گرادیان هدر سازمانی روشن — سفید تا تینت نفتی بسیار ملایم
+  /// گرادیان هدر سازمانی روشن — سفید تا تینت آبی بسیار ملایم
   static const heroLight = LinearGradient(
-    colors: [Color(0xffffffff), Color(0xffeef4f2)],
+    colors: [Color(0xffffffff), Color(0xffe9effa)],
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
   );
 
-  /// گرادیان طلای سوزنی — نشان‌ها، امضا و درخشش‌های ثانویه
+  /// گرادیان کهربایی — فقط برای نشان‌های توجه
   static LinearGradient get goldGradient => const LinearGradient(
     colors: [Color(0xffe3c878), gold, goldDeep],
     begin: Alignment.topRight,
@@ -97,10 +97,10 @@ class OfficeColors {
         colors: [Color(0xff3f8a5c), Color(0xff20633a)],
       ),
       LetterKind.incoming => const LinearGradient(
-        colors: [Color(0xff2c7a80), Color(0xff14606e)],
+        colors: [Color(0xff2f6ea6), Color(0xff1d4e89)],
       ),
       _ => const LinearGradient(
-        colors: [Color(0xff2c687a), Color(0xff164e63)],
+        colors: [Color(0xff3f66c4), Color(0xff2547a8)],
       ),
     };
   }
@@ -112,14 +112,14 @@ class OfficeColors {
   static Color forConfidential(String v) => switch (v) {
     'سری' => danger,
     'محرمانه' => signing,
-    _ => const Color(0xff565d54),
+    _ => const Color(0xff44547a),
   };
 
   static Color forOutgoingStatus(int s) => switch (s) {
     3 => ok,
-    2 => const Color(0xff1f6f86),
+    2 => const Color(0xff1f5fa8),
     1 => signing,
-    _ => const Color(0xff565d54),
+    _ => const Color(0xff44547a),
   };
 }
 
@@ -385,8 +385,8 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                     height: 1.45,
                                     fontWeight: unread ? FontWeight.w800 : FontWeight.w600,
                                     color: unread
-                                        ? const Color(0xff16221f)
-                                        : const Color(0xff2a3631),
+                                        ? const Color(0xff1e2a45)
+                                        : const Color(0xff2a3552),
                                   ),
                                 ),
                                 if (widget.showSender && sender.isNotEmpty) ...[
@@ -427,7 +427,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(
-                            color: const Color(0xfff5f4ee),
+                            color: const Color(0xfff4f7fb),
                             borderRadius: BorderRadius.circular(11),
                             border: BorderDirectional(
                               start: BorderSide(color: tint, width: 3),
@@ -447,7 +447,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     height: 1.6,
-                                    color: const Color(0xff4c5a55),
+                                    color: const Color(0xff44547a),
                                   ),
                                 ),
                               ),
@@ -483,7 +483,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                   size: 19,
                                   color: it.isNeshan
                                       ? OfficeColors.gold
-                                      : const Color(0xffc4ccc5),
+                                      : const Color(0xffc9d3e4),
                                 ),
                               ),
                             ),
@@ -534,7 +534,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
       ));
     }
     if (it.hasAttachment) {
-      out.add(const _Tag(label: 'پیوست', icon: Icons.attach_file, color: Color(0xff1f6f86)));
+      out.add(const _Tag(label: 'پیوست', icon: Icons.attach_file, color: Color(0xff1f5fa8)));
     }
     if (it.typeTaeed != 0) {
       out.add(_Tag(
@@ -735,7 +735,7 @@ class _SelectDot extends StatelessWidget {
     decoration: BoxDecoration(
       color: on ? color : Colors.transparent,
       shape: BoxShape.circle,
-      border: Border.all(color: on ? color : const Color(0xffc4ccc5), width: 2),
+      border: Border.all(color: on ? color : const Color(0xffc9d3e4), width: 2),
     ),
     child: on
         ? const Icon(Icons.check, size: 13, color: Colors.white)
@@ -1395,9 +1395,9 @@ class _OfficeShimmerState extends State<OfficeShimmer>
               begin: Alignment(-1 + 2 * t, 0),
               end: Alignment(0 + 2 * t, 0),
               colors: const [
-                Color(0xffedeae0),
-                Color(0xfffaf9f4),
-                Color(0xffedeae0),
+                Color(0xffe9effa),
+                Color(0xfffafbfe),
+                Color(0xffe9effa),
               ],
             ),
           ),
@@ -1484,7 +1484,7 @@ class GardeshTimeline extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11.5,
                             height: 1.65,
-                            color: const Color(0xff4c5a55),
+                            color: const Color(0xff44547a),
                           ),
                         ),
                       ],

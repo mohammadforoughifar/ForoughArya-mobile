@@ -36,7 +36,7 @@ PreferredSizeWidget _luxuryAppBar(
     child: Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xffffffff), Color(0xffeef4f2)],
+          colors: [Color(0xffffffff), Color(0xffe9effa)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -54,8 +54,8 @@ PreferredSizeWidget _luxuryAppBar(
                 onPressed: () => Navigator.of(context).maybePop(),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xff155e6b),
-                  side: const BorderSide(color: Color(0xffe2e7e3)),
+                  foregroundColor: const Color(0xff2547a8),
+                  side: const BorderSide(color: Color(0xffdce3ee)),
                 ),
                 icon: const Icon(Icons.arrow_back_rounded, size: 21),
               ),
@@ -64,7 +64,7 @@ PreferredSizeWidget _luxuryAppBar(
                 height: 40,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                    colors: [Color(0xff2547a8), Color(0xff173a63)],
                     begin: Alignment.topRight,
                     end: Alignment.bottomLeft,
                   ),
@@ -83,7 +83,7 @@ PreferredSizeWidget _luxuryAppBar(
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xff0f414b),
+                        color: Color(0xff173a63),
                         fontSize: 14.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -93,7 +93,7 @@ PreferredSizeWidget _luxuryAppBar(
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xff5f6f6b),
+                        color: Color(0xff5a6a8c),
                         fontSize: 10.5,
                       ),
                     ),
@@ -214,7 +214,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                       children: [
                         const Icon(
                           Icons.groups_rounded,
-                          color: Color(0xff1d5f70),
+                          color: Color(0xff3357b0),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -304,7 +304,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                     const SizedBox(height: 12),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xff1d5f70),
+                        backgroundColor: const Color(0xff3357b0),
                         padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
                       onPressed: saving
@@ -358,7 +358,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xfff6f5ef),
+        backgroundColor: const Color(0xfff7f9fe),
         appBar: _luxuryAppBar(
           context,
           title: 'گروه‌های گیرندگان نامه',
@@ -373,7 +373,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
         ),
         floatingActionButton: access.canManageLetterGroups
             ? FloatingActionButton.extended(
-                backgroundColor: const Color(0xff1d5f70),
+                backgroundColor: const Color(0xff3357b0),
                 foregroundColor: Colors.white,
                 onPressed: () => _openEditor(),
                 icon: const Icon(Icons.group_add_rounded),
@@ -396,7 +396,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12.5,
-                      color: Color(0xff6a6f66),
+                      color: Color(0xff66779c),
                       height: 1.8,
                     ),
                   ),
@@ -418,7 +418,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xffe3e4d8)),
+                        border: Border.all(color: const Color(0xffdce3ee)),
                       ),
                       child: Row(
                         children: [
@@ -427,13 +427,13 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                             height: 42,
                             decoration: BoxDecoration(
                               color: const Color(
-                                0xff1d5f70,
+                                0xff3357b0,
                               ).withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(13),
                             ),
                             child: const Icon(
                               Icons.groups_rounded,
-                              color: Color(0xff1d5f70),
+                              color: Color(0xff3357b0),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -453,7 +453,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                                   '${Fa.digits(count)} عضو در این گروه',
                                   style: const TextStyle(
                                     fontSize: 11.5,
-                                    color: Color(0xff6a6f66),
+                                    color: Color(0xff66779c),
                                   ),
                                 ),
                               ],
@@ -465,7 +465,7 @@ class _LetterGroupsPageState extends State<LetterGroupsPage> {
                               onPressed: () => _openEditor(existing: g),
                               icon: const Icon(
                                 Icons.edit_outlined,
-                                color: Color(0xff1d5f70),
+                                color: Color(0xff3357b0),
                               ),
                             ),
                             IconButton(
@@ -570,7 +570,7 @@ class _LetterStructurePageState extends State<LetterStructurePage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xfff6f5ef),
+        backgroundColor: const Color(0xfff7f9fe),
         appBar: _luxuryAppBar(
           context,
           title: 'ساختار شماره نامه (اندیکاتور)',
@@ -598,7 +598,7 @@ class _LetterStructurePageState extends State<LetterStructurePage> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xffeeece1),
+                      color: const Color(0xffe9effa),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0xffe9d6a0)),
                     ),
@@ -606,7 +606,7 @@ class _LetterStructurePageState extends State<LetterStructurePage> {
                       'هر ساختار باید حداقل شامل جزء «شماره» به همراه یک جزء دیگر («سال» یا «واحد») باشد. تغییر فرمت فقط روی نامه‌های جدید اثر می‌گذارد.',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: Color(0xff134049),
+                        color: Color(0xff20304f),
                         height: 1.7,
                       ),
                     ),
@@ -632,7 +632,7 @@ class _LetterStructurePageState extends State<LetterStructurePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xffe3e4d8)),
+        border: Border.all(color: const Color(0xffdce3ee)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -653,7 +653,7 @@ class _LetterStructurePageState extends State<LetterStructurePage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xfff0efe9),
+                  color: const Color(0xfff0f3fa),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -661,7 +661,7 @@ class _LetterStructurePageState extends State<LetterStructurePage> {
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xff3a423c),
+                    color: Color(0xff2c3a58),
                   ),
                 ),
               ),
@@ -864,7 +864,7 @@ class _AmalgarsManagerPageState extends State<AmalgarsManagerPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xfff6f5ef),
+        backgroundColor: const Color(0xfff7f9fe),
         appBar: _luxuryAppBar(
           context,
           title: 'عناوین و دستورات ارجاع',
@@ -872,7 +872,7 @@ class _AmalgarsManagerPageState extends State<AmalgarsManagerPage> {
           icon: Icons.alt_route_rounded,
         ),
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: const Color(0xff1d5f70),
+          backgroundColor: const Color(0xff3357b0),
           foregroundColor: Colors.white,
           onPressed: _addAmalgar,
           icon: const Icon(Icons.add_rounded),
@@ -922,12 +922,12 @@ class _AmalgarsManagerPageState extends State<AmalgarsManagerPage> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xffe3e4d8)),
+                            border: Border.all(color: const Color(0xffdce3ee)),
                           ),
                           child: ListTile(
                             leading: const Icon(
                               Icons.subdirectory_arrow_left_rounded,
-                              color: Color(0xff1d5f70),
+                              color: Color(0xff3357b0),
                             ),
                             title: Text(
                               a.title,
@@ -1079,7 +1079,7 @@ class _PersonalArchivePageState extends State<PersonalArchivePage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xfff6f5ef),
+        backgroundColor: const Color(0xfff7f9fe),
         appBar: _luxuryAppBar(
           context,
           title: 'بایگانی شخصی من',
@@ -1141,7 +1141,7 @@ class _PersonalArchivePageState extends State<PersonalArchivePage> {
                             const Icon(
                               Icons.folder_copy_outlined,
                               size: 46,
-                              color: Color(0xff9aa093),
+                              color: Color(0xffb9c3d9),
                             ),
                             const SizedBox(height: 10),
                             const Text(
@@ -1162,7 +1162,7 @@ class _PersonalArchivePageState extends State<PersonalArchivePage> {
                   ? const Center(
                       child: Text(
                         'این پوشه خالی است.',
-                        style: TextStyle(color: Color(0xff6a6f66)),
+                        style: TextStyle(color: Color(0xff66779c)),
                       ),
                     )
                   : ListView.builder(
@@ -1175,12 +1175,12 @@ class _PersonalArchivePageState extends State<PersonalArchivePage> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xffe3e4d8)),
+                            border: Border.all(color: const Color(0xffdce3ee)),
                           ),
                           child: ListTile(
                             leading: const Icon(
                               Icons.article_outlined,
-                              color: Color(0xff1d5f70),
+                              color: Color(0xff3357b0),
                             ),
                             title: Text(
                               it.title,
@@ -1237,7 +1237,7 @@ class OfficeGuidePage extends StatelessWidget {
     (
       title: '۱. کارتابل نامه‌های داخلی و چرخهٔ ارجاع',
       icon: Icons.mark_email_unread_rounded,
-      color: Color(0xff1d5f75),
+      color: Color(0xff3357b0),
       points: [
         'نامهٔ داخلی برای مکاتبهٔ رسمی درون‌سازمانی بین افراد، سمت‌ها و گروه‌های گیرندگان استفاده می‌شود.',
         'گیرندهٔ اصلی، رونوشت و ارجاع همراه با دستور ارجاع («جهت اقدام»، «جهت استحضار» و مهلت پاسخ) ثبت می‌شوند.',
@@ -1257,7 +1257,7 @@ class OfficeGuidePage extends StatelessWidget {
     (
       title: '۳. دبیرخانه یکپارچه و رزرو شماره اندیکاتور',
       icon: Icons.markunread_mailbox_rounded,
-      color: Color(0xff1d5f70),
+      color: Color(0xff3357b0),
       points: [
         'در دبیرخانه صادره، روش ارسال (پست پیشتاز، پیک، ایمیل رسمی دبیرخانه، فکس، تحویل حضوری یا ECE) و کد رهگیری/تحویل‌گیرنده ثبت می‌شود.',
         'چاپ رسمی نامه روی سربرگ A4 یا A5 در دو نسخهٔ «با رونوشت» و «بدون رونوشت» انجام می‌گیرد.',
@@ -1267,7 +1267,7 @@ class OfficeGuidePage extends StatelessWidget {
     (
       title: '۴. بایگانی درختی شخصی و بایگانی رسمی دبیرخانه',
       icon: Icons.account_tree_rounded,
-      color: Color(0xff546a4f),
+      color: Color(0xff46536b),
       points: [
         'هر کاربر می‌تواند درخت پوشه‌های بایگانی اختصاصی خود را بسازد و نامه‌ها را به شکل تکی یا گروهی بایگانی کند.',
         'بایگانی رسمی دبیرخانه مستقل از بایگانی شخصی است و مخصوص پرونده‌های رسمی نامه‌های صادره و واردهٔ سازمان است.',
@@ -1276,7 +1276,7 @@ class OfficeGuidePage extends StatelessWidget {
     (
       title: '۵. پست الکترونیک سازمانی و شخصی',
       icon: Icons.alternate_email_rounded,
-      color: Color(0xff124f61),
+      color: Color(0xff1c3d7a),
       points: [
         'ایمیل سازمانی برای حساب‌های رسمی واحدها و دبیرخانه و ایمیل شخصی برای حساب اختصاصی کاربر (با مجوز Email.Personal) تفکیک شده است.',
         'امکان ذخیرهٔ پیش‌نویس، پیوست فایل و ارسال مستقیم PDF نامه‌های صادره از حساب دبیرخانه فراهم است.',
@@ -1289,7 +1289,7 @@ class OfficeGuidePage extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xfff6f5ef),
+        backgroundColor: const Color(0xfff7f9fe),
         appBar: _luxuryAppBar(
           context,
           title: 'راهنمای جامع اتوماسیون اداری توکا',
@@ -1306,7 +1306,7 @@ class OfficeGuidePage extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xffe3e4d8)),
+                  border: Border.all(color: const Color(0xffdce3ee)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1358,7 +1358,7 @@ class OfficeGuidePage extends StatelessWidget {
                                 p,
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: Color(0xff4f564e),
+                                  color: Color(0xff44547a),
                                   height: 1.7,
                                 ),
                               ),

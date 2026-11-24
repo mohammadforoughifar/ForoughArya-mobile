@@ -59,7 +59,7 @@ void main() {
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xffffffff), Color(0xffeef4f2)],
+                        colors: [Color(0xffffffff), Color(0xffe9effa)],
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
                       ),
@@ -83,7 +83,7 @@ void main() {
                           height: 46,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                              colors: [Color(0xff2547a8), Color(0xff173a63)],
                               begin: Alignment.topRight,
                               end: Alignment.bottomLeft,
                             ),
@@ -99,9 +99,9 @@ void main() {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('اتوماسیون اداری توکا', style: TextStyle(color: Color(0xff0f414b), fontSize: 17, fontWeight: FontWeight.w900)),
+                              Text('اتوماسیون اداری توکا', style: TextStyle(color: Color(0xff173a63), fontSize: 17, fontWeight: FontWeight.w900)),
                               SizedBox(height: 4),
-                              Text('سازمانی روشن + طلای سوزنی', style: TextStyle(color: Color(0xff8a6a24), fontSize: 11, fontWeight: FontWeight.w800)),
+                              Text('آبی سازمانی • مشتق از برند', style: TextStyle(color: Color(0xff8a6a24), fontSize: 11, fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),
@@ -118,13 +118,13 @@ void main() {
                     runSpacing: 10,
                     children: [
                       for (final c in [
-                        (OfficeColors.seed, 'نفتی اصلی'),
-                        (OfficeColors.deep, 'نفتی عمیق'),
-                        (OfficeColors.outgoing, 'صادره'),
+                        (OfficeColors.seed, 'آبی برند'),
+                        (OfficeColors.deep, 'سرمه‌ای برند'),
                         (OfficeColors.incoming, 'وارده'),
+                        (OfficeColors.outgoing, 'صادره'),
                         (OfficeColors.signing, 'امضا'),
                         (OfficeColors.dabirkhane, 'دبیرخانه'),
-                        (OfficeColors.gold, 'طلای سوزنی'),
+                        (OfficeColors.goldSoft, 'گلد توجه'),
                         (OfficeColors.danger, 'آجری هشدار'),
                       ])
                         Container(

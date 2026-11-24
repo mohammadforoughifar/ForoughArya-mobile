@@ -12,7 +12,7 @@ Color emailTabColor(EmailTab tab) => switch (tab) {
   EmailTab.inbox => OfficeColors.email,
   EmailTab.sent => OfficeColors.outgoing,
   EmailTab.archive => OfficeColors.archive,
-  EmailTab.draft => const Color(0xff7a5b6e),
+  EmailTab.draft => const Color(0xff46536b),
 };
 
 IconData emailTabIcon(EmailTab tab) => switch (tab) {
@@ -61,7 +61,7 @@ class EmailCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: (unread ? accent : const Color(0xff5f6f6b)).withValues(alpha: unread ? .09 : .05),
+            color: (unread ? accent : const Color(0xff5a6a8c)).withValues(alpha: unread ? .09 : .05),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -131,7 +131,7 @@ class EmailCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: const Color(0xff4c5a55),
+                              color: const Color(0xff44547a),
                               fontWeight: unread ? FontWeight.w600 : FontWeight.w500,
                             ),
                           ),
@@ -149,7 +149,7 @@ class EmailCard extends StatelessWidget {
                           size: 20,
                           color: message.isNeshan
                               ? OfficeColors.gold
-                              : const Color(0xff9aa79f),
+                              : const Color(0xffb9c3d9),
                         ),
                       ),
                     ),
@@ -186,7 +186,7 @@ class EmailCard extends StatelessWidget {
                         dateText,
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: const Color(0xff6f7d77),
+                          color: const Color(0xff66779c),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -297,7 +297,7 @@ class _AccountPill extends StatelessWidget {
               '($subtitle)',
               style: TextStyle(
                 fontSize: 10.5,
-                color: selected ? Colors.white70 : const Color(0xff6f7d77),
+                color: selected ? Colors.white70 : const Color(0xff66779c),
               ),
             ),
           ],

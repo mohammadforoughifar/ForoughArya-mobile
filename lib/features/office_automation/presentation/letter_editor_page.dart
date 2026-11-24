@@ -460,7 +460,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
           padding: EdgeInsets.only(bottom: 8),
           child: Text(
             'فایلی پیوست نشده است. (هر فایل حداکثر ۲۰ مگابایت)',
-            style: TextStyle(fontSize: 11.5, color: Color(0xff6a6f66)),
+            style: TextStyle(fontSize: 11.5, color: Color(0xff66779c)),
           ),
         ),
       for (var i = 0; i < _pendingFiles.length; i++)
@@ -471,7 +471,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
             decoration: BoxDecoration(
               color: OfficeColors.bg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xffe3e4d8)),
+              border: Border.all(color: const Color(0xffdce3ee)),
             ),
             child: Row(
               children: [
@@ -531,7 +531,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       const SizedBox(height: 4),
       const Text(
         'این فایل‌ها بلافاصله بعد از ثبت نامه، روی همان نامه پیوست می‌شوند.',
-        style: TextStyle(fontSize: 10.5, color: Color(0xff9aa093)),
+        style: TextStyle(fontSize: 10.5, color: Color(0xffb9c3d9)),
       ),
     ],
   );
@@ -757,7 +757,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
         label: 'گیرندهٔ اصلی',
         list: _girande,
         onPick: () => _pickRecipients(title: 'گیرندهٔ اصلی', target: _girande),
-        color: const Color(0xff1f6f86),
+        color: const Color(0xff1f5fa8),
       ),
       _recipientBlock(
         label: 'ارجاع (جهت اقدام)',
@@ -838,7 +838,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
         else
           Text(
             'انتخاب نشده',
-            style: TextStyle(fontSize: 11.5, color: const Color(0xff6f7d77)),
+            style: TextStyle(fontSize: 11.5, color: const Color(0xff66779c)),
           ),
       ],
     ),
@@ -851,7 +851,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       if (_related.isEmpty)
         Text(
           'نامه‌ای مرتبط نشده است.',
-          style: TextStyle(fontSize: 12, color: const Color(0xff6f7d77)),
+          style: TextStyle(fontSize: 12, color: const Color(0xff66779c)),
         )
       else
         ..._related.map(
@@ -861,7 +861,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
               children: [
                 OfficeChip(
                   label: r.kindLabel,
-                  color: r.kind == 2 ? const Color(0xff7d5f1f) : const Color(0xff1f6f86),
+                  color: r.kind == 2 ? const Color(0xff7d5f1f) : const Color(0xff1f5fa8),
                   dense: true,
                 ),
                 const SizedBox(width: 7),
@@ -1239,7 +1239,7 @@ class _LetterPickerSheetState extends State<_LetterPickerSheet> {
                               title: Text(it.title, style: const TextStyle(fontSize: 13)),
                               subtitle: Text(
                                 '${it.letterNumber.isNotEmpty ? 'شماره ${Fa.digits(it.letterNumber)} • ' : ''}${Fa.date(it.date?.toIso8601String(), time: false)}',
-                                style: TextStyle(fontSize: 11, color: const Color(0xff5f6f6b)),
+                                style: TextStyle(fontSize: 11, color: const Color(0xff5a6a8c)),
                               ),
                               onTap: () => Navigator.pop(context, it),
                             );

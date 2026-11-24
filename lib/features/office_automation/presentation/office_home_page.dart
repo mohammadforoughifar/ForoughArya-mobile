@@ -261,7 +261,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
         label: 'میز فرماندهی',
         subtitle: 'نمای کلان مکاتبات، دبیرخانه یکپارچه و ابزارهای اتوماسیون',
         icon: Icons.space_dashboard_rounded,
-        accent: const Color(0xff1d5f70),
+        accent: const Color(0xff3357b0),
         builder: () => _buildHubBody(access),
       ),
       if (access.canSeeInnerLetters)
@@ -309,7 +309,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           label: 'دبیرخانه',
           subtitle: 'دبیرخانه یکپارچه صادره و وارده، چاپ سربرگ و رزرو اندیکاتور',
           icon: Icons.markunread_mailbox_rounded,
-          accent: const Color(0xff1a4e5c),
+          accent: const Color(0xff20304f),
           badge: _dabirkhanePending,
           builder: () => OfficeDabirkhanePage(
             embedded: true,
@@ -416,7 +416,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'کارتابل مکاتبات رسمی',
           subtitle: 'گردش مکاتبات درون‌سازمانی، برون‌سازمانی و امضای دیجیتال',
           icon: Icons.inbox_rounded,
-          accent: const Color(0xff1d5f75),
+          accent: const Color(0xff3357b0),
           items: corrItems,
         ),
       );
@@ -431,7 +431,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           subtitle:
               'ثبت روش ارسال، کد رهگیری، چاپ سربرگ A4/A5 و بایگانی دبیرخانه',
           icon: Icons.markunread_mailbox_rounded,
-          color: const Color(0xff1a4e5c),
+          color: const Color(0xff20304f),
           featured: true,
           badge: _dabirkhanePending > 0
               ? '${Fa.digits(_dabirkhanePending)} در انتظار'
@@ -446,7 +446,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'دبیرخانه یکپارچه نامه‌های وارده',
           subtitle: 'ثبت، ارجاع سازمانی، نمودار گردش و بایگانی گروهی وارده',
           icon: Icons.domain_verification_rounded,
-          color: const Color(0xff146a5c),
+          color: const Color(0xff1466a6),
           featured: true,
           onTap: () => _pushPage(
             const OfficeDabirkhanePage(initialMode: DabirkhaneMode.varede),
@@ -472,7 +472,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'ساختار شماره نامه و اندیکاتور',
           subtitle: 'چیدمان فرمت «سال / واحد / شماره» در کل سازمان',
           icon: Icons.format_list_numbered_rtl_rounded,
-          color: const Color(0xff546a4f),
+          color: const Color(0xff46536b),
           onTap: () => _pushPage(const LetterStructurePage()),
         ),
     ];
@@ -483,7 +483,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'دبیرخانه یکپارچه و اندیکاتور',
           subtitle: 'ثبت رسمی مرسولات، چاپ سربرگ و مدیریت شماره‌گذاری',
           icon: Icons.account_balance_rounded,
-          accent: const Color(0xff1a4e5c),
+          accent: const Color(0xff20304f),
           items: secItems,
         ),
       );
@@ -537,7 +537,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'بایگانی شخصی من',
           subtitle: 'پوشه‌بندی اختصاصی نامه‌ها و مستندات فردی',
           icon: Icons.folder_special_rounded,
-          color: const Color(0xff14606f),
+          color: const Color(0xff1d4e89),
           onTap: () => _pushPage(const PersonalArchivePage()),
         ),
       if (access.canSeeInnerLetters || access.canManageLetterGroups)
@@ -546,7 +546,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'گروه‌های گیرندگان نامه',
           subtitle: 'تعریف گروه برای انتخاب یک‌ضرب در گیرنده، ارجاع و هامش',
           icon: Icons.groups_2_rounded,
-          color: const Color(0xff1d5f70),
+          color: const Color(0xff3357b0),
           onTap: () => _pushPage(const LetterGroupsPage()),
         ),
       if (canAnyLetters)
@@ -575,7 +575,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'بایگانی، گروه‌ها و قالب‌های ارجاع',
           subtitle: 'ابزارهای شتاب‌دهندهٔ مکاتبات و سازمان‌دهی پرونده‌ها',
           icon: Icons.tune_rounded,
-          accent: const Color(0xff14606f),
+          accent: const Color(0xff1d4e89),
           items: toolItems,
         ),
       );
@@ -589,7 +589,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           title: 'صورتجلسات سازمانی',
           subtitle: 'ثبت جلسات، امضای حاضرین و ارسال مصوبات در قالب نامه/ایمیل',
           icon: Icons.assignment_rounded,
-          color: const Color(0xff5d6a55),
+          color: const Color(0xff46536b),
           onTap: () => _pushPage(const MinutesListPage()),
         ),
       _HubItemSpec(
@@ -597,7 +597,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
         title: 'راهنمای جامع اتوماسیون اداری',
         subtitle: 'مرجع فرآیندهای مکاتبات، امضا و گردش کار دبیرخانه',
         icon: Icons.menu_book_rounded,
-        color: const Color(0xff4f564e),
+        color: const Color(0xff44547a),
         onTap: () => _pushPage(const OfficeGuidePage()),
       ),
     ];
@@ -607,7 +607,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
         title: 'جلسات و راهنمای اتوماسیون',
         subtitle: 'هماهنگی مصوبات جلسات و مستندات آموزشی سیستم',
         icon: Icons.hub_rounded,
-        accent: const Color(0xff5d6a55),
+        accent: const Color(0xff46536b),
         items: coordItems,
       ),
     );
@@ -660,7 +660,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xffd2d4c8),
+                        color: const Color(0xffd4dbe8),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -674,11 +674,11 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                         prefixIcon: const Icon(Icons.search_rounded),
                         isDense: true,
                         filled: true,
-                        fillColor: const Color(0xfffaf9f5),
+                        fillColor: const Color(0xfffafbfe),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: const BorderSide(
-                            color: Color(0xffe3e4d8),
+                            color: Color(0xffdce3ee),
                           ),
                         ),
                       ),
@@ -758,7 +758,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                   const Icon(
                     Icons.lock_person_outlined,
                     size: 52,
-                    color: Color(0xff9aa093),
+                    color: Color(0xffb9c3d9),
                   ),
                   const SizedBox(height: 12),
                   const Text(
@@ -769,7 +769,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                   const Text(
                     'نقش کاربری شما مجوز مشاهدهٔ کارتابل نامه‌ها، دبیرخانه یا ایمیل را ندارد.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Color(0xff6a6f66)),
+                    style: TextStyle(fontSize: 12, color: Color(0xff66779c)),
                   ),
                 ],
               ),
@@ -788,8 +788,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: isDark
-            ? const Color(0xff0a130f)
-            : const Color(0xfff4f3ed),
+            ? const Color(0xff0d1526)
+            : const Color(0xfff4f7fb),
         body: Column(
           children: [
             _buildExecutiveHeader(
@@ -825,7 +825,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xffffffff), Color(0xfff0f6f4)],
+          colors: [Color(0xffffffff), Color(0xffe9effa)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -896,7 +896,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: Color(0xff0f414b),
+                                  color: Color(0xff173a63),
                                   fontSize: 15.5,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -934,7 +934,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xff5f6f6b),
+                            color: Color(0xff5a6a8c),
                             fontSize: 10.8,
                           ),
                         ),
@@ -998,7 +998,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                 decoration: BoxDecoration(
                                   gradient: selected
                                       ? const LinearGradient(
-                                          colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                                          colors: [Color(0xff2547a8), Color(0xff173a63)],
                                           begin: Alignment.topRight,
                                           end: Alignment.bottomLeft,
                                         )
@@ -1007,8 +1007,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: selected
-                                        ? const Color(0xff0f414b)
-                                        : const Color(0xffe2e7e3),
+                                        ? const Color(0xff173a63)
+                                        : const Color(0xffdce3ee),
                                   ),
                                   boxShadow: selected
                                       ? const [
@@ -1028,7 +1028,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                       size: 16,
                                       color: selected
                                           ? Colors.white
-                                          : const Color(0xff155e6b),
+                                          : const Color(0xff2547a8),
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -1038,7 +1038,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                         fontWeight: FontWeight.w900,
                                         color: selected
                                             ? Colors.white
-                                            : const Color(0xff17302e),
+                                            : const Color(0xff1e2a45),
                                       ),
                                     ),
                                     if (t.badge > 0) ...[
@@ -1154,7 +1154,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           count: totalUnread,
           unit: 'نامه منتظر بررسی',
           icon: Icons.mark_email_unread_rounded,
-          color: const Color(0xff1d5f75),
+          color: const Color(0xff3357b0),
           onTap: () {
             if (access.canSeeInnerLetters) {
               _switchTab('inner', tabs);
@@ -1185,7 +1185,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           count: _dabirkhanePending,
           unit: 'مرسوله منتظر ثبت',
           icon: Icons.markunread_mailbox_rounded,
-          color: const Color(0xff1d5f70),
+          color: const Color(0xff3357b0),
           onTap: () => _switchTab('dabirkhane', tabs),
         ),
       if (access.canSeeEmail)
@@ -1194,7 +1194,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
           count: _emailUnread,
           unit: 'پیام در صندوق رسمی',
           icon: Icons.alternate_email_rounded,
-          color: const Color(0xff146a5c),
+          color: const Color(0xff1466a6),
           onTap: () => _switchTab('email', tabs),
         ),
     ];
@@ -1268,7 +1268,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
         (
           label: 'میز دبیرخانه',
           icon: Icons.markunread_mailbox_rounded,
-          color: const Color(0xff1a4e5c),
+          color: const Color(0xff20304f),
           onTap: () => _pushPage(
             OfficeDabirkhanePage(
               initialMode: access.canSeeOutgoingDabirkhane
@@ -1291,10 +1291,10 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xff121f1c) : Colors.white,
+        color: isDark ? const Color(0xff141d33) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark ? const Color(0xff24302c) : const Color(0xffe3e4d8),
+          color: isDark ? const Color(0xff26314e) : const Color(0xffdce3ee),
         ),
       ),
       child: Column(
@@ -1302,7 +1302,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
         children: [
           const Row(
             children: [
-              Icon(Icons.bolt_rounded, size: 17, color: Color(0xff1d5f70)),
+              Icon(Icons.bolt_rounded, size: 17, color: Color(0xff3357b0)),
               SizedBox(width: 5),
               Expanded(
                 child: Text(
@@ -1396,7 +1396,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 10.8,
-                      color: Color(0xff6a6f66),
+                      color: Color(0xff66779c),
                     ),
                   ),
                 ],
@@ -1430,13 +1430,13 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
     final open = _expandedGroups.contains(group.id);
 
     return Material(
-      color: isDark ? const Color(0xff121f1c) : Colors.white,
+      color: isDark ? const Color(0xff141d33) : Colors.white,
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isDark ? const Color(0xff24302c) : const Color(0xffe3e4d8),
+            color: isDark ? const Color(0xff26314e) : const Color(0xffdce3ee),
           ),
         ),
         child: Column(
@@ -1479,7 +1479,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 10.8,
-                            color: Color(0xff6a6f66),
+                            color: Color(0xff66779c),
                           ),
                         ),
                       ],
@@ -1564,10 +1564,10 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xff121f1c) : Colors.white,
+        color: isDark ? const Color(0xff141d33) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark ? const Color(0xff24302c) : const Color(0xffe3e4d8),
+          color: isDark ? const Color(0xff26314e) : const Color(0xffdce3ee),
         ),
       ),
       child: Column(
@@ -1578,7 +1578,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
               Icon(
                 Icons.notifications_active_outlined,
                 size: 18,
-                color: Color(0xff1d5f70),
+                color: Color(0xff3357b0),
               ),
               SizedBox(width: 6),
               Expanded(
@@ -1636,7 +1636,7 @@ class _HeaderIconBtn extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: const Color(0xffe2e7e3)),
+            border: Border.all(color: const Color(0xffdce3ee)),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x140f414b),
@@ -1645,7 +1645,7 @@ class _HeaderIconBtn extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(icon, color: const Color(0xff155e6b), size: 18),
+          child: Icon(icon, color: const Color(0xff2547a8), size: 18),
         ),
       ),
     );
@@ -1674,7 +1674,7 @@ class _PulseKpiCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: isDark ? const Color(0xff121f1c) : Colors.white,
+      color: isDark ? const Color(0xff141d33) : Colors.white,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -1687,8 +1687,8 @@ class _PulseKpiCard extends StatelessWidget {
               color: count > 0
                   ? color.withValues(alpha: 0.35)
                   : (isDark
-                        ? const Color(0xff24302c)
-                        : const Color(0xffe3e4d8)),
+                        ? const Color(0xff26314e)
+                        : const Color(0xffdce3ee)),
             ),
             boxShadow: [
               BoxShadow(
@@ -1722,7 +1722,7 @@ class _PulseKpiCard extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                         color: count > 0
                             ? color
-                            : (isDark ? Colors.white : const Color(0xff1b2420)),
+                            : (isDark ? Colors.white : const Color(0xff1e2a45)),
                         height: 1.1,
                       ),
                     ),
@@ -1742,7 +1742,7 @@ class _PulseKpiCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 9.8,
-                        color: Color(0xff6a6f66),
+                        color: Color(0xff66779c),
                       ),
                     ),
                   ],
@@ -1766,7 +1766,7 @@ class _BentoModuleTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: isDark ? const Color(0xff121f1c) : Colors.white,
+      color: isDark ? const Color(0xff141d33) : Colors.white,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -1779,7 +1779,7 @@ class _BentoModuleTile extends StatelessWidget {
                 ? LinearGradient(
                     colors: [
                       item.color.withValues(alpha: isDark ? 0.22 : 0.08),
-                      isDark ? const Color(0xff121f1c) : Colors.white,
+                      isDark ? const Color(0xff141d33) : Colors.white,
                     ],
                     begin: Alignment.topRight,
                     end: Alignment.bottomLeft,
@@ -1789,13 +1789,13 @@ class _BentoModuleTile extends StatelessWidget {
               color: item.featured
                   ? item.color.withValues(alpha: 0.30)
                   : (isDark
-                        ? const Color(0xff24302c)
-                        : const Color(0xffe3e4d8)),
+                        ? const Color(0xff26314e)
+                        : const Color(0xffdce3ee)),
             ),
             boxShadow: [
               BoxShadow(
                 color: const Color(
-                  0xff1b2420,
+                  0xff1e2a45,
                 ).withValues(alpha: isDark ? 0.16 : 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
@@ -1868,8 +1868,8 @@ class _BentoModuleTile extends StatelessWidget {
                   fontSize: 10.6,
                   height: 1.45,
                   color: isDark
-                      ? const Color(0xff9aa093)
-                      : const Color(0xff6a6f66),
+                      ? const Color(0xffb9c3d9)
+                      : const Color(0xff66779c),
                 ),
               ),
             ],

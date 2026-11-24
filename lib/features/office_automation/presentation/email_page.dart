@@ -476,7 +476,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
               style: TextStyle(
                 fontSize: 13,
                 height: 1.8,
-                color: const Color(0xff3a4a46),
+                color: const Color(0xff33415e),
               ),
             ),
           ),
@@ -494,7 +494,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
     Color tabAccent(int i) => switch (i) {
       1 => OfficeColors.outgoing,
       2 => OfficeColors.archive,
-      3 => const Color(0xff7a5b6e),
+      3 => const Color(0xff46536b),
       _ => accent,
     };
 
@@ -557,7 +557,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                   const SizedBox(width: 6),
                   _SquareBtn(
                     icon: Icons.settings_outlined,
-                    color: const Color(0xff3a4a46),
+                    color: const Color(0xff33415e),
                     onTap: _openSettings,
                   ),
                 ],
@@ -604,7 +604,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                             height: 40,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                                colors: [Color(0xff2547a8), Color(0xff173a63)],
                                 begin: Alignment.topRight,
                                 end: Alignment.bottomLeft,
                               ),
@@ -613,7 +613,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                             child: const Icon(
                               Icons.alternate_email,
                               size: 20,
-                              color: const Color(0xff17302e),
+                              color: const Color(0xff1e2a45),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -625,7 +625,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                                 const Text(
                                   'پست الکترونیک',
                                   style: TextStyle(
-                                    color: Color(0xff0f414b),
+                                    color: Color(0xff173a63),
                                     fontSize: 16,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -633,7 +633,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                                 Text(
                                   name.isEmpty ? 'فروغ آریا' : name,
                                   style: const TextStyle(
-                                    color: Color(0xff5f6f6b),
+                                    color: Color(0xff5a6a8c),
                                     fontSize: 10.5,
                                   ),
                                 ),
@@ -744,7 +744,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 child: Container(
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xff17302e),
+                    color: const Color(0xff1e2a45),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: OfficeColors.line),
                   ),
@@ -761,7 +761,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                       hintText: 'جست‌وجوی موضوع یا فرستنده...',
                       hintStyle: TextStyle(
                         fontSize: 12,
-                        color: const Color(0xff6f7d77),
+                        color: const Color(0xff66779c),
                       ),
                       prefixIcon: Icon(Icons.search, size: 18, color: accent),
                       border: InputBorder.none,
@@ -773,7 +773,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
               const SizedBox(width: 7),
               _SquareBtn(
                 icon: Icons.date_range_outlined,
-                color: _dateRange != null ? accent : const Color(0xff4c5a55),
+                color: _dateRange != null ? accent : const Color(0xff44547a),
                 onTap: () => _pickDateRange(key),
               ),
               if (_dateRange != null) ...[
@@ -1007,13 +1007,13 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xff7a5b6e).withValues(alpha: .12),
+                  color: const Color(0xff46536b).withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.drafts_outlined,
                   size: 18,
-                  color: Color(0xff7a5b6e),
+                  color: Color(0xff46536b),
                 ),
               ),
               title: Text(
@@ -1026,7 +1026,7 @@ class _EmailPageState extends State<EmailPage> with SingleTickerProviderStateMix
                 d.to.trim().isEmpty ? 'گیرنده مشخص نشده' : 'گیرنده: ${d.to}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11.5, color: const Color(0xff4c5a55)),
+                style: TextStyle(fontSize: 11.5, color: const Color(0xff44547a)),
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline, color: OfficeColors.danger),
@@ -1063,9 +1063,9 @@ class _ScopeSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xfff3f6f5),
+        color: const Color(0xfff4f7fb),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xffe2e7e3)),
+        border: Border.all(color: const Color(0xffdce3ee)),
       ),
       child: Row(
         children: [
@@ -1126,7 +1126,7 @@ class _ScopePill extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 16, color: selected ? color : const Color(0xff5f6f6b)),
+          Icon(icon, size: 16, color: selected ? color : const Color(0xff5a6a8c)),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -1136,7 +1136,7 @@ class _ScopePill extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: selected ? color : const Color(0xff17302e),
+                color: selected ? color : const Color(0xff1e2a45),
               ),
             ),
           ),
@@ -1145,7 +1145,7 @@ class _ScopePill extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: selected ? color.withValues(alpha: .14) : const Color(0xffe2e7e3),
+                color: selected ? color.withValues(alpha: .14) : const Color(0xffdce3ee),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -1153,7 +1153,7 @@ class _ScopePill extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  color: selected ? color : const Color(0xff17302e),
+                  color: selected ? color : const Color(0xff1e2a45),
                 ),
               ),
             ),
@@ -1183,9 +1183,9 @@ class _HeaderBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: const Color(0xffe2e7e3)),
+          border: Border.all(color: const Color(0xffdce3ee)),
         ),
-        child: Icon(icon, size: 17, color: const Color(0xff155e6b)),
+        child: Icon(icon, size: 17, color: const Color(0xff2547a8)),
       ),
     ),
   );
@@ -1243,7 +1243,7 @@ class _FilterChip extends StatelessWidget {
         style: TextStyle(
           fontSize: 11.5,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-          color: selected ? color : const Color(0xff4c5a55),
+          color: selected ? color : const Color(0xff44547a),
         ),
       ),
     ),

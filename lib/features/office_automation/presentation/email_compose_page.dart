@@ -377,7 +377,7 @@ class _EmailComposePageState extends State<EmailComposePage> {
                                     size: 19,
                                     color: _accountId == a.id
                                         ? accent
-                                        : const Color(0xff6f7d77),
+                                        : const Color(0xff66779c),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -472,7 +472,7 @@ class _EmailComposePageState extends State<EmailComposePage> {
                   if (_files.isEmpty)
                     Text(
                       'فایلی پیوست نشده است.',
-                      style: TextStyle(fontSize: 12, color: const Color(0xff6f7d77)),
+                      style: TextStyle(fontSize: 12, color: const Color(0xff66779c)),
                     )
                   else
                     Column(

@@ -282,10 +282,10 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.info_outline, color: const Color(0xff5f6f6b)),
+                  leading: const Icon(Icons.info_outline, color: const Color(0xff5a6a8c)),
                   subtitle: Text(
                     file.path,
-                    style: TextStyle(fontSize: 10.5, color: const Color(0xff5f6f6b)),
+                    style: TextStyle(fontSize: 10.5, color: const Color(0xff5a6a8c)),
                   ),
                   title: Text(
                     '${a.fileName} • ${Fa.bytes(a.size)}',
@@ -439,7 +439,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                       _heroHeader(accent),
                       // ---------- تب کشویی ----------
                       Container(
-                        color: const Color(0xffeef4f2),
+                        color: const Color(0xffe9effa),
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 2),
                           child: OfficeSlidingTabs(
@@ -503,7 +503,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xffffffff), Color(0xffeef4f2)],
+          colors: [Color(0xffffffff), Color(0xffe9effa)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -547,14 +547,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                       children: [
                         IconButton(
                           onPressed: () => Navigator.pop(context, _changed),
-                          icon: const Icon(Icons.arrow_back, color: Color(0xff155e6b)),
+                          icon: const Icon(Icons.arrow_back, color: Color(0xff2547a8)),
                           tooltip: 'بازگشت',
                         ),
                         Expanded(
                           child: Text(
                             widget.kind.label,
                             style: const TextStyle(
-                              color: Color(0xff0f414b),
+                              color: Color(0xff173a63),
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                             ),
@@ -562,11 +562,11 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                         ),
                         IconButton(
                           onPressed: _load,
-                          icon: const Icon(Icons.refresh, color: Color(0xff155e6b)),
+                          icon: const Icon(Icons.refresh, color: Color(0xff2547a8)),
                           tooltip: 'به‌روزرسانی',
                         ),
                         PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Color(0xff155e6b)),
+                          icon: const Icon(Icons.more_vert, color: Color(0xff2547a8)),
                           onSelected: (v) {
                             if (v == 'delete') _deleteLetter();
                           },
@@ -615,7 +615,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                         Text(
                           _title,
                           style: const TextStyle(
-                            color: Color(0xff17302e),
+                            color: Color(0xff1e2a45),
                             fontSize: 18,
                             height: 1.5,
                             fontWeight: FontWeight.w800,
@@ -626,7 +626,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                           children: [
                             if (_sender.isNotEmpty) ...[
                               Icon(Icons.person_outline,
-                                  size: 13, color: const Color(0xff5f6f6b)),
+                                  size: 13, color: const Color(0xff5a6a8c)),
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
@@ -634,7 +634,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    color: Color(0xff3a4a46),
+                                    color: Color(0xff33415e),
                                     fontSize: 11.5,
                                   ),
                                 ),
@@ -642,12 +642,12 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                               const SizedBox(width: 12),
                             ],
                             Icon(Icons.schedule,
-                                size: 13, color: const Color(0xff5f6f6b)),
+                                size: 13, color: const Color(0xff5a6a8c)),
                             const SizedBox(width: 4),
                             Text(
                               Fa.date(_date?.toIso8601String()),
                               style: const TextStyle(
-                                color: Color(0xff3a4a46),
+                                color: Color(0xff33415e),
                                 fontSize: 11.5,
                               ),
                             ),
@@ -658,13 +658,13 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                           Row(
                             children: [
                               Icon(Icons.timeline,
-                                  size: 14, color: const Color(0xff155e6b)),
+                                  size: 14, color: const Color(0xff2547a8)),
                               const SizedBox(width: 5),
                               Text(
                                 'پیشرفت گردش',
                                 style: const TextStyle(
                                   fontSize: 11,
-                                  color: Color(0xff5f6f6b),
+                                  color: Color(0xff5a6a8c),
                                 ),
                               ),
                               const Spacer(),
@@ -673,7 +673,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                                 style: const TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xff155e6b),
+                                  color: Color(0xff2547a8),
                                 ),
                               ),
                             ],
@@ -688,8 +688,8 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                               builder: (context, v, child) => LinearProgressIndicator(
                                 value: v,
                                 minHeight: 7,
-                                backgroundColor: const Color(0xffe2e7e3),
-                                valueColor: const AlwaysStoppedAnimation(Color(0xff155e6b)),
+                                backgroundColor: const Color(0xffdce3ee),
+                                valueColor: const AlwaysStoppedAnimation(Color(0xff2547a8)),
                               ),
                             ),
                           ),
@@ -724,7 +724,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
             border: Border.all(color: OfficeColors.line),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xff17302e).withValues(alpha: .05),
+                color: const Color(0xff1e2a45).withValues(alpha: .05),
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
@@ -746,7 +746,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 icon: Icons.attach_file,
                 value: Fa.digits(_attachments.length),
                 label: 'پیوست',
-                color: const Color(0xff1f6f86),
+                color: const Color(0xff1f5fa8),
               ),
               _vDivider(),
               MiniStat(
@@ -781,7 +781,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 width: double.infinity,
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
-                  color: const Color(0xfff8f7f1),
+                  color: const Color(0xfff8fafe),
                   borderRadius: BorderRadius.circular(12),
                   border: BorderDirectional(
                     start: BorderSide(color: accent.withValues(alpha: .55), width: 3),
@@ -794,7 +794,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.95,
-                    color: Color(0xff222f2b),
+                    color: Color(0xff26314e),
                   ),
                 ),
               ),
@@ -821,13 +821,13 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 icon: Icons.confirmation_number_outlined,
                 label: 'شمارهٔ نامه',
                 value: Fa.digits(_inner!.letterNumber),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
               OfficeInfoTile(
                 icon: Icons.login,
                 label: 'تاریخ ثبت',
                 value: Fa.date(_inner!.dateSabt?.toIso8601String()),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
               OfficeInfoTile(
                 icon: Icons.lock_outline,
@@ -840,7 +840,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 label: 'فوریت',
                 value: _inner!.foriat,
                 color: _inner!.foriat == 'عادی'
-                    ? const Color(0xff6f7d77)
+                    ? const Color(0xff66779c)
                     : OfficeColors.signing,
               ),
             ],
@@ -856,28 +856,28 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   icon: Icons.person_outline,
                   label: 'شخص گیرنده',
                   value: _outgoing!.receiverName!,
-                  color: const Color(0xff6f7d77),
+                  color: const Color(0xff66779c),
                 ),
               if ((_outgoing!.receiverTitle ?? '').isNotEmpty)
                 OfficeInfoTile(
                   icon: Icons.badge_outlined,
                   label: 'سمت گیرنده',
                   value: _outgoing!.receiverTitle!,
-                  color: const Color(0xff6f7d77),
+                  color: const Color(0xff66779c),
                 ),
               if ((_outgoing!.receiverAddress ?? '').isNotEmpty)
                 OfficeInfoTile(
                   icon: Icons.place_outlined,
                   label: 'نشانی',
                   value: _outgoing!.receiverAddress!,
-                  color: const Color(0xff6f7d77),
+                  color: const Color(0xff66779c),
                 ),
               if ((_outgoing!.externalRefNumber ?? '').isNotEmpty)
                 OfficeInfoTile(
                   icon: Icons.tag,
                   label: 'شمارهٔ نامهٔ طرف مقابل',
                   value: Fa.digits(_outgoing!.externalRefNumber!),
-                  color: const Color(0xff6f7d77),
+                  color: const Color(0xff66779c),
                 ),
               OfficeInfoTile(
                 icon: Icons.verified_outlined,
@@ -889,7 +889,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 icon: Icons.login,
                 label: 'تاریخ ثبت',
                 value: Fa.date(_outgoing!.dateSabt?.toIso8601String()),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
             ],
             if (_incoming != null) ...[
@@ -905,7 +905,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 value: Fa.digits(
                   pickStr(_incoming!, ['numberLetterVarede', 'NumberLetterVarede']),
                 ),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
               OfficeInfoTile(
                 icon: Icons.event,
@@ -914,7 +914,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   pickDate(_incoming!, ['date', 'Date'])?.toIso8601String(),
                   time: false,
                 ),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
               OfficeInfoTile(
                 icon: Icons.login,
@@ -922,19 +922,19 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 value: Fa.date(
                   pickDate(_incoming!, ['dateErsal', 'DateErsal'])?.toIso8601String(),
                 ),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
               OfficeInfoTile(
                 icon: Icons.local_shipping_outlined,
                 label: 'روش ارسال',
                 value: pickStr(_incoming!, ['typeErsal', 'TypeErsal']),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
               OfficeInfoTile(
                 icon: Icons.person_outline,
                 label: 'تحویل‌گیرنده',
                 value: pickStr(_incoming!, ['deliveryName', 'DeliveryName']),
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
             ],
           ],
@@ -1010,7 +1010,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
           child: OfficeCard(
             title: 'نامه‌های مرتبط',
             icon: Icons.link,
-            color: const Color(0xff1f6f86),
+            color: const Color(0xff1f5fa8),
             children: _related
                 .map(
                   (r) => Padding(
@@ -1021,11 +1021,11 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                           width: 30,
                           height: 30,
                           decoration: BoxDecoration(
-                            color: const Color(0xff1f6f86).withValues(alpha: .10),
+                            color: const Color(0xff1f5fa8).withValues(alpha: .10),
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: const Icon(Icons.description_outlined,
-                              size: 15, color: Color(0xff1f6f86)),
+                              size: 15, color: Color(0xff1f5fa8)),
                         ),
                         const SizedBox(width: 9),
                         Expanded(
@@ -1045,7 +1045,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                                 'شماره ${Fa.digits(r.number)}',
                                 style: TextStyle(
                                   fontSize: 10.5,
-                                  color: const Color(0xff5f6f6b),
+                                  color: const Color(0xff5a6a8c),
                                 ),
                               ),
                             ],
@@ -1119,7 +1119,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
     decoration: BoxDecoration(
       color: s.isSigned
           ? OfficeColors.ok.withValues(alpha: .045)
-          : const Color(0xfff8f7f1),
+          : const Color(0xfff8fafe),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(
         color: s.isSigned
@@ -1137,7 +1137,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
             gradient: LinearGradient(
               colors: s.isSigned
                   ? [const Color(0xff3f8a5c), OfficeColors.ok]
-                  : [const Color(0xffd9deda), const Color(0xffe8ebe8)],
+                  : [const Color(0xffe0e6ef), const Color(0xffe0e6ef)],
             ),
             shape: BoxShape.circle,
           ),
@@ -1148,7 +1148,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xff4c5a55),
+                    color: const Color(0xff44547a),
                   ),
                 ),
         ),
@@ -1164,7 +1164,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
               if ((s.sematTitle ?? '').isNotEmpty)
                 Text(
                   s.sematTitle!,
-                  style: TextStyle(fontSize: 10.5, color: const Color(0xff5f6f6b)),
+                  style: TextStyle(fontSize: 10.5, color: const Color(0xff5a6a8c)),
                 ),
               if ((s.signNote ?? '').isNotEmpty)
                 Padding(
@@ -1174,7 +1174,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                     style: TextStyle(
                       fontSize: 10.5,
                       height: 1.6,
-                      color: const Color(0xff4c5a55),
+                      color: const Color(0xff44547a),
                     ),
                   ),
                 ),
@@ -1209,43 +1209,43 @@ class _LetterDetailPageState extends State<LetterDetailPage>
           icon: Icons.local_shipping_outlined,
           label: 'روش ارسال',
           value: d.sendMethod ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
         OfficeInfoTile(
           icon: Icons.tag,
           label: 'شمارهٔ ثبت مقصد',
           value: d.destRegNumber ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
         OfficeInfoTile(
           icon: Icons.person_outline,
           label: 'تحویل‌گیرنده',
           value: d.delivererName ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
         OfficeInfoTile(
           icon: Icons.qr_code_2,
           label: 'کد رهگیری',
           value: d.trackingCode ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
         OfficeInfoTile(
           icon: Icons.print_outlined,
           label: 'فکس مقصد',
           value: d.destFax ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
         OfficeInfoTile(
           icon: Icons.mail_outline,
           label: 'ایمیل مقصد',
           value: d.destEmail ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
         OfficeInfoTile(
           icon: Icons.notes_outlined,
           label: 'توضیحات',
           value: d.dabirkhaneNote ?? '',
-          color: const Color(0xff6f7d77),
+          color: const Color(0xff66779c),
         ),
       ],
     ),
@@ -1261,11 +1261,11 @@ class _LetterDetailPageState extends State<LetterDetailPage>
       OfficeCard(
         title: 'پیوست‌ها (${Fa.digits(_attachments.length)})',
         icon: Icons.attach_file,
-        color: const Color(0xff1f6f86),
+        color: const Color(0xff1f5fa8),
         trailing: FilledButton.icon(
           onPressed: _upload,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xff1f6f86),
+            backgroundColor: const Color(0xff1f5fa8),
             padding: const EdgeInsets.symmetric(horizontal: 12),
             minimumSize: const Size(0, 34),
             textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
@@ -1284,21 +1284,21 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
-                        color: const Color(0xff1f6f86).withValues(alpha: .08),
+                        color: const Color(0xff1f5fa8).withValues(alpha: .08),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.attach_file,
-                          size: 25, color: Color(0xff1f6f86)),
+                          size: 25, color: Color(0xff1f5fa8)),
                     ),
                     const SizedBox(height: 10),
                     Text(
                       'پیوستی ثبت نشده است.',
-                      style: TextStyle(fontSize: 12.5, color: const Color(0xff5f6f6b)),
+                      style: TextStyle(fontSize: 12.5, color: const Color(0xff5a6a8c)),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       'حداکثر ۲۰ مگابایت برای هر فایل',
-                      style: TextStyle(fontSize: 10.5, color: const Color(0xff6f7d77)),
+                      style: TextStyle(fontSize: 10.5, color: const Color(0xff66779c)),
                     ),
                   ],
                 ),
@@ -1313,7 +1313,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
-                    color: const Color(0xfff8f7f1),
+                    color: const Color(0xfff8fafe),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: OfficeColors.line),
                   ),
@@ -1325,14 +1325,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              const Color(0xff1f6f86).withValues(alpha: .18),
-                              const Color(0xff1f6f86).withValues(alpha: .07),
+                              const Color(0xff1f5fa8).withValues(alpha: .18),
+                              const Color(0xff1f5fa8).withValues(alpha: .07),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(11),
                         ),
                         child: const Icon(Icons.insert_drive_file_outlined,
-                            size: 18, color: Color(0xff1f6f86)),
+                            size: 18, color: Color(0xff1f5fa8)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1353,7 +1353,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                               '${Fa.bytes(a.size)} • ${a.uploaderName}',
                               style: TextStyle(
                                 fontSize: 10.5,
-                                color: const Color(0xff5f6f6b),
+                                color: const Color(0xff5a6a8c),
                               ),
                             ),
                           ],
@@ -1363,7 +1363,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                         onPressed: () => _download(a),
                         icon: const Icon(Icons.download_outlined, size: 19),
                         tooltip: 'دانلود',
-                        color: const Color(0xff1f6f86),
+                        color: const Color(0xff1f5fa8),
                       ),
                       IconButton(
                         onPressed: () => _deleteAttachment(a),
@@ -1407,7 +1407,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 const SizedBox(height: 12),
                 Text(
                   'گردشی ثبت نشده است.',
-                  style: TextStyle(fontSize: 13, color: const Color(0xff5f6f6b)),
+                  style: TextStyle(fontSize: 13, color: const Color(0xff5a6a8c)),
                 ),
               ],
             ),
@@ -1421,7 +1421,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
             child: OfficeCard(
               title: '${n.sender} ← ${n.receiver}',
               icon: n.isRead ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
-              color: n.isRead ? OfficeColors.ok : const Color(0xff1f6f86),
+              color: n.isRead ? OfficeColors.ok : const Color(0xff1f5fa8),
               trailing: _Pill(
                 label: n.type,
                 color: OfficeColors.accent,
@@ -1438,7 +1438,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   icon: Icons.schedule,
                   label: 'تاریخ',
                   value: Fa.date(n.date?.toIso8601String()),
-                  color: const Color(0xff6f7d77),
+                  color: const Color(0xff66779c),
                 ),
                 if (n.deadline != null)
                   OfficeInfoTile(
@@ -1460,7 +1460,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   children: [
                     _Pill(
                       label: n.isRead ? 'خوانده شد' : 'خوانده نشده',
-                      color: n.isRead ? OfficeColors.ok : const Color(0xff1f6f86),
+                      color: n.isRead ? OfficeColors.ok : const Color(0xff1f5fa8),
                       icon: n.isRead
                           ? Icons.check_circle_outline
                           : Icons.mark_email_unread_outlined,
@@ -1509,14 +1509,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: (c.isRead ? OfficeColors.ok : const Color(0xff1f6f86))
+                    color: (c.isRead ? OfficeColors.ok : const Color(0xff1f5fa8))
                         .withValues(alpha: .12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     c.isRead ? Icons.check : Icons.subdirectory_arrow_left,
                     size: 12,
-                    color: c.isRead ? OfficeColors.ok : const Color(0xff1f6f86),
+                    color: c.isRead ? OfficeColors.ok : const Color(0xff1f5fa8),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1537,14 +1537,14 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                           style: TextStyle(
                             fontSize: 11,
                             height: 1.6,
-                            color: const Color(0xff4c5a55),
+                            color: const Color(0xff44547a),
                           ),
                         ),
                       Text(
                         Fa.date(c.date?.toIso8601String()),
                         style: TextStyle(
                           fontSize: 10,
-                          color: const Color(0xff6f7d77),
+                          color: const Color(0xff66779c),
                         ),
                       ),
                       if (c.children.isNotEmpty) _childGardesh(c.children, depth + 1),
@@ -1587,7 +1587,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
             style: TextStyle(
               fontSize: 12,
               height: 1.75,
-              color: const Color(0xff24302c),
+              color: const Color(0xff26314e),
             ),
           ),
         ],
@@ -1621,7 +1621,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 const SizedBox(height: 12),
                 Text(
                   'ارجاعی به شما ثبت نشده است.',
-                  style: TextStyle(fontSize: 13, color: const Color(0xff5f6f6b)),
+                  style: TextStyle(fontSize: 13, color: const Color(0xff5a6a8c)),
                 ),
               ],
             ),
@@ -1662,8 +1662,8 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: late
-                          ? [const Color(0xffe05357), OfficeColors.danger]
-                          : [const Color(0xff2c687a), OfficeColors.seed],
+                          ? [const Color(0xffc7574d), OfficeColors.danger]
+                          : [const Color(0xff3f66c4), OfficeColors.seed],
                     ),
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -1693,7 +1693,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                             : 'مهلت: ${Fa.date(e.deadline!.toIso8601String(), time: false)}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: const Color(0xff4c5a55),
+                          color: const Color(0xff44547a),
                         ),
                       ),
                     ],
@@ -1726,13 +1726,13 @@ class _LetterDetailPageState extends State<LetterDetailPage>
                 icon: Icons.alt_route,
                 label: 'عملگر',
                 value: e.amalgarTitle!,
-                color: const Color(0xff6f7d77),
+                color: const Color(0xff66779c),
               ),
             OfficeInfoTile(
               icon: Icons.schedule,
               label: 'تاریخ ارجاع',
               value: Fa.date(e.date?.toIso8601String()),
-              color: const Color(0xff6f7d77),
+              color: const Color(0xff66779c),
             ),
             if (e.deadline != null)
               OfficeInfoTile(
@@ -1797,7 +1797,7 @@ class _LetterDetailPageState extends State<LetterDetailPage>
             border: Border.all(color: OfficeColors.line),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xff17302e).withValues(alpha: .10),
+                color: const Color(0xff1e2a45).withValues(alpha: .10),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -2014,7 +2014,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
             width: 42,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xffd9deda),
+              color: const Color(0xffe0e6ef),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -2069,7 +2069,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                             decoration: BoxDecoration(
                               gradient: _type == a.title
                                   ? const LinearGradient(
-                                      colors: [OfficeColors.seed, Color(0xff2c687a)],
+                                      colors: [OfficeColors.seed, Color(0xff3f66c4)],
                                     )
                                   : null,
                               color: _type == a.title ? null : Colors.white,
@@ -2098,7 +2098,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                                     : FontWeight.w500,
                                 color: _type == a.title
                                     ? Colors.white
-                                    : const Color(0xff3a4a46),
+                                    : const Color(0xff33415e),
                               ),
                             ),
                           ),
@@ -2162,7 +2162,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                     child: Row(
                       children: [
                         Icon(Icons.event_outlined,
-                            size: 18, color: const Color(0xff6f7d77)),
+                            size: 18, color: const Color(0xff66779c)),
                         const SizedBox(width: 8),
                         Text(
                           _deadline == null
@@ -2171,8 +2171,8 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                           style: TextStyle(
                             fontSize: 12.5,
                             color: _deadline == null
-                                ? const Color(0xff6f7d77)
-                                : const Color(0xff16221f),
+                                ? const Color(0xff66779c)
+                                : const Color(0xff1e2a45),
                           ),
                         ),
                         const Spacer(),
@@ -2180,7 +2180,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
                           GestureDetector(
                             onTap: () => setState(() => _deadline = null),
                             child: Icon(Icons.close,
-                                size: 17, color: const Color(0xff6f7d77)),
+                                size: 17, color: const Color(0xff66779c)),
                           ),
                       ],
                     ),
@@ -2286,7 +2286,7 @@ class _ErjaSheetState extends State<_ErjaSheet> {
 
 InputDecoration _inputDeco(String hint) => InputDecoration(
   hintText: hint,
-  hintStyle: TextStyle(fontSize: 12.5, color: const Color(0xff9aa79f)),
+  hintStyle: TextStyle(fontSize: 12.5, color: const Color(0xffb9c3d9)),
   filled: true,
   fillColor: Colors.white,
   contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
@@ -2387,7 +2387,7 @@ class _DabirkhaneSheetState extends State<_DabirkhaneSheet> {
             width: 42,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xffd9deda),
+              color: const Color(0xffe0e6ef),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -2464,7 +2464,7 @@ class _DabirkhaneSheetState extends State<_DabirkhaneSheet> {
                                     : FontWeight.w500,
                                 color: _method == m
                                     ? Colors.white
-                                    : const Color(0xff3a4a46),
+                                    : const Color(0xff33415e),
                               ),
                             ),
                           ),

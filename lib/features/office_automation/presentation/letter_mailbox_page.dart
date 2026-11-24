@@ -725,7 +725,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xffffffff), Color(0xffeef4f2)],
+          colors: [Color(0xffffffff), Color(0xffe9effa)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -744,8 +744,8 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                 onPressed: () => Navigator.of(context).maybePop(),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xff155e6b),
-                  side: const BorderSide(color: Color(0xffe2e7e3)),
+                  foregroundColor: const Color(0xff2547a8),
+                  side: const BorderSide(color: Color(0xffdce3ee)),
                 ),
                 icon: const Icon(Icons.arrow_back_rounded, size: 20),
               ),
@@ -759,7 +759,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xff0f414b),
+                        color: Color(0xff173a63),
                         fontSize: 16.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -769,7 +769,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xff5f6f6b),
+                        color: Color(0xff5a6a8c),
                         fontSize: 11.5,
                       ),
                     ),
@@ -795,7 +795,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xff8a6a24),
-                    side: const BorderSide(color: Color(0xffe2e7e3)),
+                    side: const BorderSide(color: Color(0xffdce3ee)),
                   ),
                   icon: const Icon(Icons.markunread_mailbox_rounded, size: 19),
                 ),
@@ -811,8 +811,8 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                 },
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xff155e6b),
-                  side: const BorderSide(color: Color(0xffe2e7e3)),
+                  foregroundColor: const Color(0xff2547a8),
+                  side: const BorderSide(color: Color(0xffdce3ee)),
                 ),
                 icon: const Icon(Icons.help_outline_rounded, size: 19),
               ),
@@ -920,7 +920,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                         Icon(
                           Icons.confirmation_number_outlined,
                           size: 17,
-                          color: Color(0xff174a5c),
+                          color: Color(0xff3357b0),
                         ),
                         SizedBox(width: 4),
                         Text(
@@ -928,7 +928,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xff174a5c),
+                            color: Color(0xff3357b0),
                           ),
                         ),
                       ],
@@ -1060,7 +1060,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                         size: 14,
                         color: _activeChip == chip
                             ? Colors.white
-                            : const Color(0xff4f564e),
+                            : const Color(0xff44547a),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -1070,7 +1070,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                           fontWeight: FontWeight.w800,
                           color: _activeChip == chip
                               ? Colors.white
-                              : const Color(0xff3a423c),
+                              : const Color(0xff2c3a58),
                         ),
                       ),
                     ],
@@ -1186,7 +1186,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                   padding: EdgeInsets.all(12),
                   child: Text(
                     'هنوز پوشه‌ای ساخته نشده است.',
-                    style: TextStyle(fontSize: 11.5, color: Color(0xff6a6f66)),
+                    style: TextStyle(fontSize: 11.5, color: Color(0xff66779c)),
                   ),
                 ),
               for (final row in _buildFolderRows(_folders))

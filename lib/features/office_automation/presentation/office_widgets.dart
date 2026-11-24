@@ -69,24 +69,24 @@ class OfficeChip extends StatelessWidget {
 
 /// رنگ محرمانگی
 Color mahramanegiColor(String value) => switch (value) {
-  'سری' => const Color(0xffb3261e),
+  'سری' => const Color(0xffb5332f),
   'محرمانه' => const Color(0xffa86f1f),
-  _ => const Color(0xff565d54),
+  _ => const Color(0xff44547a),
 };
 
 /// رنگ فوریت
 Color foriatColor(String value) => switch (value) {
-  'آنی' => const Color(0xffb3261e),
+  'آنی' => const Color(0xffb5332f),
   'فوری' => const Color(0xffa86f1f),
-  _ => const Color(0xff565d54),
+  _ => const Color(0xff44547a),
 };
 
 /// رنگ وضعیت نامه صادره
 Color outgoingStatusColor(int status) => switch (status) {
   3 => const Color(0xff20633a),
-  2 => const Color(0xff1f6f86),
+  2 => const Color(0xff1f5fa8),
   1 => const Color(0xffa86f1f),
-  _ => const Color(0xff565d54),
+  _ => const Color(0xff44547a),
 };
 
 /// بج‌های وضعیت یک سطر نامه
@@ -140,7 +140,7 @@ class LetterBadges extends StatelessWidget {
     if (item.hasAttachment) {
       badges.add(OfficeChip(
         label: 'پیوست',
-        color: const Color(0xff1f6f86),
+        color: const Color(0xff1f5fa8),
         icon: Icons.attach_file,
         dense: compact,
       ));
@@ -148,7 +148,7 @@ class LetterBadges extends StatelessWidget {
     if (item.typeTaeed != 0) {
       badges.add(OfficeChip(
         label: item.typeTaeed == 1 ? 'تأیید شد' : 'رد شد',
-        color: item.typeTaeed == 1 ? const Color(0xff20633a) : const Color(0xffb3261e),
+        color: item.typeTaeed == 1 ? const Color(0xff20633a) : const Color(0xffb5332f),
         icon: item.typeTaeed == 1 ? Icons.check_circle_outline : Icons.cancel_outlined,
         dense: compact,
       ));
@@ -172,7 +172,7 @@ class LetterBadges extends StatelessWidget {
       final overdue = item.deadline!.isBefore(DateTime.now());
       badges.add(OfficeChip(
         label: 'مهلت ${Fa.date(item.deadline!.toIso8601String(), time: false)}',
-        color: overdue ? const Color(0xffb3261e) : const Color(0xffa86f1f),
+        color: overdue ? const Color(0xffb5332f) : const Color(0xffa86f1f),
         icon: Icons.schedule,
         dense: compact,
       ));
@@ -201,7 +201,7 @@ class LetterTile extends StatelessWidget {
   final bool showSender;
 
   static Color _kindAccent(LetterKind? kind, Color fallback) => switch (kind) {
-    LetterKind.inner => const Color(0xff1d5f75),
+    LetterKind.inner => const Color(0xff3357b0),
     LetterKind.outgoing => const Color(0xff1f6e45),
     LetterKind.incoming => const Color(0xffb4771e),
     null => fallback,
@@ -225,19 +225,19 @@ class LetterTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xff121f1c) : Colors.white,
+        color: isDark ? const Color(0xff141d33) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: unread
               ? accent.withValues(alpha: 0.34)
               : isDark
-              ? const Color(0xff24302c)
-              : const Color(0xffe3e4d8),
+              ? const Color(0xff26314e)
+              : const Color(0xffdce3ee),
           width: unread ? 1.25 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: (unread ? accent : const Color(0xff1b2420)).withValues(
+            color: (unread ? accent : const Color(0xff1e2a45)).withValues(
               alpha: isDark ? 0.18 : (unread ? 0.08 : 0.035),
             ),
             blurRadius: unread ? 16 : 10,
@@ -301,11 +301,11 @@ class LetterTile extends StatelessWidget {
                                         width: 10,
                                         height: 10,
                                         decoration: BoxDecoration(
-                                          color: const Color(0xffef4444),
+                                          color: const Color(0xffb5332f),
                                           shape: BoxShape.circle,
                                           border: Border.all(
                                             color: isDark
-                                                ? const Color(0xff121f1c)
+                                                ? const Color(0xff141d33)
                                                 : Colors.white,
                                             width: 1.6,
                                           ),
@@ -348,8 +348,8 @@ class LetterTile extends StatelessWidget {
                                             ),
                                             decoration: BoxDecoration(
                                               color: isDark
-                                                  ? const Color(0xff202b28)
-                                                  : const Color(0xfff0efe9),
+                                                  ? const Color(0xff26314e)
+                                                  : const Color(0xfff0f3fa),
                                               borderRadius:
                                                   BorderRadius.circular(6),
                                             ),
@@ -359,8 +359,8 @@ class LetterTile extends StatelessWidget {
                                                 fontSize: 10.5,
                                                 fontWeight: FontWeight.w800,
                                                 color: isDark
-                                                    ? const Color(0xffd2d4c8)
-                                                    : const Color(0xff4f564e),
+                                                    ? const Color(0xffd4dbe8)
+                                                    : const Color(0xff44547a),
                                               ),
                                             ),
                                           ),
@@ -373,8 +373,8 @@ class LetterTile extends StatelessWidget {
                                               fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
                                               color: isDark
-                                                  ? const Color(0xff9aa093)
-                                                  : const Color(0xff6a6f66),
+                                                  ? const Color(0xffb9c3d9)
+                                                  : const Color(0xff66779c),
                                             ),
                                           ),
                                       ],
@@ -395,8 +395,8 @@ class LetterTile extends StatelessWidget {
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w700,
                                       color: isDark
-                                          ? const Color(0xff9aa093)
-                                          : const Color(0xff6a6f66),
+                                          ? const Color(0xffb9c3d9)
+                                          : const Color(0xff66779c),
                                     ),
                                   ),
                                   if (onNeshan != null)
@@ -412,7 +412,7 @@ class LetterTile extends StatelessWidget {
                                         size: 20,
                                         color: item.isNeshan
                                             ? const Color(0xffd3a24a)
-                                            : const Color(0xff9aa093),
+                                            : const Color(0xffb9c3d9),
                                       ),
                                     )
                                   else if (item.isNeshan)
@@ -454,8 +454,8 @@ class LetterTile extends StatelessWidget {
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
                                   color: isDark
-                                      ? const Color(0xffe3e4d8)
-                                      : const Color(0xff3a423c),
+                                      ? const Color(0xffdce3ee)
+                                      : const Color(0xff2c3a58),
                                 ),
                               ),
                             ),
@@ -498,14 +498,14 @@ class InfoRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 15, color: const Color(0xff6f7d77)),
+          Icon(icon, size: 15, color: const Color(0xff66779c)),
           const SizedBox(width: 6),
         ],
         SizedBox(
           width: 96,
           child: Text(
             label,
-            style: TextStyle(fontSize: 12, color: const Color(0xff5f6f6b)),
+            style: TextStyle(fontSize: 12, color: const Color(0xff5a6a8c)),
           ),
         ),
         Expanded(
@@ -576,7 +576,7 @@ class StatPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: const Color(0xffe2e1d5)),
+          border: Border.all(color: const Color(0xffdce3ee)),
         ),
         child: Row(
           children: [
@@ -603,7 +603,7 @@ class StatPill extends StatelessWidget {
                 ),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 10.5, color: const Color(0xff5f6f6b)),
+                  style: TextStyle(fontSize: 10.5, color: const Color(0xff5a6a8c)),
                 ),
               ],
             ),
@@ -699,7 +699,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
             width: 42,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xffd9deda),
+              color: const Color(0xffe0e6ef),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -715,7 +715,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                 ),
                 Text(
                   '${Fa.digits(_selected.length)} انتخاب',
-                  style: TextStyle(fontSize: 11.5, color: const Color(0xff5f6f6b)),
+                  style: TextStyle(fontSize: 11.5, color: const Color(0xff5a6a8c)),
                 ),
               ],
             ),
@@ -747,7 +747,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xff4c5a55),
+                            color: const Color(0xff44547a),
                           )),
                     ),
                     Wrap(
@@ -773,7 +773,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xff4c5a55),
+                          color: const Color(0xff44547a),
                         )),
                   ),
                   if (filtered.isEmpty)
@@ -794,7 +794,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                               u.positions.join('، '),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: const Color(0xff5f6f6b),
+                                color: const Color(0xff5a6a8c),
                               ),
                             ),
                       onChanged: (v) => setState(() {
