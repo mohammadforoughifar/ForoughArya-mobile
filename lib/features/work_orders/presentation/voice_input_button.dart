@@ -120,21 +120,24 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
         return;
       }
 
-      // انتخاب زبان: روی وب locales() خالی است و باید مستقیماً fa-IR ست شود
+      // انتخاب زبان:
+      // - وب: locales() خالی است و باید مستقیماً fa-IR ست شود
+      // - موبایل: بعضی گوشی‌ها/سرویس‌ها لیست زبان‌ها را خالی برمی‌گردانند یا
+      //   فارسی را فهرست نمی‌کنند (اما خود سرویس آن را می‌شناسد)؛ بنابراین
+      //   به‌جای خطای مرگبار، به fa-IR برمی‌گردیم و فقط اگر واقعاً پیدا شود از آن استفاده می‌کنیم.
       String? localeId;
       if (kIsWeb) {
         localeId = 'fa-IR';
       } else {
-        final locales = await _VoiceSession.speech.locales();
-        final fa = locales
-            .where((l) => l.localeId.toLowerCase().replaceAll('-', '_').startsWith('fa'))
-            .toList();
-        if (fa.isEmpty) {
-          _VoiceSession.owner = null;
-          _message('زبان فارسی در سرویس تشخیص گفتار این دستگاه در دسترس نیست.');
-          return;
+        try {
+          final locales = await _VoiceSession.speech.locales();
+          final fa = locales
+              .where((l) => l.localeId.toLowerCase().replaceAll('-', '_').startsWith('fa'))
+              .toList();
+          localeId = fa.isNotEmpty ? fa.first.localeId : 'fa-IR';
+        } catch (_) {
+          localeId = 'fa-IR';
         }
-        localeId = fa.first.localeId;
       }
 
       if (!mounted || _VoiceSession.owner != this) return;
