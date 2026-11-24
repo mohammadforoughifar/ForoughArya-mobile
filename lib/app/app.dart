@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../core/auth/auth_controller.dart';
 import '../core/network/api_client.dart';
 import '../core/notifications/notification_launcher.dart';
+import '../core/web/back_interceptor.dart';
 import '../core/notifications/push_service.dart';
 import '../features/messenger/data/upload_queue.dart';
 import '../features/auth/login_page.dart';
@@ -42,6 +43,8 @@ class _ForoughAppState extends State<ForoughApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    // وب/PWA: دکمهٔ بک مرورگر مثل اندروید رفتار می‌کند (یک مرحله عقب + تأیید خروج)
+    registerWebBackInterceptor(appNavigatorKey);
     WidgetsBinding.instance.addObserver(this);
     // اطلاع‌رسانی کوتاه وقتی اتصال خودکار به آدرس دیگری سوییچ شد
     _switchNotice = context.read<AuthController>().connections.lastAutoSwitch

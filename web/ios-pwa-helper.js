@@ -105,6 +105,25 @@
     } catch (_) {}
   })();
 
+  // ۰-الف) دکمهٔ «بازگشت» مرورگر/سافاری — رفتار دقیق مثل اندروید اپ:
+  //   • هیچ‌وقت با یک بکِ اشتباه از برنامه بیرون نمی‌رود
+  //   • هر بک برنامه داخل Flutter مدیریت می‌شود (مرحله به عقب / بستن دیالوگ)
+  //   • در ریشه، PopScope اپ (HomeShell) دیالوگ «خروج از برنامه؟» را نشان می‌دهد
+  // نکته: Flutter با Navigator معمولی هرگز History Entry بpush نمی‌کند؛ بنابراین
+  // اگر گارد نگذاریم، اولین بک کاربر را به صفحهٔ قبلی مرورگر (یا «about:blank») می‌برد.
+  (function guardBrowserBackButton() {
+    try {
+      history.replaceState({ forough: true, guard: true }, document.title);
+      history.pushState({ forough: true, guard: true }, document.title);
+      window.addEventListener('popstate', function () {
+        // نگه داشتن کاربر داخل اپ: همیشه یک گارد جدید بگذار تا صفحه ترک نشود
+        try { history.pushState({ forough: true, guard: true }, document.title); } catch (_) {}
+        // به Flutter خبر بده که بک زده شد تا کارت را مدیریت کند
+        try { window.dispatchEvent(new CustomEvent('forough-back-pressed')); } catch (_) {}
+      });
+    } catch (_) {}
+  })();
+
   const PUSH_OPT_IN_KEY = 'forough_push_opt_in_user';
   const INSTALL_DISMISS_KEY = 'forough_ios_install_dismiss_ts';
   let currentAudio = null;
