@@ -225,8 +225,13 @@ class ConnectionManager extends ChangeNotifier {
     } catch (_) {
       _profiles = [];
     }
-    _activeProfileId = await _storage.read(key: ConnectionKeys.activeProfile);
-    _activeEndpointId = await _storage.read(key: ConnectionKeys.activeEndpoint);
+    try {
+      _activeProfileId = await _storage.read(key: ConnectionKeys.activeProfile);
+      _activeEndpointId = await _storage.read(key: ConnectionKeys.activeEndpoint);
+    } catch (_) {
+      _activeProfileId = null;
+      _activeEndpointId = null;
+    }
 
     if (_profiles.isEmpty) {
       final legacy = (legacyBaseUrl ??
@@ -306,25 +311,33 @@ class ConnectionManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ذخیرهٔ پروفایل‌ها — روی وبِ بدون HTTPS هرگز خطا پرتاب نمی‌کند؛
+  /// در بدترین حالت فقط همین نشست حافظه‌ای می‌مانند
   Future<void> _save() async {
-    await _storage.write(
-      key: ConnectionKeys.profiles,
-      value: jsonEncode(_profiles.map((p) => p.toJson()).toList()),
-    );
-    if (_activeProfileId == null) {
-      await _storage.delete(key: ConnectionKeys.activeProfile);
-    } else {
+    try {
       await _storage.write(
-        key: ConnectionKeys.activeProfile,
-        value: _activeProfileId,
+        key: ConnectionKeys.profiles,
+        value: jsonEncode(_profiles.map((p) => p.toJson()).toList()),
       );
-    }
-    final ep = activeEndpoint;
-    if (ep == null) {
-      await _storage.delete(key: ConnectionKeys.activeEndpoint);
-    } else {
-      await _storage.write(key: ConnectionKeys.activeEndpoint, value: ep.id);
-    }
+    } catch (_) {}
+    try {
+      if (_activeProfileId == null) {
+        await _storage.delete(key: ConnectionKeys.activeProfile);
+      } else {
+        await _storage.write(
+          key: ConnectionKeys.activeProfile,
+          value: _activeProfileId,
+        );
+      }
+    } catch (_) {}
+    try {
+      final ep = activeEndpoint;
+      if (ep == null) {
+        await _storage.delete(key: ConnectionKeys.activeEndpoint);
+      } else {
+        await _storage.write(key: ConnectionKeys.activeEndpoint, value: ep.id);
+      }
+    } catch (_) {}
   }
 
   Future<void> _apply() async {
@@ -366,7 +379,9 @@ class ConnectionManager extends ChangeNotifier {
       _activeProfileId = null;
       _activeEndpointId = null;
     }
-    await _storage.delete(key: 'conn_session_$id');
+    try {
+      await _storage.delete(key: 'conn_session_$id');
+    } catch (_) {}
     await _save();
     notifyListeners();
     return true;

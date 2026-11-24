@@ -16,7 +16,9 @@ import os
 ROOT = '/home/user/ForoughArya-mobile'
 _CANDIDATE_WEB = os.path.join(ROOT, 'build/web')
 WEB_BUILD = _CANDIDATE_WEB if os.path.exists(os.path.join(_CANDIDATE_WEB, 'main.dart.js')) else '/home/user/ForoughArya-iOS-PWA'
-OUT_HTML = '/home/user/ForoughArya-SingleFile-v1.70.1.html'
+import os as _os
+_SUFFIX = _os.environ.get('SINGLEFILE_VERSION', 'v1.70.3')
+OUT_HTML = f'/home/user/ForoughArya-SingleFile-{_SUFFIX}.html'
 
 
 def gz_b64(raw_bytes: bytes) -> str:

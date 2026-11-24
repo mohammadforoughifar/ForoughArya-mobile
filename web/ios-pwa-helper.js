@@ -44,6 +44,18 @@
       }
     } catch (_) {}
 
+    // شیم isSecureContext — بدون این، FlutterSecureStorageWeb در HTTP/فایل
+    // خطای UnsupportedError پرت می‌کند و هیچ چیزی ذخیره نمی‌شود (مشکل «تنظیمات
+    // شبکه اضافه نمی‌شود و لاگین نمی‌خورد» روی سرورهای بدون HTTPS).
+    try {
+      if (window.isSecureContext === false) {
+        Object.defineProperty(window, 'isSecureContext', {
+          value: true,
+          configurable: true,
+        });
+      }
+    } catch (_) {}
+
     // شیم WebCrypto برای FlutterSecureStorage در شبکه داخلی HTTP یا فایل محلی آیفون
     try {
       if (window.crypto && !window.crypto.subtle) {

@@ -17,12 +17,26 @@ class AuthController extends ChangeNotifier {
     _api.onUnreachable = this.connections.failover;
     this.connections.onApply = (url, alts) async {
       await _api.setBaseUrl(url);
-      await _storage.write(key: 'api_base_urls', value: alts.join('\n'));
+      await _safeWrite('api_base_urls', alts.join('\n'));
       onServerChanged?.call(url, alts);
     };
   }
   final ApiClient _api;
   final FlutterSecureStorage _storage;
+
+  Future<void> _safeWrite(String key, String value) async {
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (_) {
+      // نبودِ HTTPS روی وب: ذخیرهٔ امن در دسترس نیست؛ اپ را متوقف نکن
+    }
+  }
+
+  Future<void> _safeDelete(String key) async {
+    try {
+      await _storage.delete(key: key);
+    } catch (_) {}
+  }
 
   /// چند سرور / چند آدرس جایگزین
   final ConnectionManager connections;
@@ -52,7 +66,9 @@ class AuthController extends ChangeNotifier {
   bool get isLoggedIn => _session != null;
 
   Future<void> initialize() async {
-    await _api.restoreBaseUrl();
+    try {
+      await _api.restoreBaseUrl();
+    } catch (_) {}
     try {
       await connections.load(legacyBaseUrl: _api.baseUrl == _defaultBase ? null : _api.baseUrl);
       final url = connections.activeUrl;
@@ -97,10 +113,7 @@ class AuthController extends ChangeNotifier {
         if ((map['token']?.toString() ?? '').isEmpty) 'token': current.token,
       });
       _session = fresh;
-      await _storage.write(
-        key: 'auth_session',
-        value: jsonEncode(fresh.toJson()),
-      );
+      await _safeWrite('auth_session', jsonEncode(fresh.toJson()));
       notifyListeners();
     } catch (_) {
       // در صورت آفلاین بودن شبکه، نشست ذخیره‌شده حفظ می‌شود.
@@ -118,11 +131,8 @@ class AuthController extends ChangeNotifier {
       });
       final value = AuthSession.fromJson(r.data!);
       _session = value;
-      await _storage.write(key: 'auth_token', value: value.token);
-      await _storage.write(
-        key: 'auth_session',
-        value: jsonEncode(value.toJson()),
-      );
+      await _safeWrite('auth_token', value.token);
+      await _safeWrite('auth_session', jsonEncode(value.toJson()));
       try {
         await _api.ensureCompanyId();
       } catch (_) {}
@@ -164,7 +174,7 @@ class AuthController extends ChangeNotifier {
     try {
       if (old != null) await _stashSession(old);
       for (final k in _sessionKeys) {
-        await _storage.delete(key: k);
+        await _safeDelete(k);
       }
       _session = null;
       await _api.setCompanyId(null);
@@ -182,26 +192,30 @@ class AuthController extends ChangeNotifier {
   Future<void> _stashSession(String profileId) async {
     final data = <String, String>{};
     for (final k in _sessionKeys) {
-      final v = await _storage.read(key: k);
-      if (v != null) data[k] = v;
+      try {
+        final v = await _storage.read(key: k);
+        if (v != null) data[k] = v;
+      } catch (_) {}
     }
     if (data['auth_token']?.isNotEmpty == true) {
-      await _storage.write(
-        key: 'conn_session_$profileId',
-        value: jsonEncode(data),
-      );
+      await _safeWrite('conn_session_$profileId', jsonEncode(data));
     } else {
-      await _storage.delete(key: 'conn_session_$profileId');
+      await _safeDelete('conn_session_$profileId');
     }
   }
 
   Future<void> _restoreSession(String profileId) async {
-    final raw = await _storage.read(key: 'conn_session_$profileId');
+    String? raw;
+    try {
+      raw = await _storage.read(key: 'conn_session_$profileId');
+    } catch (_) {
+      return;
+    }
     if (raw == null || raw.isEmpty) return;
     try {
       final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       for (final e in data.entries) {
-        await _storage.write(key: e.key, value: e.value.toString());
+        await _safeWrite(e.key, e.value.toString());
       }
       final s = data['auth_session']?.toString();
       if (s != null) {
@@ -211,16 +225,16 @@ class AuthController extends ChangeNotifier {
         if (value.token.isNotEmpty) _session = value;
       }
     } catch (_) {
-      await _storage.delete(key: 'conn_session_$profileId');
+      await _safeDelete('conn_session_$profileId');
     }
   }
 
   Future<void> logout({bool notify = true}) async {
     _session = null;
     final pid = connections.activeProfileId;
-    if (pid != null) await _storage.delete(key: 'conn_session_$pid');
-    await _storage.delete(key: 'auth_token');
-    await _storage.delete(key: 'auth_session');
+    if (pid != null) await _safeDelete('conn_session_$pid');
+    await _safeDelete('auth_token');
+    await _safeDelete('auth_session');
     await _api.setCompanyId(null);
     if (notify) notifyListeners();
   }

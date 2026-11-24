@@ -31,13 +31,13 @@ class ApiClient {
     dio.interceptors.add(
       QueuedInterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _storage.read(key: 'auth_token');
+          final token = await _safeRead('auth_token');
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           var cid = _companyId;
           if (cid == null) {
-            final saved = await _storage.read(key: 'company_id');
+            final saved = await _safeRead('company_id');
             cid = saved == null ? null : int.tryParse(saved);
             _companyId = cid;
           }
@@ -55,6 +55,29 @@ class ApiClient {
 
   final FlutterSecureStorage _storage;
   FlutterSecureStorage get storage => _storage;
+
+  /// روی برخی وب‌سرورها (HTTP بدون HTTPS) secure-storage خطای UnsupportedError
+  /// می‌دهد؛ این متد هرگز نمی‌برد تا درخواست شبکه همیشه ارسال شود
+  Future<String?> _safeRead(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _safeWrite(String key, String value) async {
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (_) {}
+  }
+
+  Future<void> _safeDelete(String key) async {
+    try {
+      await _storage.delete(key: key);
+    } catch (_) {}
+  }
+
   late final Dio dio;
   void Function()? onUnauthorized;
 
@@ -70,21 +93,21 @@ class ApiClient {
     final url = normalizeServerUrl(value);
     if (url.isEmpty) return;
     dio.options.baseUrl = url;
-    await _storage.write(key: 'api_base_url', value: url);
+    await _safeWrite('api_base_url', url);
   }
 
   Future<void> setCompanyId(int? id) async {
     if (id == null || id <= 0) {
       _companyId = null;
-      await _storage.delete(key: 'company_id');
+      await _safeDelete('company_id');
       return;
     }
     _companyId = id;
-    await _storage.write(key: 'company_id', value: id.toString());
+    await _safeWrite('company_id', id.toString());
   }
 
   Future<void> restoreCompanyId() async {
-    final saved = await _storage.read(key: 'company_id');
+    final saved = await _safeRead('company_id');
     _companyId = saved == null ? null : int.tryParse(saved);
   }
 
@@ -120,9 +143,13 @@ class ApiClient {
   }
 
   Future<void> restoreBaseUrl() async {
-    final saved = await _storage.read(key: 'api_base_url');
-    if (saved != null && saved.isNotEmpty) dio.options.baseUrl = saved;
-    await restoreCompanyId();
+    try {
+      final saved = await _safeRead('api_base_url');
+      if (saved != null && saved.isNotEmpty) dio.options.baseUrl = saved;
+      await restoreCompanyId();
+    } catch (_) {
+      // حتی اگر ذخیره‌سازی خطا بدهد، اپ باید با آدرس پیش‌فرض بالا بیاید
+    }
   }
 
   /// مسیر نسبی را با دامنهٔ baseUrl ترکیب می‌کند.
