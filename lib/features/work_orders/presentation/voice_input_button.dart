@@ -106,9 +106,10 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
             owner._webBuffer = '';
             _VoiceSession.owner = null;
             owner.setState(() {});
+            final code = error.errorMsg;
             owner._message(kIsWeb
-                ? 'تشخیص گفتار انجام نشد؛ مجوز میکروفن و اتصال اینترنت مرورگر را بررسی کنید (روی Safari/Chrome بدون HTTPS میکروفن مجاز نیست).'
-                : 'تشخیص گفتار انجام نشد؛ مجوز، اتصال اینترنت و تنظیمات زبان گوشی را بررسی کنید.');
+                ? 'تشخیص گفتار انجام نشد${code.isNotEmpty ? ' ($code)' : ''}؛ مجوز میکروفن، اینترنت و HTTPS را بررسی کنید.'
+                : 'تشخیص گفتار انجام نشد${code.isNotEmpty ? ' ($code)' : ''}؛ مجوز میکروفن، اینترنت و سرویس گوگل گوشی را بررسی کنید.');
           },
         );
       }
@@ -134,7 +135,12 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
           final fa = locales
               .where((l) => l.localeId.toLowerCase().replaceAll('-', '_').startsWith('fa'))
               .toList();
-          localeId = fa.isNotEmpty ? fa.first.localeId : 'fa-IR';
+          if (fa.isNotEmpty) {
+            localeId = fa.first.localeId;
+          } else {
+            localeId = 'fa-IR';
+            _message('زبان فارسی در فهرست زبان‌های این دستگاه دیده نشد؛ با fa-IR اینترنت‌محور تلاش می‌شود.');
+          }
         } catch (_) {
           localeId = 'fa-IR';
         }
@@ -145,10 +151,12 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
       setState(() => _listening = true);
       await _VoiceSession.speech.listen(
         localeId: localeId,
-        // روی وب: نتایج جزئی ضروری است تا متن به‌محض توقف ما تزریق شود
-        // روی موبایل: فقط نتیجهٔ نهایی (رفتار قبلی)
+        // روی وب: continuous=false بگذار؛ روی آیفون سافاری continuous=true
+        // هرگز متن نهایی برنمی‌گرداند. با توقف خودکار پس از اولین مکث، متن
+        // نهایی در onend برمی‌گردد و به کادر تزریق می‌شود.
+        // روی موبایل: فقط نتیجهٔ نهایی (رفتار تأییدشدهٔ قبلی)
         listenOptions: stt.SpeechListenOptions(
-          partialResults: kIsWeb,
+          partialResults: false,
           cancelOnError: kIsWeb,
           listenMode: kIsWeb ? stt.ListenMode.dictation : stt.ListenMode.confirmation,
         ),
