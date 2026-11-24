@@ -498,14 +498,14 @@ class InfoRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 15, color: Colors.blueGrey.shade400),
+          Icon(icon, size: 15, color: const Color(0xff6f7d77)),
           const SizedBox(width: 6),
         ],
         SizedBox(
           width: 96,
           child: Text(
             label,
-            style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade500),
+            style: TextStyle(fontSize: 12, color: const Color(0xff5f6f6b)),
           ),
         ),
         Expanded(
@@ -603,7 +603,7 @@ class StatPill extends StatelessWidget {
                 ),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 10.5, color: Colors.blueGrey.shade500),
+                  style: TextStyle(fontSize: 10.5, color: const Color(0xff5f6f6b)),
                 ),
               ],
             ),
@@ -699,7 +699,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
             width: 42,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.blueGrey.shade200,
+              color: const Color(0xffd9deda),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -715,7 +715,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                 ),
                 Text(
                   '${Fa.digits(_selected.length)} انتخاب',
-                  style: TextStyle(fontSize: 11.5, color: Colors.blueGrey.shade500),
+                  style: TextStyle(fontSize: 11.5, color: const Color(0xff5f6f6b)),
                 ),
               ],
             ),
@@ -747,7 +747,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: Colors.blueGrey.shade600,
+                            color: const Color(0xff4c5a55),
                           )),
                     ),
                     Wrap(
@@ -773,7 +773,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Colors.blueGrey.shade600,
+                          color: const Color(0xff4c5a55),
                         )),
                   ),
                   if (filtered.isEmpty)
@@ -794,7 +794,7 @@ class _RecipientSheetState extends State<_RecipientSheet> {
                               u.positions.join('، '),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.blueGrey.shade500,
+                                color: const Color(0xff5f6f6b),
                               ),
                             ),
                       onChanged: (v) => setState(() {

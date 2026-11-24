@@ -55,11 +55,11 @@ void main() {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // هدر به سبک دستور کار جدید
+                  // هدر سازمانی روشن — سفید با خط طلای سوزنی
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xff071f26), Color(0xff0d2e36), Color(0xff164e63)],
+                        colors: [Color(0xffffffff), Color(0xffeef4f2)],
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
                       ),
@@ -67,19 +67,41 @@ void main() {
                       border: Border(
                         bottom: BorderSide(color: Color(0xff8a6a24), width: 1.4),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x1a0f414b),
+                          blurRadius: 22,
+                          offset: Offset(0, 8),
+                        ),
+                      ],
                     ),
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                    child: const Row(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                    child: Row(
                       children: [
-                        Icon(Icons.space_dashboard_rounded, color: Colors.white, size: 26),
-                        SizedBox(width: 12),
-                        Expanded(
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                              begin: Alignment.topRight,
+                              end: Alignment.bottomLeft,
+                            ),
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0x55155e6b), blurRadius: 12, offset: Offset(0, 5)),
+                            ],
+                          ),
+                          child: const Icon(Icons.space_dashboard_rounded, color: Colors.white, size: 23),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('اتوماسیون اداری توکا', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
-                              SizedBox(height: 3),
-                              Text('نفتی کلاسیک سازمانی + طلای سوزنی', style: TextStyle(color: Color(0xffe3c878), fontSize: 11.5, fontWeight: FontWeight.w700)),
+                              Text('اتوماسیون اداری توکا', style: TextStyle(color: Color(0xff0f414b), fontSize: 17, fontWeight: FontWeight.w900)),
+                              SizedBox(height: 4),
+                              Text('سازمانی روشن + طلای سوزنی', style: TextStyle(color: Color(0xff8a6a24), fontSize: 11, fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),

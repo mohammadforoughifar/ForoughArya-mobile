@@ -378,7 +378,7 @@ class _EmailDetailPageState extends State<EmailDetailPage> {
                                                 a.sizeLabel,
                                                 style: TextStyle(
                                                   fontSize: 10.5,
-                                                  color: Colors.blueGrey.shade500,
+                                                  color: const Color(0xff5f6f6b),
                                                 ),
                                               ),
                                           ],

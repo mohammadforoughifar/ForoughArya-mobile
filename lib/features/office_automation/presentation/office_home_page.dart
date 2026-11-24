@@ -825,7 +825,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xff071f26), Color(0xff0d2e36), Color(0xff164e63)],
+          colors: [Color(0xffffffff), Color(0xfff0f6f4)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -835,9 +835,9 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Color(0x3d071f26),
-            blurRadius: 26,
-            offset: Offset(0, 10),
+            color: Color(0x1a0f414b),
+            blurRadius: 22,
+            offset: Offset(0, 8),
           ),
         ],
       ),
@@ -865,15 +865,19 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                       gradient: LinearGradient(
                         colors: [
                           currentTab.accent,
-                          const Color(0xffc9a24b),
+                          OfficeColors.deep,
                         ],
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
                       ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.25),
-                      ),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: currentTab.accent.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
                     ),
                     child: Icon(currentTab.icon, color: Colors.white, size: 22),
                   ),
@@ -892,7 +896,7 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xff0f414b),
                                   fontSize: 15.5,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -905,16 +909,20 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.13),
+                                color: const Color(0xfff3e8cf),
                                 borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: const Color(0xffc9a24b),
+                                  width: .8,
+                                ),
                               ),
                               child: const Text(
                                 'PRO',
                                 style: TextStyle(
-                                  color: Color(0xffe3c878),
+                                  color: Color(0xff8a6a24),
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.6,
+                                  letterSpacing: 0.8,
                                 ),
                               ),
                             ),
@@ -925,8 +933,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                           currentTab.subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.74),
+                          style: const TextStyle(
+                            color: Color(0xff5f6f6b),
                             fontSize: 10.8,
                           ),
                         ),
@@ -988,15 +996,29 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                   horizontal: 11,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: selected
-                                      ? Colors.white
-                                      : Colors.white.withValues(alpha: 0.10),
+                                  gradient: selected
+                                      ? const LinearGradient(
+                                          colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                                          begin: Alignment.topRight,
+                                          end: Alignment.bottomLeft,
+                                        )
+                                      : null,
+                                  color: selected ? null : Colors.white,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: selected
-                                        ? Colors.white
-                                        : Colors.white.withValues(alpha: 0.14),
+                                        ? const Color(0xff0f414b)
+                                        : const Color(0xffe2e7e3),
                                   ),
+                                  boxShadow: selected
+                                      ? const [
+                                          BoxShadow(
+                                            color: Color(0x33155e6b),
+                                            blurRadius: 10,
+                                            offset: Offset(0, 4),
+                                          ),
+                                        ]
+                                      : null,
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1005,8 +1027,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                       t.icon,
                                       size: 16,
                                       color: selected
-                                          ? const Color(0xff0d2e36)
-                                          : Colors.white70,
+                                          ? Colors.white
+                                          : const Color(0xff155e6b),
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -1015,8 +1037,8 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w900,
                                         color: selected
-                                            ? const Color(0xff1b2420)
-                                            : Colors.white,
+                                            ? Colors.white
+                                            : const Color(0xff17302e),
                                       ),
                                     ),
                                     if (t.badge > 0) ...[
@@ -1028,16 +1050,18 @@ class _OfficeAutomationPageState extends State<OfficeAutomationPage> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: selected
-                                              ? t.accent
-                                              : const Color(0xffef4444),
+                                              ? const Color(0xffc9a24b)
+                                              : const Color(0xffb5332f),
                                           borderRadius: BorderRadius.circular(
                                             999,
                                           ),
                                         ),
                                         child: Text(
                                           Fa.digits(t.badge),
-                                          style: const TextStyle(
-                                            color: Colors.white,
+                                          style: TextStyle(
+                                            color: selected
+                                                ? const Color(0xff3a2c08)
+                                                : Colors.white,
                                             fontSize: 10,
                                             fontWeight: FontWeight.w900,
                                           ),
@@ -1610,11 +1634,18 @@ class _HeaderIconBtn extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            border: Border.all(color: const Color(0xffe2e7e3)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x140f414b),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
-          child: Icon(icon, color: Colors.white, size: 18),
+          child: Icon(icon, color: const Color(0xff155e6b), size: 18),
         ),
       ),
     );
@@ -1670,17 +1701,14 @@ class _PulseKpiCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color, color.withValues(alpha: 0.72)],
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
-                  ),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: color.withValues(alpha: 0.25)),
                 ),
-                child: Icon(icon, color: Colors.white, size: 20),
+                child: Icon(icon, color: color, size: 21),
               ),
               const SizedBox(width: 10),
               Expanded(

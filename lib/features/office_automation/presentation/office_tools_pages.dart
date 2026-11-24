@@ -36,7 +36,7 @@ PreferredSizeWidget _luxuryAppBar(
     child: Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xff1b2420), Color(0xff123e49), Color(0xff1a4e5c)],
+          colors: [Color(0xffffffff), Color(0xffeef4f2)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -52,15 +52,23 @@ PreferredSizeWidget _luxuryAppBar(
             children: [
               IconButton(
                 onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xff155e6b),
+                  side: const BorderSide(color: Color(0xffe2e7e3)),
+                ),
+                icon: const Icon(Icons.arrow_back_rounded, size: 21),
               ),
               Container(
-                width: 38,
-                height: 38,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff155e6b), Color(0xff0f414b)],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                  ),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white24),
                 ),
                 child: Icon(icon, color: Colors.white, size: 20),
               ),
@@ -75,7 +83,7 @@ PreferredSizeWidget _luxuryAppBar(
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xff0f414b),
                         fontSize: 14.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -85,7 +93,7 @@ PreferredSizeWidget _luxuryAppBar(
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white70,
+                        color: Color(0xff5f6f6b),
                         fontSize: 10.5,
                       ),
                     ),

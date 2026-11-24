@@ -724,8 +724,8 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
   Widget _buildHeader(WebAccess access) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [const Color(0xff1b2420), _accent],
+        gradient: const LinearGradient(
+          colors: [Color(0xffffffff), Color(0xffeef4f2)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -743,8 +743,9 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
               IconButton(
                 onPressed: () => Navigator.of(context).maybePop(),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.14),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xff155e6b),
+                  side: const BorderSide(color: Color(0xffe2e7e3)),
                 ),
                 icon: const Icon(Icons.arrow_back_rounded, size: 20),
               ),
@@ -758,7 +759,7 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xff0f414b),
                         fontSize: 16.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -767,8 +768,8 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                       'صندوق ${_box.label} • ${Fa.digits(_total)} فقره نامه',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
+                      style: const TextStyle(
+                        color: Color(0xff5f6f6b),
                         fontSize: 11.5,
                       ),
                     ),
@@ -792,8 +793,9 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                     );
                   },
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.14),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xff8a6a24),
+                    side: const BorderSide(color: Color(0xffe2e7e3)),
                   ),
                   icon: const Icon(Icons.markunread_mailbox_rounded, size: 19),
                 ),
@@ -808,8 +810,9 @@ class _LetterMailboxPageState extends State<LetterMailboxPage>
                   );
                 },
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.14),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xff155e6b),
+                  side: const BorderSide(color: Color(0xffe2e7e3)),
                 ),
                 icon: const Icon(Icons.help_outline_rounded, size: 19),
               ),

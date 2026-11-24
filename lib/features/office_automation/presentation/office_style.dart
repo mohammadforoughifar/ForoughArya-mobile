@@ -18,32 +18,49 @@ import '../models/letter_models.dart';
 // ------------------------------------------------------------
 
 class OfficeColors {
-  // هویت واحد — نفتی کلاسیک و طلای سوزنی
-  static const seed = Color(0xff164e63);   // نفتی اصلی (دکمه/برند)
-  static const deep = Color(0xff0d2e36);   // نفتی تیره (هدر/گریدینت)
-  static const deepInk = Color(0xff071f26); // عمق سایه‌ای برای گرادیان
-  static const accent = Color(0xff2a6e7e);  // نفتی روشن (هایلایت)
-  static const gold = Color(0xffc9a24b);    // طلای سوزنی — امضا/تحریر
-  static const goldDeep = Color(0xff8a6a24); // برنجی آنتیک (دبیرخانه)
+  // هویت واحد — «سازمانی روشن»: نفتی سازمانی روی کاغذ سبز-خاکستری بسیار روشن
+  static const seed = Color(0xff155e6b);    // نفتی سازمانی (اصلی)
+  static const deep = Color(0xff0f414b);    // نفتی تیرهٔ متنی
+  static const deepInk = Color(0xff0b2e35); // عمق سایه‌ای
+  static const accent = Color(0xff2e7d8a);  // نفتی روشن (هایلایت)
+  static const accentSoft = Color(0xffe7efed); // تینت نفتی بسیار ملایم
+  static const gold = Color(0xffc9a24b);    // طلای سوزنی
+  static const goldDeep = Color(0xff8a6a24); // برنجی آنتیک
+  static const goldSoft = Color(0xfff3e8cf); // تینت طلایی ملایم
 
-  // رنگ اختصاصی هر نوع نامه — طیف گرم-سرد متعادل
-  static const inner = Color(0xff164e63);   // داخلی — نفتی
+  // رنگ اختصاصی هر نوع نامه — طیف رسمی و خوانا روی روشن
+  static const inner = Color(0xff155e6b);   // داخلی — نفتی
   static const outgoing = Color(0xff20633a); // صادره — سبز عمیق
-  static const incoming = Color(0xff14606e); // وارده — سبزآبی نفتی
-  static const signing = Color(0xffa86f1f);  // در انتظار امضا — طلای عسلی
-  static const dabirkhane = Color(0xff8a6a24); // دبیرخانه — برنجی آنتیک
+  static const incoming = Color(0xff1f6f86); // وارده — آبی نفتی
+  static const signing = Color(0xffa86f1f);  // امضا — طلای عسلی
+  static const dabirkhane = Color(0xff8a6a24); // دبیرخانه — برنجی
   static const archive = Color(0xff626a61);  // بایگانی — خاکستری گرم
-  static const email = Color(0xff124f61);    // پست الکترونیک — نفتی تیره
+  static const email = Color(0xff124f61);    // ایمیل سازمانی — نفتی تیره
   static const emailPersonal = Color(0xff4f5c46); // ایمیل شخصی — زیتونی مات
-  static const minutes = Color(0xff14594f);  // صورتجلسه — سبز نفتی اداری
+  static const minutes = Color(0xff14594f);  // صورتجلسه — سبز نفتی
 
-  static const danger = Color(0xffb5332f);   // قرمز آجری گرم (رسمی)
+  static const danger = Color(0xffb5332f);   // آجری رسمی
   static const ok = Color(0xff20633a);
 
-  static const bg = Color(0xfff5f4ee);   // کرم-کاغذی گرم
+  static const bg = Color(0xfff3f6f5);   // سبز-خاکستری بسیار روشن
   static const surface = Color(0xffffffff);
-  static const line = Color(0xffe2e1d5); // خط گرم ملایم
-  static const ink = Color(0xff1b2420);  // جوهر گرم
+  static const line = Color(0xffe2e7e3); // خط سبز-خاکستری ملایم
+  static const ink = Color(0xff17302e);  // جوهر نزدیک به مشکی-سبز
+  static const sub = Color(0xff5f6f6b);  // متن ثانویه
+
+  /// گرادیان هدر سازمانی روشن — سفید تا تینت نفتی بسیار ملایم
+  static const heroLight = LinearGradient(
+    colors: [Color(0xffffffff), Color(0xffeef4f2)],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  /// گرادیان طلای سوزنی — نشان‌ها، امضا و درخشش‌های ثانویه
+  static LinearGradient get goldGradient => const LinearGradient(
+    colors: [Color(0xffe3c878), gold, goldDeep],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
 
   /// رنگ پایه هر نوع نامه
   static Color forKind(LetterKind? kind) => switch (kind) {
@@ -88,18 +105,9 @@ class OfficeColors {
     };
   }
 
-  static LinearGradient get heroGradient => const LinearGradient(
-    colors: [deepInk, deep, seed],
-    begin: Alignment.topRight,
-    end: Alignment.bottomLeft,
-  );
-
-  /// گرادیان طلای سوزنی — برای نشان‌ها، امضا و درخشش‌های ثانویه
-  static LinearGradient get goldGradient => const LinearGradient(
-    colors: [Color(0xffe3c878), gold, goldDeep],
-    begin: Alignment.topRight,
-    end: Alignment.bottomLeft,
-  );
+  /// هدرها دیگر تاریک نیستند؛ این گرادیان بقایای سازگاری است و
+  /// عمداً معادل heroLight بوده تا هیچ صفحه‌ای تیره نماند
+  static LinearGradient get heroGradient => heroLight;
 
   static Color forConfidential(String v) => switch (v) {
     'سری' => danger,
@@ -281,17 +289,18 @@ class _GlowLetterCardState extends State<GlowLetterCard>
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: widget.selected ? OfficeColors.seed : OfficeColors.line,
-                width: widget.selected ? 1.8 : 1,
+                width: widget.selected ? 1.6 : 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: (widget.selected ? OfficeColors.seed : Colors.blueGrey)
-                      .withValues(alpha: widget.selected ? .20 : .07),
-                  blurRadius: widget.selected ? 18 : 12,
-                  offset: const Offset(0, 5),
+                  color: OfficeColors.ink.withValues(
+                    alpha: widget.selected ? .14 : .045,
+                  ),
+                  blurRadius: widget.selected ? 16 : 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -302,7 +311,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                   start: 0,
                   top: 0,
                   bottom: 0,
-                  child: Container(width: 5, decoration: BoxDecoration(gradient: grad)),
+                  child: Container(width: 4, decoration: BoxDecoration(gradient: grad)),
                 ),
                 // هالهٔ نبضی برای نامه‌های داغ
                 if (_overdue || it.foriat == 'آنی')
@@ -389,7 +398,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                             ? Icons.outbox_outlined
                                             : Icons.person_outline,
                                         size: 13,
-                                        color: Colors.blueGrey.shade400,
+                                        color: OfficeColors.sub,
                                       ),
                                       const SizedBox(width: 4),
                                       Expanded(
@@ -399,7 +408,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontSize: 11.5,
-                                            color: Colors.blueGrey.shade500,
+                                            color: OfficeColors.sub,
                                           ),
                                         ),
                                       ),
@@ -438,7 +447,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     height: 1.6,
-                                    color: Colors.blueGrey.shade700,
+                                    color: const Color(0xff4c5a55),
                                   ),
                                 ),
                               ),
@@ -474,7 +483,7 @@ class _GlowLetterCardState extends State<GlowLetterCard>
                                   size: 19,
                                   color: it.isNeshan
                                       ? OfficeColors.gold
-                                      : Colors.blueGrey.shade300,
+                                      : const Color(0xffc4ccc5),
                                 ),
                               ),
                             ),
@@ -699,14 +708,14 @@ class _MetaChip extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 13, color: Colors.blueGrey.shade400),
+      Icon(icon, size: 13, color: OfficeColors.sub),
       const SizedBox(width: 3),
       Text(
         label,
         style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w600,
-          color: Colors.blueGrey.shade500,
+          color: OfficeColors.sub,
         ),
       ),
     ],
@@ -726,7 +735,7 @@ class _SelectDot extends StatelessWidget {
     decoration: BoxDecoration(
       color: on ? color : Colors.transparent,
       shape: BoxShape.circle,
-      border: Border.all(color: on ? color : Colors.blueGrey.shade300, width: 2),
+      border: Border.all(color: on ? color : const Color(0xffc4ccc5), width: 2),
     ),
     child: on
         ? const Icon(Icons.check, size: 13, color: Colors.white)
@@ -894,7 +903,7 @@ class _TabPillState extends State<_TabPill> {
               Icon(
                 widget.icon,
                 size: 18,
-                color: selected ? Colors.white : Colors.blueGrey.shade400,
+                color: selected ? Colors.white : OfficeColors.sub,
               ),
               const SizedBox(width: 7),
               AnimatedDefaultTextStyle(
@@ -902,7 +911,7 @@ class _TabPillState extends State<_TabPill> {
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                  color: selected ? Colors.white : Colors.blueGrey.shade700,
+                  color: selected ? Colors.white : OfficeColors.ink,
                 ),
                 child: Text(widget.label),
               ),
@@ -1069,31 +1078,34 @@ class HeroBadge extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-    decoration: BoxDecoration(
-      color: color?.withValues(alpha: .30) ?? Colors.white.withValues(alpha: .22),
-      borderRadius: BorderRadius.circular(9),
-      border: Border.all(color: Colors.white.withValues(alpha: .28)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 11, color: Colors.white),
-          const SizedBox(width: 4),
-        ],
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final c = color ?? OfficeColors.deep;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: c.withValues(alpha: .32)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: c),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: c,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 // ------------------------------------------------------------
@@ -1130,8 +1142,8 @@ class OfficeCard extends StatelessWidget {
         border: Border.all(color: OfficeColors.line),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withValues(alpha: .05),
-            blurRadius: 14,
+            color: OfficeColors.ink.withValues(alpha: .045),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -1185,7 +1197,7 @@ class OfficeInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Colors.blueGrey.shade400;
+    final c = color ?? OfficeColors.sub;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(11),
@@ -1210,7 +1222,7 @@ class OfficeInfoTile extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: TextStyle(fontSize: 10.5, color: Colors.blueGrey.shade400),
+                    style: TextStyle(fontSize: 10.5, color: OfficeColors.sub),
                   ),
                   const SizedBox(height: 1),
                   Text(
@@ -1281,7 +1293,7 @@ class OfficeRing extends StatelessWidget {
       const SizedBox(height: 6),
       Text(
         label,
-        style: TextStyle(fontSize: 10.5, color: Colors.blueGrey.shade500),
+        style: TextStyle(fontSize: 10.5, color: OfficeColors.sub),
       ),
     ],
   );
@@ -1331,7 +1343,7 @@ class MiniStat extends StatelessWidget {
             ),
             Text(
               label,
-              style: TextStyle(fontSize: 10, color: Colors.blueGrey.shade500),
+              style: TextStyle(fontSize: 10, color: OfficeColors.sub),
             ),
           ],
         ),
@@ -1411,7 +1423,7 @@ class GardeshTimeline extends StatelessWidget {
     if (nodes.isEmpty) {
       return Text(
         'گردشی ثبت نشده است.',
-        style: TextStyle(fontSize: 12.5, color: Colors.blueGrey.shade400),
+        style: TextStyle(fontSize: 12.5, color: OfficeColors.sub),
       );
     }
     return Column(
@@ -1472,7 +1484,7 @@ class GardeshTimeline extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11.5,
                             height: 1.65,
-                            color: Colors.blueGrey.shade600,
+                            color: const Color(0xff4c5a55),
                           ),
                         ),
                       ],
@@ -1480,7 +1492,7 @@ class GardeshTimeline extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           n.time!,
-                          style: TextStyle(fontSize: 10.5, color: Colors.blueGrey.shade400),
+                          style: TextStyle(fontSize: 10.5, color: OfficeColors.sub),
                         ),
                       ],
                     ],

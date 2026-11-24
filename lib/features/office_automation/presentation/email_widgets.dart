@@ -61,7 +61,7 @@ class EmailCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: (unread ? accent : Colors.blueGrey).withValues(alpha: unread ? .09 : .05),
+            color: (unread ? accent : const Color(0xff5f6f6b)).withValues(alpha: unread ? .09 : .05),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -131,7 +131,7 @@ class EmailCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: Colors.blueGrey.shade600,
+                              color: const Color(0xff4c5a55),
                               fontWeight: unread ? FontWeight.w600 : FontWeight.w500,
                             ),
                           ),
@@ -149,7 +149,7 @@ class EmailCard extends StatelessWidget {
                           size: 20,
                           color: message.isNeshan
                               ? OfficeColors.gold
-                              : Colors.blueGrey.shade300,
+                              : const Color(0xff9aa79f),
                         ),
                       ),
                     ),
@@ -186,7 +186,7 @@ class EmailCard extends StatelessWidget {
                         dateText,
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: Colors.blueGrey.shade400,
+                          color: const Color(0xff6f7d77),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -297,7 +297,7 @@ class _AccountPill extends StatelessWidget {
               '($subtitle)',
               style: TextStyle(
                 fontSize: 10.5,
-                color: selected ? Colors.white70 : Colors.blueGrey.shade400,
+                color: selected ? Colors.white70 : const Color(0xff6f7d77),
               ),
             ),
           ],

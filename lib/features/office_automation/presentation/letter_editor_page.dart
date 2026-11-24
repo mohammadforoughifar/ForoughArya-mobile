@@ -838,7 +838,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
         else
           Text(
             'انتخاب نشده',
-            style: TextStyle(fontSize: 11.5, color: Colors.blueGrey.shade400),
+            style: TextStyle(fontSize: 11.5, color: const Color(0xff6f7d77)),
           ),
       ],
     ),
@@ -851,7 +851,7 @@ class _LetterEditorPageState extends State<LetterEditorPage> {
       if (_related.isEmpty)
         Text(
           'نامه‌ای مرتبط نشده است.',
-          style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade400),
+          style: TextStyle(fontSize: 12, color: const Color(0xff6f7d77)),
         )
       else
         ..._related.map(
@@ -1239,7 +1239,7 @@ class _LetterPickerSheetState extends State<_LetterPickerSheet> {
                               title: Text(it.title, style: const TextStyle(fontSize: 13)),
                               subtitle: Text(
                                 '${it.letterNumber.isNotEmpty ? 'شماره ${Fa.digits(it.letterNumber)} • ' : ''}${Fa.date(it.date?.toIso8601String(), time: false)}',
-                                style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade500),
+                                style: TextStyle(fontSize: 11, color: const Color(0xff5f6f6b)),
                               ),
                               onTap: () => Navigator.pop(context, it),
                             );

@@ -186,7 +186,7 @@ class _EmailSettingsPageState extends State<EmailSettingsPage> {
                       if (corporate.isEmpty)
                         Text(
                           'حساب سازمانی ثبت نشده است.',
-                          style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade400),
+                          style: TextStyle(fontSize: 12, color: const Color(0xff6f7d77)),
                         )
                       else
                         for (final a in corporate) _buildTile(a, OfficeColors.email),
@@ -205,7 +205,7 @@ class _EmailSettingsPageState extends State<EmailSettingsPage> {
                       if (personal.isEmpty)
                         Text(
                           'حساب شخصی ثبت نشده است.',
-                          style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade400),
+                          style: TextStyle(fontSize: 12, color: const Color(0xff6f7d77)),
                         )
                       else
                         for (final a in personal)
@@ -250,11 +250,11 @@ class _EmailSettingsPageState extends State<EmailSettingsPage> {
                 ),
                 Text(
                   a.address,
-                  style: TextStyle(fontSize: 11.5, color: Colors.blueGrey.shade600),
+                  style: TextStyle(fontSize: 11.5, color: const Color(0xff4c5a55)),
                 ),
                 Text(
                   '${Fa.digits(a.messageCount)} پیام · IMAP ${a.imap}:${Fa.digits(a.imapPort)}',
-                  style: TextStyle(fontSize: 10.5, color: Colors.blueGrey.shade400),
+                  style: TextStyle(fontSize: 10.5, color: const Color(0xff6f7d77)),
                 ),
               ],
             ),

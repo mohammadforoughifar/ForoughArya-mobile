@@ -991,7 +991,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xff10262c), Color(0xff0f3943), Color(0xff1d5f70)],
+          colors: [Color(0xffffffff), Color(0xffeef4f2)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -1007,15 +1007,30 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
             children: [
               IconButton(
                 onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xff155e6b),
+                  side: const BorderSide(color: Color(0xffe2e7e3)),
+                ),
+                icon: const Icon(Icons.arrow_back_rounded, size: 21),
               ),
               Container(
-                width: 40,
-                height: 40,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff8a6a24), Color(0xffc9a24b)],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                  ),
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: Colors.white24),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x338a6a24),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: const Icon(
                   Icons.markunread_mailbox_rounded,
@@ -1033,7 +1048,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Color(0xff0f414b),
                         fontSize: 15.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1042,7 +1057,7 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                       'شماره‌گذاری اندیکاتور، ثبت ارسال، رونوشت، چاپ سربرگ و بایگانی رسمی',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                      style: TextStyle(color: Color(0xff5f6f6b), fontSize: 10.5),
                     ),
                   ],
                 ),
@@ -1051,7 +1066,12 @@ class _OfficeDabirkhanePageState extends State<OfficeDabirkhanePage> {
                 IconButton(
                   tooltip: 'رزرو شماره اندیکاتور',
                   onPressed: _openReservationSheet,
-                  icon: const Icon(Icons.tag_rounded, color: Colors.white),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xff8a6a24),
+                    side: const BorderSide(color: Color(0xffe2e7e3)),
+                  ),
+                  icon: const Icon(Icons.tag_rounded, size: 20),
                 ),
               IconButton(
                 tooltip: 'به‌روزرسانی',
