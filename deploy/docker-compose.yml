@@ -1,0 +1,12 @@
+services:
+  forough-ios-pwa:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: forough-ios-pwa
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    # برای تغییر آدرس سرور بدون بیلد مجدد ایمیج، فایل pwa-config.js را مستقیم مانت کنید:
+    volumes:
+      - ../pwa-config.js:/usr/share/nginx/html/pwa-config.js:ro

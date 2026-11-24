@@ -295,6 +295,7 @@
 
   // ۶) بررسی و به‌روزرسانی Service Worker یکپارچه (کش آفلاین + Web Push اپل)
   async function ensureServiceWorkerRegistration() {
+    if (window.__FOROUGH_SINGLE_FILE) return null;
     if (!('serviceWorker' in navigator) || !window.isSecureContext) return null;
     try {
       await navigator.serviceWorker.register(
