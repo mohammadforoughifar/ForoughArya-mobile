@@ -32,6 +32,11 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
   /// آخرین متن تشخیص‌داده‌شده روی وب (که finalResult ندارد) — فقط در وب استفاده می‌شود.
   String _webBuffer = '';
 
+  /// آیا در این نشست حداقل یک نتیجه (حتی جزئی) از موتور گرفتیم؟
+  /// (اگر false بماند و نشست تمام شود یعنی هیچ متنی تشخیص داده نشده —
+  ///  احتمالاً فارسی اصلاً پشتیبانی نمی‌شود؛ راهنمایی لازم داریم)
+  bool _heardResult = false;
+
   void _message(String text) {
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
@@ -92,6 +97,13 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
               owner._listening = false;
               // روی وب، finalResult هرگز نمی‌آید؛ متن بافرشده را همین‌جا تزریق کن
               if (kIsWeb) owner._flushWebBuffer();
+              if (!owner._heardResult) {
+                owner._message(
+                  'متنی تشخیص داده نشد؛ فارسی احتمالاً روی این سرویس پشتیبانی نمی‌شود. '
+                  'از میکروفن کیبورد Gboard داخل همین کادر استفاده کنید.',
+                );
+              }
+              owner._heardResult = false;
               owner.setState(() {});
               // نگه‌داشتن مالکیت تا رسیدن نتیجهٔ نهایی (یا پایان نشست)
               if (status == 'done' || status == 'notListening') {
@@ -138,8 +150,47 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
           if (fa.isNotEmpty) {
             localeId = fa.first.localeId;
           } else {
+            _VoiceSession.owner = null;
+            if (!context.mounted) return;
+            final proceed = await showDialog<bool>(
+              context: context,
+              builder: (c) => Directionality(
+                textDirection: TextDirection.rtl,
+                child: AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  title: const Text(
+                    'فارسی در این دستگاه پشتیبانی نمی‌شود؟',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                  ),
+                  content: const Text(
+                    'زبان فارسی در فهرست تشخیص گفتار این گوشی دیده نشد؛ به همین خاطر موتور گفتار '
+                    '(خصوصاً سرویس‌های غیرگوگل مثل گفتار سامسونگ/هواوی) متن فارسی برنمی‌گرداند.\n\n'
+                    'روش‌های قطعیِ متن‌کردن صدای فارسی روی همین گوشی:\n'
+                    '۱) روی میکروفون کیبورد Google (Gboard) داخل همین کادر بزنید — فارسی آنلاین به‌خوبی کار می‌کند.\n'
+                    '۲) در تنظیمات گوشی مسیر Voice Input / گفتار را روی «Google Voice Typing» بگذارید و زبان فارسی را دانلود کنید.\n'
+                    '۳) در صورت تمایل، توسعه‌دهنده می‌تواند صدا را به سرور بفرستد و متن را از فضای ابری (مثلاً Google Cloud Speech) بگیرد.\n\n'
+                    'آیا باز هم با «تلاش اینترنتی fa-IR» ادامه دهیم؟',
+                    style: TextStyle(fontSize: 12.5, height: 1.7),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text('انصراف'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text('تلاش با fa-IR'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+            if (proceed != true) return;
+            if (_VoiceSession.owner != null) return;
+            _VoiceSession.owner = this;
             localeId = 'fa-IR';
-            _message('زبان فارسی در فهرست زبان‌های این دستگاه دیده نشد؛ با fa-IR اینترنت‌محور تلاش می‌شود.');
           }
         } catch (_) {
           localeId = 'fa-IR';
@@ -148,6 +199,7 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
 
       if (!mounted || _VoiceSession.owner != this) return;
       _webBuffer = '';
+      _heardResult = false;
       setState(() => _listening = true);
       await _VoiceSession.speech.listen(
         localeId: localeId,
@@ -163,6 +215,7 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
         onResult: (result) {
           if (!mounted || _VoiceSession.owner != this) return;
           final words = result.recognizedWords.trim();
+          if (words.isNotEmpty) _heardResult = true;
           if (words.isEmpty) return;
           if (kIsWeb) {
             // وب finalResult ندارد؛ آخرین متن را برای زمان توقف نگه می‌داریم
