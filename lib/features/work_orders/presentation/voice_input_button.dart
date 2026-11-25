@@ -213,7 +213,7 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
           listenMode: kIsWeb ? stt.ListenMode.dictation : stt.ListenMode.confirmation,
         ),
         onResult: (result) {
-          if (!mounted || _VoiceSession.owner != this) return;
+          if (!mounted) return;
           final words = result.recognizedWords.trim();
           if (words.isNotEmpty) _heardResult = true;
           if (words.isEmpty) return;

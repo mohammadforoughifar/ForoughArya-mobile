@@ -2,7 +2,7 @@
 
 > مرجع اصلی **ساخت خروجی وب‌اپلیکیشن (PWA)** از ریشهٔ همین مخزن است.
 > هر بار که «خروجی بگیر» خواسته شد، همین گردش کار اجرا می‌شود.
-> (آخرین نسخهٔ معتبر در زمان نگارش: `v1.70.8+87` — 2026-11-24)
+> (آخرین نسخهٔ معتبر در زمان نگارش: `v1.70.9+88` — 2026-11-24)
 
 ---
 
@@ -66,8 +66,8 @@ rm -f ../ForoughArya-iOS-PWA/flutter_service_worker.js
 cd ForoughArya-mobile
 python3 tools/build_single_file_pwa.py
 # یا نام دلخواه نسخه:
-SINGLEFILE_VERSION=v1.70.8 python3 tools/build_single_file_pwa.py
-cp /home/user/ForoughArya-SingleFile-v1.70.8.html /home/user/ForoughArya-iOS-PWA/single.html
+SINGLEFILE_VERSION=v1.70.9 python3 tools/build_single_file_pwa.py
+cp /home/user/ForoughArya-SingleFile-v1.70.9.html /home/user/ForoughArya-iOS-PWA/single.html
 ```
 
 - فایل خروجی در `/home/user/ForoughArya-SingleFile-vX.Y.Z.html` ساخته می‌شود
@@ -84,7 +84,7 @@ cp /home/user/ForoughArya-SingleFile-v1.70.8.html /home/user/ForoughArya-iOS-PWA
 cd /home && python3 - <<'PY'
 import zipfile, os
 src = '/home/user/ForoughArya-iOS-PWA'
-dst = '/home/user/ForoughArya-iOS-PWA-v1.70.8.zip'
+dst = '/home/user/ForoughArya-iOS-PWA-v1.70.9.zip'
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
     for root, dirs, files in os.walk(src):
         dirs[:] = [d for d in dirs if d != '.git']
@@ -101,7 +101,7 @@ PY
 
 ## ۵. نسخه‌سازی و بالا بردن ورژن
 
-1. `pubspec.yaml` ← `version: 1.70.8+87` (فرمت `X.Y.Z+BUILD`).
+1. `pubspec.yaml` ← `version: 1.70.9+88` (فرمت `X.Y.Z+BUILD`).
 2. در صورت نیاز `README`های `docs/README-iPhone-PWA-FA.md` و این سند به‌روز شود.
 3. ابتدا بیلد وب می‌گیریم (خوانندهٔ `version.json`)، سپس تک‌فایل، سپس ZIP.
 4. خروجی‌های ثابت:
