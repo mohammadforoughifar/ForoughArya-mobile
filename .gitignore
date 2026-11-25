@@ -17,3 +17,13 @@ key.properties
 .idea/
 .vscode/
 *.iml
+
+# محلی/کش‌ها
+.dart_tool/
+android/build/
+.flutter-plugins-dependencies
+build/
+
+# آرتیفکت‌های بیلد نیتیو پلاگین‌ها
+third_party/whisper_flutter_new/android/.cxx/
+.cxx/
