@@ -2,7 +2,7 @@
 
 > مرجع اصلی **ساخت خروجی وب‌اپلیکیشن (PWA)** از ریشهٔ همین مخزن است.
 > هر بار که «خروجی بگیر» خواسته شد، همین گردش کار اجرا می‌شود.
-> (آخرین نسخهٔ معتبر در زمان نگارش: `v1.71.0+89` — 2026-11-25)
+> (آخرین نسخهٔ معتبر در زمان نگارش: `v1.71.1+90` — 2026-11-25)
 
 ---
 
@@ -66,8 +66,8 @@ rm -f ../ForoughArya-iOS-PWA/flutter_service_worker.js
 cd ForoughArya-mobile
 python3 tools/build_single_file_pwa.py
 # یا نام دلخواه نسخه:
-SINGLEFILE_VERSION=v1.71.0 python3 tools/build_single_file_pwa.py
-cp /home/user/ForoughArya-SingleFile-v1.71.0.html /home/user/ForoughArya-iOS-PWA/single.html
+SINGLEFILE_VERSION=v1.71.1 python3 tools/build_single_file_pwa.py
+cp /home/user/ForoughArya-SingleFile-v1.71.1.html /home/user/ForoughArya-iOS-PWA/single.html
 ```
 
 - فایل خروجی در `/home/user/ForoughArya-SingleFile-vX.Y.Z.html` ساخته می‌شود
@@ -84,7 +84,7 @@ cp /home/user/ForoughArya-SingleFile-v1.71.0.html /home/user/ForoughArya-iOS-PWA
 cd /home && python3 - <<'PY'
 import zipfile, os
 src = '/home/user/ForoughArya-iOS-PWA'
-dst = '/home/user/ForoughArya-iOS-PWA-v1.71.0.zip'
+dst = '/home/user/ForoughArya-iOS-PWA-v1.71.1.zip'
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
     for root, dirs, files in os.walk(src):
         dirs[:] = [d for d in dirs if d != '.git']

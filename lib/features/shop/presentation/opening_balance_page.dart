@@ -15,6 +15,10 @@
 //     کالا و انبار پیش‌فرض از سرور خوانده می‌شود. (وب در صورت نبود، کالا
 //     می‌سازد — این مرحله با پیام روشن به کاربر واگذار شده است.)
 //  پیام‌های اعتبارسنجی عیناً وب.
+//
+//  فهرست سوابق (طرف حساب‌ها و موجودی اولیه) از سرور خوانده می‌شود تا اسناد
+//  ثبت‌شده در وب (یا نشست‌های قبلی) هم نمایش داده شوند؛ اسناد موجودی اولیه
+//  سفارش خرید با شرح «موجودی اولیه …» شناسایی می‌شوند.
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -51,9 +55,11 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
   List<TreasuryAccount> _accounts = const [];
   List<TreasuryCheque> _cheques = const [];
 
-  // سوابق این نشست (مثل وب که در حافظه نگه می‌دارد)
+  // سوابق افتتاح حساب: از سرور بارگذاری می‌شود (اسناد ثبت‌شده در وب هم دیده می‌شوند)
   final List<_PartyOpening> _partyHistory = [];
+  bool _serverHistoryFailed = false;
   final List<_StockOpening> _stockHistory = [];
+  bool _stockHistoryFailed = false;
 
   @override
   void initState() {
@@ -92,6 +98,20 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
       try {
         cheques = (await _repo.treasuryCheques(pageSize: 20)).items;
       } catch (_) {}
+      var serverParty = <_PartyOpening>[];
+      var serverFailed = false;
+      var serverStock = <_StockOpening>[];
+      var stockFailed = false;
+      try {
+        serverParty = await _fetchServerPartyOpenings(products);
+      } catch (_) {
+        serverFailed = true;
+      }
+      try {
+        serverStock = await _fetchServerStockOpenings();
+      } catch (_) {
+        stockFailed = true;
+      }
       if (!mounted) return;
       setState(() {
         _customers = customers;
@@ -100,6 +120,18 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
         _warehouses = whs;
         _accounts = accounts;
         _cheques = cheques;
+        if (!serverFailed) {
+          _partyHistory
+            ..clear()
+            ..addAll(serverParty);
+        }
+        if (!stockFailed) {
+          _stockHistory
+            ..clear()
+            ..addAll(serverStock);
+        }
+        _serverHistoryFailed = serverFailed;
+        _stockHistoryFailed = stockFailed;
         _loading = false;
       });
     } catch (e) {
@@ -108,6 +140,137 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
         _error = _clean(e);
         _loading = false;
       });
+    }
+  }
+
+  /// افتتاح حساب‌های ثبت‌شده را از سرور می‌خواند (اسناد وبی هم پیدا می‌شوند).
+  /// اسناد افتتاح حساب همان سفارش‌های خرید/فروشی هستند که «کالای سیستمی»
+  /// افتتاح حساب/بستانکاری در اقلام‌شان یا (در صورت نبود اقلام) شرحشان آمده است.
+  Future<List<_PartyOpening>> _fetchServerPartyOpenings(
+    List<Product> products,
+  ) async {
+    Product? svc;
+    Product? goods;
+    for (final p in products) {
+      if (svc == null && p.name.contains('مانده افتتاح حساب')) svc = p;
+      if (goods == null && p.name.contains('مانده بستانکاری افتتاحیه')) {
+        goods = p;
+      }
+    }
+    final sale = await _repo.orders(type: TxnType.sale, pageSize: 100);
+    final purchase = await _repo.orders(type: TxnType.purchase, pageSize: 100);
+    final all = [...sale.items, ...purchase.items];
+    final linesPresent = all.any((o) => o.lines.isNotEmpty);
+
+    bool isOpening(ShopOrder o, int? sysId) {
+      if (linesPresent) {
+        if (sysId == null || sysId <= 0) return false;
+        return o.lines.any((l) => l.productId == sysId);
+      }
+      return o.description.contains('افتتاح');
+    }
+
+    final out = <_PartyOpening>[];
+    for (final o in sale.items) {
+      if (o.isCancelled) continue;
+      if (isOpening(o, svc?.id)) {
+        out.add(
+          _PartyOpening(
+            partyName: (o.partyName ?? '').trim().isEmpty
+                ? '—'
+                : o.partyName!.trim(),
+            amount: o.totalAmount,
+            isDebtor: true,
+            date: o.date,
+          ),
+        );
+      }
+    }
+    for (final o in purchase.items) {
+      if (o.isCancelled) continue;
+      if (isOpening(o, goods?.id)) {
+        out.add(
+          _PartyOpening(
+            partyName: (o.partyName ?? '').trim().isEmpty
+                ? '—'
+                : o.partyName!.trim(),
+            amount: o.totalAmount,
+            isDebtor: false,
+            date: o.date,
+          ),
+        );
+      }
+    }
+    out.sort(
+      (a, b) => (b.date ?? DateTime(2000)).compareTo(a.date ?? DateTime(2000)),
+    );
+    return out.take(30).toList();
+  }
+
+  /// موجودی‌های اولیه ثبت‌شده را از سرور می‌خواند (سفارش خرید با شرح «موجودی اولیه…»).
+  Future<List<_StockOpening>> _fetchServerStockOpenings() async {
+    final purchase = await _repo.orders(type: TxnType.purchase, pageSize: 100);
+    final out = <_StockOpening>[];
+    for (final o in purchase.items) {
+      if (o.isCancelled) continue;
+      if (!o.description.contains('موجودی اولیه')) continue;
+      if (o.lines.isEmpty) {
+        // اگر سرور اقلام سند را نگذاشته بود، خود سند را نشان بده
+        out.add(
+          _StockOpening(
+            productName: o.description.trim(),
+            warehouseName: (o.warehouseName ?? '').trim(),
+            quantity: 0,
+            unitPrice: o.totalAmount,
+          ),
+        );
+        continue;
+      }
+      for (final l in o.lines) {
+        out.add(
+          _StockOpening(
+            productName: l.productName.trim().isEmpty
+                ? 'کالا #${l.productId}'
+                : l.productName.trim(),
+            warehouseName: (o.warehouseName ?? '').trim(),
+            quantity: l.quantity,
+            unitPrice: l.price,
+          ),
+        );
+      }
+    }
+    return out.take(30).toList();
+  }
+
+  Future<void> _refreshStockHistory() async {
+    try {
+      final fresh = await _fetchServerStockOpenings();
+      if (!mounted) return;
+      setState(() {
+        _stockHistory
+          ..clear()
+          ..addAll(fresh);
+        _stockHistoryFailed = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _stockHistoryFailed = true);
+    }
+  }
+
+  /// پس از ثبت سند افتتاح حساب، فهرست را دوباره از سرور بارگذاری کن؛
+  /// در صورت شکست سرور، ورودی جدید را محلی به فهرست اضافه کن.
+  Future<void> _refreshPartyHistory() async {
+    try {
+      final fresh = await _fetchServerPartyOpenings(_products);
+      if (!mounted) return;
+      setState(() {
+        _partyHistory
+          ..clear()
+          ..addAll(fresh);
+        _serverHistoryFailed = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _serverHistoryFailed = true);
     }
   }
 
@@ -148,6 +311,13 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
       if (p.name.contains('مانده بستانکاری افتتاحیه')) return p;
     }
     return list.isEmpty ? null : list.first;
+  }
+
+  /// شرح سند موجودی اولیه؛ اگر خالی بود پیش‌فرض «موجودی اولیه ابتدای دوره»
+  /// استفاده می‌شود تا سند هم معنی‌دار باشد و هم در فهرست سوابق پیدا شود.
+  String _stkDocDescription() {
+    final d = _stkDesc.text.trim();
+    return d.isEmpty ? 'موجودی اولیه ابتدای دوره' : d;
   }
 
   Future<int> _warehouseIdFor(Product? p) async {
@@ -405,12 +575,20 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
               'افتتاح حساب‌های ثبت‌شده اخیر',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
             ),
+            if (_serverHistoryFailed)
+              const Padding(
+                padding: EdgeInsets.only(top: 2, bottom: 4),
+                child: Text(
+                  'اتصال به سرور برای فهرست سوابق برقرار نشد؛ فقط سوابق همین نشست نمایش داده می‌شود.',
+                  style: TextStyle(fontSize: 9.5, color: ShopColors.warn),
+                ),
+              ),
             const SizedBox(height: 6),
             if (_partyHistory.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 14),
                 child: Text(
-                  'هنوز افتتاح حسابی در این نشست ثبت نشده است.',
+                  'هنوز افتتاح حسابی ثبت نشده است.',
                   style: TextStyle(fontSize: 10.5, color: ShopColors.inkFaint),
                 ),
               )
@@ -569,21 +747,30 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
       });
       if (!mounted) return;
       _toast('افتتاح حساب طرف حساب «$_partyName» با موفقیت ثبت شد.', ok: true);
+      final savedPartyName = _partyName ?? '';
+      final savedIsDebtor = _isDebtor;
+      final savedDate = _docDate;
       setState(() {
-        _partyHistory.insert(
-          0,
-          _PartyOpening(
-            partyName: _partyName ?? '',
-            amount: amount,
-            isDebtor: _isDebtor,
-            date: _docDate,
-          ),
-        );
         _partyId = null;
         _partyName = null;
         _amount.clear();
         _desc.clear();
       });
+      await _refreshPartyHistory();
+      if (mounted && _partyHistory.isEmpty) {
+        // سرور هنوز فهرست را نشان نمی‌دهد؛ ورودی همین نشست را محلی نشان بده
+        setState(() {
+          _partyHistory.insert(
+            0,
+            _PartyOpening(
+              partyName: savedPartyName,
+              amount: amount,
+              isDebtor: savedIsDebtor,
+              date: savedDate,
+            ),
+          );
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       _toast(_cleanMsg2(e));
@@ -1241,6 +1428,7 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
         _instPartyId = null;
         _instPartyName = null;
       });
+      await _refreshPartyHistory();
     } catch (e) {
       if (!mounted) return;
       _toast(_cleanMsg2(e));
@@ -1394,15 +1582,23 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
             ),
           ]),
         ),
-        if (_stockHistory.isNotEmpty) ...[
+        if (_stockHistory.isNotEmpty || _stockHistoryFailed) ...[
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: _card([
               const Text(
-                'اقلام ثبت‌شدهٔ این نشست',
+                'موجودی‌های اولیه ثبت‌شده اخیر',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
               ),
+              if (_stockHistoryFailed)
+                const Padding(
+                  padding: EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(
+                    'اتصال به سرور برای فهرست سوابق برقرار نشد؛ فقط سوابق همین نشست نمایش داده می‌شود.',
+                    style: TextStyle(fontSize: 9.5, color: ShopColors.warn),
+                  ),
+                ),
               const SizedBox(height: 6),
               for (final s in _stockHistory)
                 Padding(
@@ -1482,7 +1678,7 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
         'warehouseId': _stkWarehouseId,
         'date': DateTime.now().toIso8601String(),
         'paymentMethod': PayMethod.cash,
-        'description': _stkDesc.text.trim(),
+        'description': _stkDocDescription(),
         'lines': [
           {
             'productId': _stkProductId,
@@ -1508,19 +1704,28 @@ class _OpeningBalancePageState extends State<OpeningBalancePage> {
         'در انبار «$whName» ثبت شد.',
         ok: true,
       );
+      final savedProductName = _stkProductName ?? '';
+      final savedQty = qty;
+      final savedPrice = parseNum(_stkPrice.text);
       setState(() {
-        _stockHistory.insert(
-          0,
-          _StockOpening(
-            productName: _stkProductName ?? '',
-            warehouseName: whName,
-            quantity: qty,
-            unitPrice: parseNum(_stkPrice.text),
-          ),
-        );
         _stkQty.text = '1';
         _stkPrice.clear();
       });
+      await _refreshStockHistory();
+      if (mounted && _stockHistory.isEmpty) {
+        // فهرست سرور هنوز سند جدید را نشان نمی‌دهد؛ محلی نشان بده
+        setState(() {
+          _stockHistory.insert(
+            0,
+            _StockOpening(
+              productName: savedProductName,
+              warehouseName: whName,
+              quantity: savedQty,
+              unitPrice: savedPrice,
+            ),
+          );
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       _toast(_cleanMsg2(e));
