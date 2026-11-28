@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:vosk_flutter_service/vosk_flutter_service.dart';
+import '../../../core/audio/vosk_service.dart';
 
 import '../../../core/audio/local_vosk.dart';
 

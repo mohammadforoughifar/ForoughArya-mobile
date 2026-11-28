@@ -43,3 +43,8 @@ flutter:
       fonts:
         - asset: assets/fonts/Vazirmatn.ttf
           # کاهش حجم: نسخهٔ subset بهینه‌شده (فارسی/عربی + لاتین + علائم تایپوگرافی)
+
+dependency_overrides:
+  # نسخهٔ داخلی: مسیر web plugin در پابسپِک اصلی (lib/src/...) دوبل می‌شد و بیلد وب را می‌شکست
+  vosk_flutter_service:
+    path: third_party/vosk_flutter_service
