@@ -1,31 +1,28 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:vosk_flutter_service/vosk_flutter_service.dart';
 
-import '../../../core/audio/local_whisper.dart';
+import '../../../core/audio/local_vosk.dart';
 
-/// دکمهٔ ورودی صوتی برای تبدیل گفتار فارسی به متن.
+/// دکمهٔ ورودی صوتی — تبدیل زندهٔ گفتار فارسی به متن با **تایپ هم‌زمان**.
 ///
 /// مسیرها:
-/// - اندروید: **کاملاً محلی** با whisper.cpp (مدلِ فشردهٔ q5_1) روی خود دستگاه؛
-///   مدل داخل خود APK است و هنگام اولین اجرا کپی می‌شود — هیچ دانلود و تأخیری
-///   وجود ندارد (بدون گوگل/اینترنت/سرور).
-/// - وب/PWA و iOS: از موتور گفتار مرورگر/سیستم (webkitSpeechRecognition / SFSpeechRecognizer) استفاده می‌شود.
-///   نکتهٔ وب: پلاگین وب هرگز `finalResult` نمی‌فرستد و `locales()` هم خالی برمی‌گرداند؛
-///   به همین دلیل روی وب نتایج را داخل بافر نگه می‌داریم و با پایان وضعیت تزریق می‌کنیم.
-class _VoiceSession {
-  static final speech = stt.SpeechToText();
-  static _VoiceInputButtonState? owner;
-  static bool initialized = false;
-}
-
+/// - اندروید: موتور کاملاً محلی و آفلاین **Vosk** (مدل small-fa-0.42 فارسی)
+///   — بدون گوگل، اینترنت و سرور؛ متن **همان‌لحظهٔ صحبت** در کادر تایپ می‌شود.
+/// - iOS: موتور اپل با نتایج زنده (SFSpeechRecognizer).
+/// - وب/PWA: موتور مرورگر (webkitSpeechRecognition) با بافر نتایج.
 class VoiceInputButton extends StatefulWidget {
-  const VoiceInputButton({super.key, required this.controller, this.onChanged, this.maxLength});
+  const VoiceInputButton({
+    super.key,
+    required this.controller,
+    this.onChanged,
+    this.maxLength,
+  });
   final TextEditingController controller;
   final ValueChanged<String>? onChanged;
   final int? maxLength;
@@ -34,300 +31,365 @@ class VoiceInputButton extends StatefulWidget {
   State<VoiceInputButton> createState() => _VoiceInputButtonState();
 }
 
+/// موتور اندروید (کش مشترک بین دفعات): مدل و recognizer یک‌بار ساخته و reuse می‌شوند.
+class _VoskEngine {
+  static final VoskFlutterPlugin vosk = VoskFlutterPlugin.instance();
+  static Model? model;
+  static Recognizer? recognizer;
+}
+
+/// وضعیت موتور گفتار سیستم (iOS/وب)
+class _SttSession {
+  static final speech = stt.SpeechToText();
+  static bool initialized = false;
+  static _VoiceInputButtonState? owner;
+}
+
 class _VoiceInputButtonState extends State<VoiceInputButton> {
-  bool _starting = false;
-  bool _listening = false;
   bool _busy = false;
-  AudioRecorder? _recorder;
-  String? _activePath;
+  bool _listening = false;
 
-  /// آخرین متن تشخیص‌داده‌شده روی وب (که finalResult ندارد) — فقط در وب استفاده می‌شود.
+  // --- ماشین تایپ زنده (اندروید Vosk / iOS اپل) ---
+  bool _liveActive = false;
+  String _origBefore = ''; // متن کادر قبل از نقطه‌ای که دیکته شروع می‌شود
+  String _prefixBase = ''; // متن قبل از دیکته +فاصلهٔ جداکننده در صورت نیاز
+  String _segSuffix = ''; // متن بعد از نقطه‌ای که دیکته شروع می‌شود (دست‌نخورده می‌ماند)
+  String _finalText = ''; // بخش‌های قطعی‌شدهٔ این نشست
+  String _partial = ''; // فرضیهٔ جاری این‌لحظه
+
+  // اندروید: سرویس/اشتراک‌های این نشست
+  SpeechService? _voskService;
+  StreamSubscription<String>? _partialSub;
+  StreamSubscription<String>? _resultSub;
+
+  // وب: بافر نتایج جزئی (موتور وب finalResult نمی‌دهد)
   String _webBuffer = '';
-
-  /// آیا در این نشست حداقل یک نتیجه (حتی جزئی) از موتور گرفتیم؟
   bool _heardResult = false;
 
-  bool get _useLocalWhisper =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.android && kLocalWhisperSupported;
+  bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android && kLocalVoskSupported;
 
   void _message(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(text)));
   }
 
-  /// متن تشخیص‌داده‌شده را داخل کادر فعال می‌نشاند و مکان‌نما را می‌سازد.
-  void _insertRecognized(String words) {
-    if (!mounted) return;
-    words = words.trim();
-    if (words.isEmpty) return;
-    final controller = widget.controller;
-    final existing = controller.text;
-    final selection = controller.selection;
-    final start = selection.isValid ? selection.start.clamp(0, existing.length) : existing.length;
-    final end = selection.isValid ? selection.end.clamp(0, existing.length) : existing.length;
-    final prefix = start > 0 && !RegExp(r'\s').hasMatch(existing[start - 1]) ? ' ' : '';
-    final suffix = end < existing.length && !RegExp(r'\s').hasMatch(existing[end]) ? ' ' : '';
-    var text = existing.replaceRange(start, end, '$prefix$words$suffix');
+  // ============================================================
+  //  تایپ زندهٔ مشترک
+  // ============================================================
+
+  void _liveBegin() {
+    final v = widget.controller.value;
+    final sel = v.selection;
+    final caret = sel.isValid ? sel.end : v.text.length;
+    _origBefore = v.text.substring(0, caret);
+    _segSuffix = v.text.substring(caret);
+    final needsSpace =
+        _origBefore.isNotEmpty && !RegExp(r'\s$').hasMatch(_origBefore);
+    _prefixBase = _origBefore + (needsSpace ? ' ' : '');
+    _finalText = '';
+    _partial = '';
+    _liveActive = true;
+  }
+
+  String get _composed =>
+      [_finalText.trim(), _partial.trim()].where((e) => e.isNotEmpty).join(' ');
+
+  void _liveApply() {
+    if (!mounted || !_liveActive) return;
+    var composed = _composed;
     if (widget.maxLength != null) {
-      text = LengthLimitingTextInputFormatter.truncate(
-        TextEditingValue(text: text),
-        widget.maxLength!,
-      ).text;
+      final budget = widget.maxLength! - _origBefore.length - _segSuffix.length;
+      if (budget <= 0) composed = ''; else if (composed.length > budget) {
+        composed = composed.substring(0, budget);
+      }
     }
-    final cursor = (start + prefix.length + words.length + suffix.length).clamp(0, text.length);
-    controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
+    final text = composed.isEmpty
+        ? _origBefore + _segSuffix
+        : _prefixBase + composed + _segSuffix;
+    final caret = composed.isEmpty
+        ? _origBefore.length
+        : _prefixBase.length + composed.length;
+    widget.controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: caret),
+    );
     widget.onChanged?.call(text);
   }
 
-  Future<void> _toggle() async {
-    if (_starting || _busy) return;
-    if (_useLocalWhisper) {
-      return _toggleLocalWhisper();
+  void _liveSetPartial(String words) {
+    _partial = words.trim();
+    _liveApply();
+  }
+
+  void _liveAppendFinal(String words) {
+    words = words.trim();
+    if (words.isNotEmpty) {
+      _finalText =
+          _finalText.trim().isEmpty ? words : '${_finalText.trim()} $words';
     }
-    return _toggleStt();
+    _partial = '';
+    _liveApply();
+  }
+
+  void _liveEnd() {
+    _liveActive = false;
+    _finalText = '';
+    _partial = '';
   }
 
   // ============================================================
-  //  مسیر محلی اندروید (whisper.cpp روی خود گوشی)
+  //  دکمه
   // ============================================================
 
-  Future<void> _toggleLocalWhisper() async {
-    final recorder = _recorder ??= AudioRecorder();
-
+  Future<void> _toggle() async {
+    if (_busy) return;
     if (_listening) {
-      // پایان ضبط و تبدیل روی خود دستگاه
-      setState(() => _starting = true);
-      try {
-        final path = await recorder.stop();
-        _activePath = null;
-        if (mounted) setState(() => _listening = false);
-        if (path == null) {
-          _message('ضبط صدا متوقف نشد؛ دوباره تلاش کنید.');
-          return;
-        }
-        final text = await _transcribeWithProgressDialog(path);
-        if (text != null && text.trim().isNotEmpty) {
-          _insertRecognized(text.trim());
-        } else {
-          _message('متنی تشخیص داده نشد؛ آرام‌تر و نزدیک‌تر به میکروفون صحبت کنید.');
-        }
-        await LocalWhisper.instance.discard(path);
-      } catch (_) {
-        _message('تبدیل صدا به متن ناموفق بود؛ حافظهٔ گوشی را بررسی کنید.');
-      } finally {
-        if (mounted) setState(() {
-          _starting = false;
+      if (_isAndroid) {
+        await _stopVosk();
+      } else if (!kIsWeb) {
+        await _SttSession.speech.stop();
+      } else {
+        await _SttSession.speech.stop(); // وب: flush در کالبک وضعیت انجام می‌شود
+      }
+      return;
+    }
+    if (_isAndroid) {
+      return _startVosk();
+    }
+    return _startStt();
+  }
+
+  // ============================================================
+  //  اندروید — Vosk کاملاً محلی با تایپ زنده
+  // ============================================================
+
+  Future<void> _startVosk() async {
+    _busy = true;
+    setState(() {});
+    try {
+      // آماده‌سازی مدل (باندل‌شده؛ در حالت عادی آنی است)
+      final path = await LocalVosk.instance.ensureModelPath();
+      if (path == null) {
+        _message('مدل گفتار فارسی در این نصب پیدا نشد؛ لطفاً برنامه را مجدداً نصب کنید.');
+        return;
+      }
+      if (_VoskEngine.model == null) {
+        _VoskEngine.model = await _VoskEngine.vosk.createModel(path);
+      }
+      if (_VoskEngine.recognizer == null) {
+        _VoskEngine.recognizer = await _VoskEngine.vosk.createRecognizer(
+          model: _VoskEngine.model!,
+          sampleRate: 16000,
+        );
+      }
+      _liveBegin();
+      _voskService = await _VoskEngine.vosk.initSpeechService(_VoskEngine.recognizer!);
+      _partialSub = _voskService!.onPartial().listen((raw) {
+        final j = _tryJson(raw);
+        final words = (j?['partial'] ?? '').toString().trim();
+        _heardResult = _heardResult || words.isNotEmpty;
+        _liveSetPartial(words);
+      });
+      _resultSub = _voskService!.onResult().listen((raw) {
+        final j = _tryJson(raw);
+        final words = (j?['text'] ?? '').toString().trim();
+        _heardResult = _heardResult || words.isNotEmpty;
+        _liveAppendFinal(words);
+      });
+      _heardResult = false;
+      await _voskService!.start();
+      HapticFeedback.mediumImpact();
+      if (mounted) setState(() => _listening = true);
+    } catch (e) {
+      await _teardownVosk();
+      _liveEnd();
+      _message('شروع تشخیص گفتار ناموفق بود؛ اجازهٔ میکروفن را بررسی کنید.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _stopVosk() async {
+    _busy = true;
+    setState(() {});
+    try {
+      final service = _voskService;
+      await _partialSub?.cancel();
+      await _resultSub?.cancel();
+      _partialSub = null;
+      _resultSub = null;
+      if (service != null) {
+        await service.stop();
+        try {
+          final tail = await _VoskEngine.recognizer?.getFinalResult();
+          final words = ((_tryJson(tail)?['text']) ?? '').toString().trim();
+          _liveAppendFinal(words);
+        } catch (_) {}
+        await service.dispose();
+      }
+      _voskService = null;
+      if (!_heardResult && _composed.isEmpty) {
+        // متن نهایی هم خالی بود
+      }
+      final anyHeard = _heardResult;
+      _liveEnd();
+      _heardResult = false;
+      if (!anyHeard) {
+        _message('متنی تشخیص داده نشد؛ نزدیک‌تر به میکروفن و شمرده صحبت کنید.');
+      }
+    } catch (_) {
+      _message('پایان ضبط با خطا مواجه شد.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _listening = false;
           _busy = false;
         });
       }
-      return;
     }
+  }
 
-    // شروع ضبط (در صورت نیاز، مدل فارسی اول یک‌بار آماده می‌شود)
-    if (!await recorder.hasPermission()) {
-      _message('برای ضبط صدا، مجوز میکروفن لازم است.');
-      return;
-    }
-    if (!await LocalWhisper.instance.isModelReady()) {
-      final ok = await _askDownloadModel();
-      if (ok != true) return;
-      _busy = true;
-      if (mounted) setState(() {});
-      final ready = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const _ModelDownloadDialog(),
-      );
-      _busy = false;
-      if (mounted) setState(() {});
-      if (ready != true) {
-        _message('دانلود مدل گفتار فارسی ناموفق بود؛ اتصال اینترنت و حافظهٔ آزاد گوشی را بررسی کنید.');
-        return;
-      }
-    }
-    final dir = await getTemporaryDirectory();
-    final path = '${dir.path}/fa_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
+  Future<void> _teardownVosk() async {
+    await _partialSub?.cancel();
+    await _resultSub?.cancel();
+    _partialSub = null;
+    _resultSub = null;
     try {
-      await recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.wav,
-          sampleRate: 16000,
-          numChannels: 1,
-          bitRate: 256000,
-        ),
-        path: path,
-      );
-      _activePath = path;
-      HapticFeedback.mediumImpact();
-      if (mounted) setState(() => _listening = true);
+      await _voskService?.cancel();
+    } catch (_) {}
+    try {
+      await _voskService?.dispose();
+    } catch (_) {}
+    _voskService = null;
+    if (mounted) setState(() => _listening = false);
+  }
+
+  static Map<String, dynamic>? _tryJson(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final v = jsonDecode(raw);
+      return v is Map<String, dynamic> ? v : null;
     } catch (_) {
-      _message('شروع ضبط ممکن نشد.');
+      return null;
     }
   }
 
-  Future<bool?> _askDownloadModel() => showDialog<bool>(
-    context: context,
-    builder: (c) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'مدل گفتار فارسی آماده نیست',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-        ),
-        content: const Text(
-          'مدل گفتار فارسی در این نصب پیدا نشد.\n\nبا تأیید شما، مدل فشرده (حدود ۵۷ مگابایت) یک‌بار از اینترنت دریافت و ذخیره می‌شود؛ بعد از آن تبدیل صدا به متن کاملاً روی خود گوشی و آفلاین انجام می‌شود.',
-          style: TextStyle(height: 1.7, fontSize: 12.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('بعداً'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(c, true),
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: const Text('دانلود و ادامه'),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Future<String?> _transcribeWithProgressDialog(String path) {
-    _busy = true;
-    if (mounted) setState(() {});
-    return showDialog<String?>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _TranscribeProgressDialog(
-        task: () async {
-          try {
-            return await LocalWhisper.instance.transcribe(path, language: 'fa');
-          } catch (_) {
-            return null;
-          }
-        },
-      ),
-    );
-  }
-
   // ============================================================
-  //  مسیر موتور سیستم (اندروید بسیار قدیمی/iOS/PWA)
+  //  iOS / وب — موتور گفتار سیستم/مرورگر
   // ============================================================
 
-  Future<void> _toggleStt() async {
-    if (_VoiceSession.owner == this && _listening) {
-      // روی وب برای تزریق متن بافرشده باید به‌جای cancel از stop استفاده شود
-      await _VoiceSession.speech.stop();
-      return;
-    }
-    if (_VoiceSession.owner != null) {
+  Future<void> _startStt() async {
+    if (_SttSession.owner != null && _SttSession.owner != this) {
       _message('ابتدا ضبط کادر دیگر را متوقف کنید.');
       return;
     }
-    _VoiceSession.owner = this;
-    setState(() => _starting = true);
+    _SttSession.owner = this;
+    _busy = true;
+    setState(() {});
     try {
-      if (!_VoiceSession.initialized) {
-        _VoiceSession.initialized = await _VoiceSession.speech.initialize(
+      if (!_SttSession.initialized) {
+        _SttSession.initialized = await _SttSession.speech.initialize(
           onStatus: (status) {
-            final owner = _VoiceSession.owner;
+            final owner = _SttSession.owner;
             if (owner == null || !owner.mounted) return;
             if (status == 'done' || status == 'notListening') {
               owner._listening = false;
-              // روی وب، finalResult هرگز نمی‌آید؛ متن بافرشده را همین‌جا تزریق کن
               if (kIsWeb) owner._flushWebBuffer();
-              if (!owner._heardResult) {
+              if (!owner._heardResult && owner._composed.isEmpty) {
                 owner._message(
-                  'متنی تشخیص داده نشد؛ فارسی احتمالاً روی این سرویس پشتیبانی نمی‌شود. '
-                  'از میکروفن کیبورد Gboard داخل همین کادر استفاده کنید.',
+                  'متنی تشخیص داده نشد؛ نزدیک‌تر به میکروفن صحبت کنید.',
                 );
               }
               owner._heardResult = false;
+              owner._liveEnd();
               owner.setState(() {});
-              // مالکیت فقط برای توقف/شروع بعدی نگه‌داشته می‌شود، نه برای مسیر متن
-              if (status == 'done' || status == 'notListening') {
-                _VoiceSession.owner = null;
-              }
+              _SttSession.owner = null;
             }
           },
           onError: (error) {
-            final owner = _VoiceSession.owner;
+            final owner = _SttSession.owner;
             if (owner == null || !owner.mounted) return;
             owner._listening = false;
             owner._webBuffer = '';
-            _VoiceSession.owner = null;
+            owner._liveEnd();
+            _SttSession.owner = null;
             owner.setState(() {});
             final code = error.errorMsg;
-            owner._message(kIsWeb
-                ? 'تشخیص گفتار انجام نشد${code.isNotEmpty ? ' ($code)' : ''}؛ مجوز میکروفن، اینترنت و HTTPS را بررسی کنید.'
-                : 'تشخیص گفتار انجام نشد${code.isNotEmpty ? ' ($code)' : ''}؛ مجوز میکروفن، اینترنت و سرویس گوگل گوشی را بررسی کنید.');
+            owner._message(
+              'تشخیص گفتار انجام نشد${code.isNotEmpty ? ' ($code)' : ''}؛ مجوز میکروفن را بررسی کنید.',
+            );
           },
         );
       }
-      if (!_VoiceSession.initialized) {
-        _VoiceSession.owner = null;
-        _message(kIsWeb
-            ? 'این مرورگر از تشخیص گفتار پشتیبانی نمی‌کند یا میکروفن مجاز نیست.'
-            : 'دسترسی میکروفن یا سرویس تشخیص گفتار در دسترس نیست.');
+      if (!_SttSession.initialized) {
+        _SttSession.owner = null;
+        _message(
+          kIsWeb
+              ? 'این مرورگر از تشخیص گفتار پشتیبانی نمی‌کند یا میکروفن مجاز نیست.'
+              : 'دسترسی میکروفن یا سرویس تشخیص گفتار در دسترس نیست.',
+        );
         return;
       }
 
-      // انتخاب زبان:
-      // - وب: locales() خالی است و باید مستقیماً fa-IR ست شود
-      // - iOS: فارسی در فهرست SFSpeechRecognizer هست؛ fa-IR استفاده می‌شود
       String? localeId;
+      var partialResults = false;
+      var mode = stt.ListenMode.dictation;
       if (kIsWeb) {
         localeId = 'fa-IR';
-      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        partialResults = false; // وب finalResult ندارد؛ از بافر استفاده می‌کنیم
+        mode = stt.ListenMode.dictation;
+      } else {
+        // iOS — نتایج زنده با تایپ هم‌زمان
         try {
-          final locales = await _VoiceSession.speech.locales();
+          final locales = await _SttSession.speech.locales();
           final fa = locales
-              .where((l) => l.localeId.toLowerCase().replaceAll('-', '_').startsWith('fa'))
+              .where((l) =>
+                  l.localeId.toLowerCase().replaceAll('-', '_').startsWith('fa'))
               .toList();
           localeId = fa.isNotEmpty ? fa.first.localeId : 'fa-IR';
         } catch (_) {
           localeId = 'fa-IR';
         }
-      } else {
-        localeId = 'fa-IR';
+        partialResults = true;
+        mode = stt.ListenMode.dictation;
       }
 
-      if (!mounted || _VoiceSession.owner != this) return;
+      if (!mounted || _SttSession.owner != this) return;
       _webBuffer = '';
       _heardResult = false;
+      if (!kIsWeb) _liveBegin();
       setState(() => _listening = true);
-      await _VoiceSession.speech.listen(
+      await _SttSession.speech.listen(
         localeId: localeId,
-        // روی وب: continuous=false بگذار؛ روی آیفون سافاری continuous=true
-        // هرگز متن نهایی برنمی‌گرداند. با توقف خودکار پس از اولین مکث، متن
-        // نهایی در onend برمی‌گردد و به کادر تزریق می‌شود.
         listenOptions: stt.SpeechListenOptions(
-          partialResults: false,
+          partialResults: partialResults,
           cancelOnError: kIsWeb,
-          listenMode: kIsWeb ? stt.ListenMode.dictation : stt.ListenMode.confirmation,
+          listenMode: mode,
         ),
         onResult: (result) {
           if (!mounted) return;
           final words = result.recognizedWords.trim();
           if (words.isNotEmpty) _heardResult = true;
-          if (words.isEmpty) return;
           if (kIsWeb) {
-            // وب finalResult ندارد؛ آخرین متن را برای زمان توقف نگه می‌داریم
             _webBuffer = words;
             return;
           }
-          if (!result.finalResult) return;
-          _insertRecognized(words);
+          if (result.finalResult) {
+            _liveAppendFinal(words);
+          } else {
+            _liveSetPartial(words);
+          }
         },
       );
     } catch (_) {
-      if (_VoiceSession.owner == this) _VoiceSession.owner = null;
+      if (_SttSession.owner == this) _SttSession.owner = null;
       if (mounted) setState(() => _listening = false);
+      _liveEnd();
       _message('شروع تشخیص گفتار ناموفق بود.');
     } finally {
-      if (mounted) setState(() => _starting = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -339,17 +401,44 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
     _insertRecognized(pending);
   }
 
+  /// درج قطعی متن (وب) داخل کادر با حفظ مکان‌نما.
+  void _insertRecognized(String words) {
+    if (!mounted) return;
+    words = words.trim();
+    if (words.isEmpty) return;
+    final controller = widget.controller;
+    final existing = controller.text;
+    final selection = controller.selection;
+    final start =
+        selection.isValid ? selection.start.clamp(0, existing.length) : existing.length;
+    final end =
+        selection.isValid ? selection.end.clamp(0, existing.length) : existing.length;
+    final prefix = start > 0 && !RegExp(r'\s').hasMatch(existing[start - 1]) ? ' ' : '';
+    final suffix =
+        end < existing.length && !RegExp(r'\s').hasMatch(existing[end]) ? ' ' : '';
+    var text = existing.replaceRange(start, end, '$prefix$words$suffix');
+    if (widget.maxLength != null) {
+      text = LengthLimitingTextInputFormatter.truncate(
+        TextEditingValue(text: text),
+        widget.maxLength!,
+      ).text;
+    }
+    final cursor = (start + prefix.length + words.length + suffix.length)
+        .clamp(0, text.length);
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: cursor),
+    );
+    widget.onChanged?.call(text);
+  }
+
   @override
   void dispose() {
-    if (_VoiceSession.owner == this) {
-      _VoiceSession.owner = null;
-      _VoiceSession.speech.cancel();
+    if (_SttSession.owner == this) {
+      _SttSession.owner = null;
+      _SttSession.speech.cancel();
     }
-    if (_activePath != null) {
-      LocalWhisper.instance.discard(_activePath!);
-      _activePath = null;
-    }
-    unawaited(_recorder?.dispose());
+    _teardownVosk();
     super.dispose();
   }
 
@@ -366,127 +455,10 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
       );
     }
     return IconButton(
-      tooltip: _listening ? 'پایان ضبط و تبدیل به متن' : 'تبدیل گفتار فارسی به متن',
-      onPressed: _starting ? null : _toggle,
+      tooltip: _listening ? 'پایان دیکته' : 'دیکتهٔ زندهٔ فارسی (تایپ هم‌زمان)',
+      onPressed: _toggle,
       icon: Icon(_listening ? Icons.stop_circle_outlined : Icons.mic_none_rounded),
       color: _listening ? Colors.red : null,
     );
   }
-}
-
-// ============================================================
-//  دیالوگ دانلود/نمایش پیشرفت مدل گفتار فارسی
-// ============================================================
-
-class _ModelDownloadDialog extends StatefulWidget {
-  const _ModelDownloadDialog();
-
-  @override
-  State<_ModelDownloadDialog> createState() => _ModelDownloadDialogState();
-}
-
-class _ModelDownloadDialogState extends State<_ModelDownloadDialog> {
-  double? _progress;
-
-  @override
-  void initState() {
-    super.initState();
-    LocalWhisper.instance
-        .prepareModel(
-          onProgress: (p) {
-            if (mounted) setState(() => _progress = p);
-          },
-        )
-        .then((ok) {
-          if (mounted) Navigator.of(context).pop(ok);
-        })
-        .catchError((_) {
-          if (mounted) Navigator.of(context).pop(false);
-        });
-  }
-
-  @override
-  Widget build(BuildContext context) => Directionality(
-    textDirection: TextDirection.rtl,
-    child: AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text(
-        'در حال دریافت مدل گفتار فارسی',
-        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 4),
-          if (_progress == null)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('در حال آماده‌سازی…'),
-            )
-          else ...[
-            LinearProgressIndicator(value: _progress!.clamp(0.0, 1.0)),
-            const SizedBox(height: 10),
-            Text(
-              '${(_progress! * 100).toStringAsFixed(0)}٪',
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ],
-          const SizedBox(height: 8),
-          const Text(
-            'معمولاً به این مرحله نمی‌رسید چون مدل داخل اپ است.',
-            style: TextStyle(fontSize: 11.5, color: Color(0xff64748b)),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _TranscribeProgressDialog extends StatefulWidget {
-  const _TranscribeProgressDialog({required this.task});
-  final Future<String?> Function() task;
-
-  @override
-  State<_TranscribeProgressDialog> createState() => _TranscribeProgressDialogState();
-}
-
-class _TranscribeProgressDialogState extends State<_TranscribeProgressDialog> {
-  @override
-  void initState() {
-    super.initState();
-    widget.task().then((text) {
-      if (mounted) Navigator.of(context).pop(text);
-    }).catchError((_) {
-      if (mounted) Navigator.of(context).pop(null);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => Directionality(
-    textDirection: TextDirection.rtl,
-    child: AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text(
-        'در حال تبدیل صدا به متن…',
-        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-      ),
-      content: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(height: 4),
-          SizedBox(
-            width: 34,
-            height: 34,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          SizedBox(height: 12),
-          Text(
-            'روی خود گوشی پردازش می‌شود؛\nمعمولاً در کمتر از یک تا دو ثانیه آماده می‌شود.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, height: 1.7, color: Color(0xff475569)),
-          ),
-        ],
-      ),
-    ),
-  );
 }

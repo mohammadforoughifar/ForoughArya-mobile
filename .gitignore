@@ -27,6 +27,6 @@ build/
 
 
 # مدل گفتار فارسی که build-time با tools/fetch_voice_model.py گرفته می‌شود (۵۷MB)
-android/app/src/main/assets/models/ggml-base.bin
 .cxx/
 third_party/whisper_flutter_new/android/.cxx/
+android/app/src/main/assets/models/vosk-model-small-fa-0.42.zip

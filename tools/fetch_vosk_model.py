@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-# دانلود مدل گفتار فارسی (whisper.cpp، نسخهٔ فشردهٔ q5_1) برای قرار دادن در APK.
+# دانلود مدل گفتار فارسی Vosk (small-fa-0.42) برای قرار دادن در APK.
 # مدل داخل ریپازیتوری کامیت نمی‌شود؛ این اسکریپت آن را می‌سازد:
-#   python3 tools/fetch_voice_model.py
+#   python3 tools/fetch_vosk_model.py
 # سپس:
 #   flutter build apk --release --split-per-abi
 import hashlib, os, sys, urllib.request
 
+MODEL = 'vosk-model-small-fa-0.42'
 DEST = os.path.join(os.path.dirname(__file__), '..', 'android', 'app', 'src',
-                    'main', 'assets', 'models', 'ggml-base.bin')
+                    'main', 'assets', 'models', MODEL + '.zip')
 URLS = [
-    'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin',
-    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin',
+    f'https://alphacephei.com/vosk/models/{MODEL}.zip',
+    f'https://hf-mirror.com/csukuangfj/vosk-models/resolve/main/fa/{MODEL}.zip',
+    f'https://huggingface.co/csukuangfj/vosk-models/resolve/main/fa/{MODEL}.zip',
 ]
-MIN_BYTES = 45 * 1024 * 1024  # فایل اصلی ≈ ۵۷MB
-EXPECTED_SHA256 = '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898'
+MIN_BYTES = 40 * 1024 * 1024
+EXPECTED_SHA256 = '977cb5faa538f3a835ccfd35f5f6d8284b5c450b89c700b9bd4736b66536ad46'
 
 os.makedirs(os.path.dirname(DEST), exist_ok=True)
 for url in URLS:

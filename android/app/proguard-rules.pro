@@ -37,3 +37,9 @@
     public static *** d(...);
     public static *** i(...);
 }
+
+# Vosk (JNA + کتابخانهٔ بومی تشخیص گفتار)
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.* { public *; }
+-keep class org.vosk.** { *; }
+-dontwarn com.sun.jna.**

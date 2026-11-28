@@ -23,44 +23,61 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
 
     /**
-     * مدل گفتار فارسی (whisper.cpp q5_1 ≈ ۵۷MB) را از assets به filesDir کپی می‌کند.
-     * getApplicationSupportDirectory() در فلاتر روی اندروید همان <filesDir> است؛
-     * پس از کپی، کد دارت بدون هیچ دانلودی به آن دسترسی دارد.
-     * — همگام اجرا می‌شود تا قبل از اولین اجرای Flutter همه‌چیز حاضر باشد (۵۷MB سریع نوشته می‌شود)
-     * — اگر فایل از قبل درست کپی شده باشد، کاری نمی‌کند
-     * — فایل‌های نیمه‌کارهٔ دانلود قدیمی (.part) را پاک می‌کند
+     * مدل گفتار فارسی Vosk (small-fa-0.42 ≈ ۵۱MB) را از assets استخراج می‌کند.
+     * مسیر خروجی: <filesDir>/vosk-model-small-fa-0.42 (همان filesDir فلاتر)
+     * با فایل نشانه‌گذار .ok معتبر شناخته می‌شود. قبل از Flutter اجرا می‌شود.
      */
-    private fun seedWhisperModelIfNeeded() {
+    private fun seedVoskModelIfNeeded() {
         try {
-            val expected: Long = try {
-                assets.openFd("models/ggml-base.bin").length
+            val modelName = "vosk-model-small-fa-0.42"
+            val dest = File(filesDir, modelName)
+            if (File(dest, ".ok").exists()) return
+            val tmp = File(filesDir, "$modelName.seedtmp")
+            tmp.deleteRecursively()
+            dest.deleteRecursively()
+            var extracted = false
+            try {
+                assets.open("models/$modelName.zip").use { input ->
+                    java.util.zip.ZipInputStream(input).use { zin ->
+                        var entry = zin.nextEntry
+                        while (entry != null) {
+                            val outFile = File(tmp, entry.name)
+                            val tmpPath = tmp.canonicalPath + File.separator
+                            if (!outFile.canonicalPath.startsWith(tmpPath)) {
+                                entry = zin.nextEntry
+                                continue // zip-slip guard
+                            }
+                            if (entry.isDirectory) {
+                                outFile.mkdirs()
+                            } else {
+                                outFile.parentFile?.mkdirs()
+                                outFile.outputStream().use { out -> zin.copyTo(out) }
+                            }
+                            entry = zin.nextEntry
+                        }
+                    }
+                }
+                val inner = File(tmp, modelName)
+                val src = if (inner.exists()) inner else tmp
+                if (File(src, "am/final.mdl").exists()) {
+                    if (!src.renameTo(dest)) {
+                        src.copyRecursively(dest, overwrite = true)
+                        src.deleteRecursively()
+                    }
+                    File(dest, ".ok").writeText("ok")
+                    extracted = true
+                }
             } catch (_: Exception) {
-                -1L // اپ بدون مدل باندل شده ساخته شده است → کد دارت دانلود می‌کند
-            }
-            if (expected <= 0L) return
-            val dest = File(filesDir, "ggml-base.bin")
-            if (dest.exists() && dest.length() == expected) return
-            File(filesDir, "ggml-base.bin.part").delete()
-            File(filesDir, "ggml-base.bin.seed.tmp").delete()
-            val tmp = File(filesDir, "ggml-base.bin.seed.tmp")
-            assets.open("models/ggml-base.bin").use { input ->
-                FileOutputStream(tmp).use { output -> input.copyTo(output) }
-            }
-            if (tmp.length() != expected) {
-                tmp.delete()
-                return
-            }
-            if (!tmp.renameTo(dest)) {
-                tmp.copyTo(dest, overwrite = true)
-                tmp.delete()
+                // بدون مدل باندل شده → کد دارت پلن B (دانلود یک‌باره) را اجرا می‌کند
+            } finally {
+                if (!extracted) tmp.deleteRecursively()
             }
         } catch (_: Exception) {
-            // هر خطایی اینجا نباید بوت اپ را بشکند؛ کد دارت به‌عنوان پلن B دانلود می‌کند
         }
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        seedWhisperModelIfNeeded()
+        seedVoskModelIfNeeded()
         super.onCreate(savedInstanceState)
     }
 
