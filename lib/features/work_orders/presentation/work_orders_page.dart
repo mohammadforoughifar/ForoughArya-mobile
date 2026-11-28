@@ -1,4 +1,3 @@
-import 'voice_input_button.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -604,13 +603,6 @@ class _WorkOrderListViewState extends State<WorkOrderListView>
                 });
               },
               decoration: InputDecoration(
-                suffixIcon: VoiceInputButton(controller: _search, onChanged: (_) {
-                  _debounce?.cancel();
-                  _debounce = Timer(const Duration(milliseconds: 450), () {
-                    _page = 1;
-                    _load();
-                  });
-                }),
                 prefixIcon: Icon(
                   Icons.search,
                   size: 20,

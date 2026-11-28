@@ -24,9 +24,4 @@ android/build/
 .flutter-plugins-dependencies
 build/
 
-# آرتیفکت‌های بیلد نیتیو پلاگین‌ها
-third_party/whisper_flutter_new/android/.cxx/
-.cxx/
 
-# مدل گفتار که build-time با tools/fetch_voice_model.py گرفته می‌شود (۵۷MB)
-android/app/src/main/assets/models/ggml-base.bin

@@ -12,7 +12,6 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
-import java.io.FileOutputStream
 
 /**
  * پل بومی برای ضبط و پخش پیام صوتی پیام‌رسان.
@@ -21,48 +20,6 @@ import java.io.FileOutputStream
  *   audio  : play(path) / stop() / duration(path)
  */
 class MainActivity : FlutterActivity() {
-
-    /**
-     * مدل گفتار فارسی (whisper.cpp q5_1 ≈ ۵۷MB) را از assets به filesDir کپی می‌کند.
-     * getApplicationSupportDirectory() در فلاتر روی اندروید همان <filesDir> است؛
-     * پس از کپی، کد دارت بدون هیچ دانلودی به آن دسترسی دارد.
-     * — همگام اجرا می‌شود تا قبل از اولین اجرای Flutter همه‌چیز حاضر باشد (۵۷MB سریع نوشته می‌شود)
-     * — اگر فایل از قبل درست کپی شده باشد، کاری نمی‌کند
-     * — فایل‌های نیمه‌کارهٔ دانلود قدیمی (.part) را پاک می‌کند
-     */
-    private fun seedWhisperModelIfNeeded() {
-        try {
-            val expected: Long = try {
-                assets.openFd("models/ggml-base.bin").length
-            } catch (_: Exception) {
-                -1L // اپ بدون مدل باندل شده ساخته شده است → کد دارت دانلود می‌کند
-            }
-            if (expected <= 0L) return
-            val dest = File(filesDir, "ggml-base.bin")
-            if (dest.exists() && dest.length() == expected) return
-            File(filesDir, "ggml-base.bin.part").delete()
-            File(filesDir, "ggml-base.bin.seed.tmp").delete()
-            val tmp = File(filesDir, "ggml-base.bin.seed.tmp")
-            assets.open("models/ggml-base.bin").use { input ->
-                FileOutputStream(tmp).use { output -> input.copyTo(output) }
-            }
-            if (tmp.length() != expected) {
-                tmp.delete()
-                return
-            }
-            if (!tmp.renameTo(dest)) {
-                tmp.copyTo(dest, overwrite = true)
-                tmp.delete()
-            }
-        } catch (_: Exception) {
-            // هر خطایی اینجا نباید بوت اپ را بشکند؛ کد دارت به‌عنوان پلن B دانلود می‌کند
-        }
-    }
-
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        seedWhisperModelIfNeeded()
-        super.onCreate(savedInstanceState)
-    }
 
     private var recorder: MediaRecorder? = null
     private var recorderPath: String? = null
