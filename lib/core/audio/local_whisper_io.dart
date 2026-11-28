@@ -7,9 +7,11 @@ import 'package:whisper_flutter_new/whisper_flutter_new.dart';
 
 /// موتور محلی تبدیل گفتار فارسی به متن — بدون اینترنت، بدون گوگل، بدون سرور.
 ///
-/// فایل مدل (ggml-base.bin ~۱۴۷MB) اولین بار به‌صورت یک فایل واحد دانلود و در
-/// حافظهٔ اپ ماندگار می‌شود؛ پس از آن تمام پردازش روی خود دستگاه انجام می‌شود
-/// ( whisper.cpp با ۴ رشته، زبان fa ).
+/// مدل whisper.cpp (ggml-base-q5_1 ≈ ۵۷MB) **داخل خود APK باندل شده** و با اولین
+/// اجرای اپ به حافظهٔ داخلی کپی می‌شود (MainActivity.seedWhisperModelIfNeeded).
+/// بعد از آن هیچ دانلود و تأخیری وجود ندارد.
+/// (اگر جایی اپ بدون مدل باندل شده نصب شد، prepareModel به‌عنوان پلن B آن را
+/// از آینهٔ سریع دانلود می‌کند — فقط در آن حالت یک‌بار.)
 const bool kLocalWhisperSupported = true;
 
 abstract class LocalWhisperEngine {
@@ -32,8 +34,8 @@ class _IosAndroidEngine implements LocalWhisperEngine {
 
   Future<File> _modelFile() async => File('${(await _dir()).path}/$_fileName');
 
-  /// حداقل اندازهٔ معقول برای مدل base (~۱۴۷MB)؛ دانلود مخدوش پذیرفته نمی‌شود.
-  static const int _minModelBytes = 120 * 1024 * 1024;
+  /// حداقل اندازهٔ معقول برای مدل base نسخهٔ q5_1 (~۵۷MB)
+  static const int _minModelBytes = 45 * 1024 * 1024;
 
   @override
   Future<bool> isModelReady() async {
@@ -44,37 +46,44 @@ class _IosAndroidEngine implements LocalWhisperEngine {
   @override
   Future<bool> prepareModel({ValueChanged<double>? onProgress}) async {
     if (await isModelReady()) return true;
+    // کپی مدل از assets کمی طول می‌کشد (اگر Race شده باشد)
+    for (var i = 0; i < 12; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (await isModelReady()) return true;
+    }
+    // پلن B — فقط وقتی APK بدون مدل باندل شده نصب شده باشد: دانلود یک‌بارهٔ q5_1
     final dest = await _modelFile();
-    // آینهٔ چین که از ایران هم معمولاً خوب جواب می‌دهد + مسیر اصلی به‌عنوان fallback
     const hosts = [
       'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main',
       'https://huggingface.co/ggerganov/whisper.cpp/resolve/main',
     ];
     for (final host in hosts) {
       try {
-        if (await _download(host, dest, onProgress)) return true;
+        if (await _download('$host/ggml-base-q5_1.bin', dest, onProgress)) {
+          return true;
+        }
       } catch (_) {
-        // به آینهٔ بعدی برو
+        // آینهٔ بعدی
       }
     }
-    // در صورت شکست پاک‌سازی فایل نیم‌کاره
     try {
       final partial = File('${dest.path}.part');
       if (partial.existsSync()) await partial.delete();
-      if (dest.existsSync()) await dest.delete();
+      if (dest.existsSync() && dest.lengthSync() < _minModelBytes) {
+        await dest.delete();
+      }
     } catch (_) {}
     return false;
   }
 
   Future<bool> _download(
-    String host,
+    String url,
     File dest,
     ValueChanged<double>? onProgress,
   ) async {
-    final url = Uri.parse('$host/ggml-${_model.modelName}.bin');
     final client = HttpClient();
     try {
-      final req = await client.getUrl(url);
+      final req = await client.getUrl(Uri.parse(url));
       req.headers.set('user-agent', 'ForoughAryaApp/1.0 (Android)');
       final res = await req.close();
       if (res.statusCode != 200) return false;

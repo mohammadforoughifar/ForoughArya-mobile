@@ -2,7 +2,7 @@
 
 > مرجع اصلی **ساخت خروجی وب‌اپلیکیشن (PWA)** از ریشهٔ همین مخزن است.
 > هر بار که «خروجی بگیر» خواسته شد، همین گردش کار اجرا می‌شود.
-> (آخرین نسخهٔ معتبر در زمان نگارش: `v1.71.1+90` — 2026-11-25)
+> (آخرین نسخهٔ معتبر در زمان نگارش: `v1.72.0+91` — 2026-11-25)
 
 ---
 
@@ -66,8 +66,8 @@ rm -f ../ForoughArya-iOS-PWA/flutter_service_worker.js
 cd ForoughArya-mobile
 python3 tools/build_single_file_pwa.py
 # یا نام دلخواه نسخه:
-SINGLEFILE_VERSION=v1.71.1 python3 tools/build_single_file_pwa.py
-cp /home/user/ForoughArya-SingleFile-v1.71.1.html /home/user/ForoughArya-iOS-PWA/single.html
+SINGLEFILE_VERSION=v1.72.0 python3 tools/build_single_file_pwa.py
+cp /home/user/ForoughArya-SingleFile-v1.72.0.html /home/user/ForoughArya-iOS-PWA/single.html
 ```
 
 - فایل خروجی در `/home/user/ForoughArya-SingleFile-vX.Y.Z.html` ساخته می‌شود
@@ -84,7 +84,7 @@ cp /home/user/ForoughArya-SingleFile-v1.71.1.html /home/user/ForoughArya-iOS-PWA
 cd /home && python3 - <<'PY'
 import zipfile, os
 src = '/home/user/ForoughArya-iOS-PWA'
-dst = '/home/user/ForoughArya-iOS-PWA-v1.71.1.zip'
+dst = '/home/user/ForoughArya-iOS-PWA-v1.72.0.zip'
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
     for root, dirs, files in os.walk(src):
         dirs[:] = [d for d in dirs if d != '.git']
@@ -99,9 +99,23 @@ PY
 
 ---
 
+## ۴٫۵. مدل گفتار فارسی برای APK (آفلاین)
+
+مدل whisper.cpp `ggml-base-q5_1` (نسخهٔ فشرده ≈ ۵۷MB) داخل خود APK باندل می‌شود و
+با اولین اجرای اپ از `android/app/src/main/assets/models/ggml-base.bin` به `filesDir`
+کپی می‌شود (MainActivity.seedWhisperModelIfNeeded — قبل از اجرای Flutter).
+
+```bash
+python3 tools/fetch_voice_model.py   # دانلود و اعتبارسنجی SHA-256 (داخل ریپو کامیت نمی‌شود)
+flutter build apk --release --split-per-abi
+```
+
+اگر اسکریپت اجرا نشود، APK بدون مدل ساخته می‌شود و اپ در اولین استفاده مدل را
+یک‌بار از hf-mirror دانلود می‌کند (پلن B). برای PWA/iOS هیچ اثری ندارد.
+
 ## ۵. نسخه‌سازی و بالا بردن ورژن
 
-1. `pubspec.yaml` ← `version: 1.71.1+90` (فرمت `X.Y.Z+BUILD`).
+1. `pubspec.yaml` ← `version: 1.72.0+91` (فرمت `X.Y.Z+BUILD`).
 2. در صورت نیاز `README`های `docs/README-iPhone-PWA-FA.md` و این سند به‌روز شود.
 3. ابتدا بیلد وب می‌گیریم (خوانندهٔ `version.json`)، سپس تک‌فایل، سپس ZIP.
 4. خروجی‌های ثابت:

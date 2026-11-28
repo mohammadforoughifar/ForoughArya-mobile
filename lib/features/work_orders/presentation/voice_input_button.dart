@@ -12,8 +12,9 @@ import '../../../core/audio/local_whisper.dart';
 /// دکمهٔ ورودی صوتی برای تبدیل گفتار فارسی به متن.
 ///
 /// مسیرها:
-/// - اندروید: **کاملاً محلی** با whisper.cpp روی خود دستگاه (بدون گوگل/اینترنت/سرور)؛
-///   مدل فارسی اولین بار یک‌بار دانلود و ذخیره می‌شود، سپس آفلاین کار می‌کند.
+/// - اندروید: **کاملاً محلی** با whisper.cpp (مدلِ فشردهٔ q5_1) روی خود دستگاه؛
+///   مدل داخل خود APK است و هنگام اولین اجرا کپی می‌شود — هیچ دانلود و تأخیری
+///   وجود ندارد (بدون گوگل/اینترنت/سرور).
 /// - وب/PWA و iOS: از موتور گفتار مرورگر/سیستم (webkitSpeechRecognition / SFSpeechRecognizer) استفاده می‌شود.
 ///   نکتهٔ وب: پلاگین وب هرگز `finalResult` نمی‌فرستد و `locales()` هم خالی برمی‌گرداند؛
 ///   به همین دلیل روی وب نتایج را داخل بافر نگه می‌داریم و با پایان وضعیت تزریق می‌کنیم.
@@ -171,11 +172,11 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
       child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
-          'آماده‌سازی تبدیل گفتار آفلاین',
+          'مدل گفتار فارسی آماده نیست',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
         ),
         content: const Text(
-          'برای اولین بار یک مدل گفتار فارسی (حدود ۱۴۷ مگابایت) یک‌بار دانلود و ذخیره می‌شود.\n\nپس از آن، تبدیل صدا به متن کاملاً روی خود گوشی و بدون اینترنت/گوگل/سرور انجام می‌شود.',
+          'مدل گفتار فارسی در این نصب پیدا نشد.\n\nبا تأیید شما، مدل فشرده (حدود ۵۷ مگابایت) یک‌بار از اینترنت دریافت و ذخیره می‌شود؛ بعد از آن تبدیل صدا به متن کاملاً روی خود گوشی و آفلاین انجام می‌شود.',
           style: TextStyle(height: 1.7, fontSize: 12.5),
         ),
         actions: [
@@ -420,7 +421,7 @@ class _ModelDownloadDialogState extends State<_ModelDownloadDialog> {
           if (_progress == null)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('در حال اتصال به سرور دانلود…'),
+              child: Text('در حال آماده‌سازی…'),
             )
           else ...[
             LinearProgressIndicator(value: _progress!.clamp(0.0, 1.0)),
@@ -432,7 +433,7 @@ class _ModelDownloadDialogState extends State<_ModelDownloadDialog> {
           ],
           const SizedBox(height: 8),
           const Text(
-            'فقط اولین بار دانلود می‌شود؛ بعد از آن آفلاین می‌ماند.',
+            'معمولاً به این مرحله نمی‌رسید چون مدل داخل اپ است.',
             style: TextStyle(fontSize: 11.5, color: Color(0xff64748b)),
           ),
         ],
@@ -480,7 +481,7 @@ class _TranscribeProgressDialogState extends State<_TranscribeProgressDialog> {
           ),
           SizedBox(height: 12),
           Text(
-            'روی خود گوشی پردازش می‌شود؛\nبرای جملات کوتاه چند ثانیه طول می‌کشد.',
+            'روی خود گوشی پردازش می‌شود؛\nمعمولاً در کمتر از یک تا دو ثانیه آماده می‌شود.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, height: 1.7, color: Color(0xff475569)),
           ),
