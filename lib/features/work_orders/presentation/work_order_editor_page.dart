@@ -1,3 +1,4 @@
+import 'voice_input_button.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -252,7 +253,8 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
                     child: TextField(
                       controller: search,
                       onChanged: (_) => setSheet(() {}),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
+                        suffixIcon: VoiceInputButton(controller: search, onChanged: (_) => setSheet(() {})),
                         prefixIcon: Icon(Icons.search),
                         hintText: 'جستجوی شخص',
                       ),
@@ -467,6 +469,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
                   controller: _title,
                   maxLength: 300,
                   decoration: InputDecoration(
+                        suffixIcon: VoiceInputButton(controller: _title, maxLength: 300),
                     labelText: 'عنوان دستور کار *',
                   ),
                   validator: (v) => v == null || v.trim().isEmpty
@@ -480,6 +483,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
                   maxLines: 8,
                   maxLength: 4000,
                   decoration: InputDecoration(
+                        suffixIcon: VoiceInputButton(controller: _description, maxLength: 4000),
                     labelText: 'شرح و توضیحات',
                     alignLabelWithHint: true,
                   ),
@@ -616,6 +620,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
                         controller: _tag,
                         maxLength: 30,
                         decoration: InputDecoration(
+                        suffixIcon: VoiceInputButton(controller: _tag, maxLength: 30),
                           hintText: 'حداکثر ۵ برچسب',
                           counterText: '',
                         ),
@@ -659,6 +664,7 @@ class _WorkOrderEditorPageState extends State<WorkOrderEditorPage> {
                       TextField(
                         controller: _checklist,
                         decoration: InputDecoration(
+                        suffixIcon: VoiceInputButton(controller: _checklist),
                           hintText: 'زیرکار جدید',
                         ),
                       ),

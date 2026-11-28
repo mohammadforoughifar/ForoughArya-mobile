@@ -1,3 +1,4 @@
+import 'voice_input_button.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -980,7 +981,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                 minLines: 3,
                 maxLines: 6,
                 maxLength: 4000,
-                decoration: InputDecoration( labelText: 'شرح پاسخ'),
+                decoration: InputDecoration(suffixIcon: VoiceInputButton(controller: text, maxLength: 4000), labelText: 'شرح پاسخ'),
               ),
               const SizedBox(height: 12),
               FilledButton(
@@ -1063,7 +1064,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
             TextField(
               controller: note,
               maxLines: 3,
-              decoration: InputDecoration(
+              decoration: InputDecoration(suffixIcon: VoiceInputButton(controller: note),
                 labelText: 'یادداشت بستن (اختیاری)',
                 isDense: true,
               ),
@@ -1111,7 +1112,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
               TextField(
                 controller: note,
                 maxLines: 3,
-                decoration: InputDecoration( labelText: 'علت بازگشایی'),
+                decoration: InputDecoration(suffixIcon: VoiceInputButton(controller: note), labelText: 'علت بازگشایی'),
               ),
               CheckboxListTile(
                 value: reset,
@@ -1211,7 +1212,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                 ),
                 TextField(
                   controller: note,
-                  decoration: InputDecoration( labelText: 'یادداشت'),
+                  decoration: InputDecoration(suffixIcon: VoiceInputButton(controller: note), labelText: 'یادداشت'),
                 ),
                 SwitchListTile(
                   value: sms,
@@ -1423,6 +1424,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                         color: Colors.blueGrey.shade300,
                       ),
                       isDense: true,
+                      suffixIcon: VoiceInputButton(controller: _checklistText),
                     ),
                   ),
                 ),
@@ -1736,6 +1738,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage>
                         maxLines: 4,
                         style: const TextStyle(fontSize: 13),
                         decoration: InputDecoration(
+                          suffixIcon: VoiceInputButton(controller: _comment),
                           hintText: 'نوشتن پیام…',
                           hintStyle: TextStyle(
                             fontSize: 12.5,
