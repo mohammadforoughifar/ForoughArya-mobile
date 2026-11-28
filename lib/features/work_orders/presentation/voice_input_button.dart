@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../../../core/audio/vosk_service.dart';
 
 import '../../../core/audio/local_vosk.dart';
+import '../../../core/audio/vosk_engine.dart';
 
 /// دکمهٔ ورودی صوتی — تبدیل زندهٔ گفتار فارسی به متن با **تایپ هم‌زمان**.
 ///
@@ -29,13 +29,6 @@ class VoiceInputButton extends StatefulWidget {
 
   @override
   State<VoiceInputButton> createState() => _VoiceInputButtonState();
-}
-
-/// موتور اندروید (کش مشترک بین دفعات): مدل و recognizer یک‌بار ساخته و reuse می‌شوند.
-class _VoskEngine {
-  static final VoskFlutterPlugin vosk = VoskFlutterPlugin.instance();
-  static Model? model;
-  static Recognizer? recognizer;
 }
 
 /// وضعیت موتور گفتار سیستم (iOS/وب)
@@ -169,23 +162,10 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
     _busy = true;
     setState(() {});
     try {
-      // آماده‌سازی مدل (باندل‌شده؛ در حالت عادی آنی است)
-      final path = await LocalVosk.instance.ensureModelPath();
-      if (path == null) {
-        _message('مدل گفتار فارسی در این نصب پیدا نشد؛ لطفاً برنامه را مجدداً نصب کنید.');
-        return;
-      }
-      if (_VoskEngine.model == null) {
-        _VoskEngine.model = await _VoskEngine.vosk.createModel(path);
-      }
-      if (_VoskEngine.recognizer == null) {
-        _VoskEngine.recognizer = await _VoskEngine.vosk.createRecognizer(
-          model: _VoskEngine.model!,
-          sampleRate: 16000,
-        );
-      }
+      // recognizer از قبل در استارتاپ گرم شده است → اولین لمس هم آنی
+      final recognizer = await VoskEngine.readyRecognizer();
       _liveBegin();
-      _voskService = await _VoskEngine.vosk.initSpeechService(_VoskEngine.recognizer!);
+      _voskService = await VoskFlutterPlugin.instance().initSpeechService(recognizer);
       _partialSub = _voskService!.onPartial().listen((raw) {
         final j = _tryJson(raw);
         final words = (j?['partial'] ?? '').toString().trim();
@@ -223,7 +203,7 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
       if (service != null) {
         await service.stop();
         try {
-          final tail = await _VoskEngine.recognizer?.getFinalResult();
+          final tail = await (await _tryGetFinalResult());
           final words = ((_tryJson(tail)?['text']) ?? '').toString().trim();
           _liveAppendFinal(words);
         } catch (_) {}
@@ -264,6 +244,14 @@ class _VoiceInputButtonState extends State<VoiceInputButton> {
     } catch (_) {}
     _voskService = null;
     if (mounted) setState(() => _listening = false);
+  }
+
+  Future<String?> _tryGetFinalResult() async {
+    try {
+      return await VoskEngine.readyRecognizer().then((r) => r.getFinalResult());
+    } catch (_) {
+      return null;
+    }
   }
 
   static Map<String, dynamic>? _tryJson(String? raw) {

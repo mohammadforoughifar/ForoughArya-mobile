@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 
 import 'app/app.dart';
+import 'core/audio/vosk_engine.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/network/api_client.dart';
 import 'core/notifications/background_push_channel.dart';
@@ -16,6 +18,8 @@ import 'features/work_orders/data/work_order_repository.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // گرم‌کردن پس‌زمینهٔ موتور گفتار فارسی Vosk تا لمس میکروفن آنی باشد
+  unawaited(VoskEngine.prewarm());
   const storage = FlutterSecureStorage(
     aOptions: AndroidOptions(),
     iOptions: IOSOptions(

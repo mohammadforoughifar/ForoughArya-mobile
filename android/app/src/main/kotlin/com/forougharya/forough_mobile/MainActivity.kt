@@ -77,7 +77,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        seedVoskModelIfNeeded()
+        // استخراج مدل در ترد پس‌زمینه؛ اپ بدون تأخیر بالا می‌آید و Dart تا آماده‌شدن منتظر می‌ماند
+        Thread { seedVoskModelIfNeeded() }.start()
         super.onCreate(savedInstanceState)
     }
 
